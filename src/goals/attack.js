@@ -8,6 +8,8 @@ const { sleep, error, costDepth } = require('../utils')
 const { Weapons } = require('minecrafthawkeye')
 const { Item } = require('prismarine-item')
 const MeleeWeapons = require('../melee-weapons')
+const Hands = require('../hands')
+const { goals } = require('mineflayer-pathfinder')
 
 module.exports = class AttackGoal extends AsyncGoal {
     /**
@@ -33,22 +35,19 @@ module.exports = class AttackGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
-        let shielding = false
         let lastPunch = performance.now()
 
         const deactivateShield = function(/** @type {Item} */ shield) {
-            if (shield && shielding) {
-                context.bot.deactivateItem()
-                shielding = false
+            if (shield && Hands.isLeftActive) {
+                Hands.deactivate()
                 return true
             }
             return false
         }
 
         const activateShield = function(/** @type {Item} */ shield) {
-            if (shield && !shielding) {
-                context.bot.activateItem(true)
-                shielding = false
+            if (shield && !Hands.isLeftActive) {
+                Hands.activate('left')
                 return true
             }
             return false
@@ -119,19 +118,19 @@ module.exports = class AttackGoal extends AsyncGoal {
                             weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
 
                         if (!isCharged) {
-                            context.bot.activateItem()
+                            Hands.activate('right')
                             const chargeTime = context.getChargeTime(weapon.weapon)
                             await sleep(Math.max(100, chargeTime))
-                            context.bot.deactivateItem()
+                            Hands.deactivate()
                         }
 
                         if (this.entity && this.entity.isValid) {
-                            context.bot.activateItem()
+                            Hands.activate('right')
                             await sleep(40)
-                            context.bot.deactivateItem()
+                            Hands.deactivate()
                         }
                     } else {
-                        context.bot.activateItem()
+                        Hands.activate('right')
                         const chargeTime = context.getChargeTime(weapon.weapon)
                         await sleep(Math.max(100, chargeTime))
                         if (!this.entity || !this.entity.isValid) {
@@ -139,7 +138,7 @@ module.exports = class AttackGoal extends AsyncGoal {
                                 console.warn(`${this.indent} Unnecessary shot`)
                             }
                         }
-                        context.bot.deactivateItem()
+                        Hands.deactivate()
                     }
                     continue
                 }
@@ -151,9 +150,8 @@ module.exports = class AttackGoal extends AsyncGoal {
             }
         }
 
-        if (shielding) {
-            context.bot.deactivateItem()
-            shielding = false
+        if (Hands.isLeftActive) {
+            Hands.deactivate()
         }
 
         return { result: true }

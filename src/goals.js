@@ -39,14 +39,14 @@ module.exports = class Goals {
     shouldCancel
 
     constructor() {
-        this.normal = [ ]
-        this.survival = [ ]
-        this.critical = [ ]
+        this.normal = []
+        this.survival = []
+        this.critical = []
 
         this.idlingStarted = 0
         this.shouldCancel = null
     }
-        
+
     /**
      * @param {number} time
      * @returns {boolean}
@@ -78,7 +78,7 @@ module.exports = class Goals {
 
         return true
     }
-        
+
     /**
      * @param {Context} context
      * @param {Array<Goal<any>>} goals
@@ -111,7 +111,7 @@ module.exports = class Goals {
             goal.finish(error(`${indent} Cancelled`))
             return true
         }
-        
+
         if (goal.goals.length > 0) {
             this.runGoals(context, goal.goals, depth + 1, type)
             return false
@@ -155,14 +155,14 @@ module.exports = class Goals {
             goal.finish(error(`Too deep task`))
             return true
         }
-        
+
         try {
             goalResult = goal.run(context)
         } catch (error) {
             console.error(error)
             goalResult = { error: error.toString() }
         }
-        
+
         if (!goalResult) {
             return false
         }
@@ -175,18 +175,16 @@ module.exports = class Goals {
                 goal.resolvedValue = { error: reason }
             })
 
-            if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} promised to finish ...`)
+            // if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} promised to finish ...`)
             return false
         }
-
-        if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} status:`, (goalResult instanceof Promise) ? 'Promise' : goalResult)
 
         if ('error' in goalResult) {
             if (!goal.quiet) console.error(`${indent} Goal ${goal.constructor.name} errored: ${goalResult.error}`)
         } else {
-            if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} finished`)
+            if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} finished: ${goalResult.result}`)
         }
-        if (!goal.quiet) console.log(`${indent} Finishing goal ${goal.constructor.name} ...`)
+        // if (!goal.quiet) console.log(`${indent} Finishing goal ${goal.constructor.name} ...`)
         goal.finish(goalResult)
         return true
     }
@@ -210,8 +208,7 @@ module.exports = class Goals {
      * @param {Context} context
      */
     tick(context) {
-        if (this.shouldCancel)
-        {
+        if (this.shouldCancel) {
             let cancelDone = true
 
             if (this.shouldCancel.normal) {
@@ -247,7 +244,7 @@ module.exports = class Goals {
                 console.log(`Cancelled`)
             }
         }
-    
+
         try {
             if (this.critical.length > 0) {
                 this.runGoals(context, this.critical, 0, 'critical')
@@ -259,7 +256,7 @@ module.exports = class Goals {
         } catch (error) {
             console.error(error)
         }
-            
+
         if (this.has(false)) {
             this.idlingStarted = 0
         } else if (this.idlingStarted === 0) {

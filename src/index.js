@@ -42,6 +42,7 @@ const PlantSeedGoal = require('./goals/plant-seed')
 const HarvestGoal = require('./goals/harvest')
 const CompostGoal = require('./goals/compost')
 const FollowPlayerGoal = require('./goals/follow-player')
+const Hands = require('./hands')
 
 const goals = new Goals()
 
@@ -273,6 +274,8 @@ const bot = MineFlayer.createBot({
     username: config['bot']['username'],
 })
 
+Hands.init(bot)
+
 /** @type {Context} */
 let context = null
 
@@ -325,14 +328,6 @@ bot.on('physicsTick', () => {
                 i++
             }
         }
-    }
-
-    if (goals.isIdle(5000) &&
-        !goals.has(true) &&
-        unshieldInterval.is() &&
-        context.holdsShield() &&
-        bot.usingHeldItem) {
-        bot.deactivateItem()
     }
 
     if (followPlayer) {

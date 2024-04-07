@@ -117,6 +117,7 @@ module.exports = class HoeingGoal extends AsyncGoal {
 
                 await sleep(100)
                 await context.bot.activateBlock(context.bot.blockAt(dirt))
+                await sleep(100)
                 shouldContinue = true
             }
 

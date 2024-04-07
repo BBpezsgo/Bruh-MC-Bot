@@ -2,6 +2,7 @@ const { goals } = require('mineflayer-pathfinder')
 const { sleep, error } = require('../utils')
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
+const Hands = require('../hands')
 
 /**
  * @extends {AsyncGoal<boolean>}
@@ -69,7 +70,7 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
                 context.holdsShield() &&
                 distance < 2
             )) {
-            context.bot.activateItem(true)
+            Hands.activate('left')
 
             console.warn(`${this.indent} Blocking melee attack ...`)
             await context.bot.lookAt(hazard.position.offset(0, hazard.height, 0), true)
@@ -86,7 +87,7 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
             }
         }
 
-        context.bot.deactivateItem()
+        Hands.deactivate()
         context.bot.pathfinder.setGoal(null)
 
         return { result: true }
