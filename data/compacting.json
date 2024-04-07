@@ -1,0 +1,19 @@
+{
+    "bone_meal": "bone_block",
+    "coal": "coal_block",
+    "iron_ingot": "iron_block",
+    "emerald": "emerald_block",
+    "copper_ingot": "copper_block",
+    "dried_kelp": "dried_kelp_block",
+    "netherite_ingot": "netherite_block",
+    "raw_gold": "raw_gold_block",
+    "raw_copper": "raw_copper_block",
+    "raw_iron": "raw_iron_block",
+    "diamond": "diamond_block",
+    "lapis_lazuli": "lapis_block",
+    "snowball": "snow_block",
+    "gold_ingot": "gold_block",
+    "slime_ball": "slime_block",
+    "redstone": "redstone_block",
+    "honey_bottle": "honey_block"
+}
