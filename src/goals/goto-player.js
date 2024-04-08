@@ -1,7 +1,10 @@
 const { goals, Movements } = require('mineflayer-pathfinder')
 const { Goal } = require('./base')
 const AsyncGoal = require('./async-base')
-const { error } = require('../utils')
+const { error, sleep } = require('../utils')
+const { Weapons } = require('minecrafthawkeye')
+const Wait = require('./wait')
+const { Vec3 } = require('vec3')
 
 /**
  * @extends {AsyncGoal<'here' | 'done'>}
@@ -54,6 +57,25 @@ module.exports = class GotoPlayerGoal extends AsyncGoal {
 
         if (distance <= this.distance) {
             return { result: 'here' }
+        }
+
+        if (false && distance > 20) {
+            const enderpearl = context.searchItem('ender_pearl')
+            if (enderpearl) {
+                const grade = context.bot.hawkEye.getMasterGrade(target, new Vec3(0, 0, 0), Weapons.ender_pearl)
+                if (grade) {
+                    if (!grade.blockInTrayect) {
+                        await context.bot.look(grade.yaw, grade.pitch, true)
+                        await sleep(500)
+                        await context.bot.look(grade.yaw, grade.pitch, true)
+                        await sleep(500)
+                        await context.bot.equip(enderpearl, 'hand')
+                        context.bot.activateItem(false)
+                        await (new Wait(this, 5000)).wait()
+                        return { result: 'done' }
+                    }
+                }
+            }
         }
 
         const oldMovements = this.movements ? context.bot.pathfinder.movements : null

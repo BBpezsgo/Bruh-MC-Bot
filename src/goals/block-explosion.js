@@ -24,10 +24,6 @@ module.exports = class BlockExplosionGoal extends AsyncGoal {
         super.run(context)
 
         const shield = context.searchItem('shield')
-        if (shield) {
-            return { result: false }
-        }
-        
         if (!shield) {
             return error(`${this.indent} I have no shield`)
         }

@@ -1,3 +1,4 @@
+const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 
 /**
@@ -188,6 +189,20 @@ function backNForthSort(blocks) {
     return result
 }
 
+/**
+ * @param {Entity} entity
+ * @returns {number | null}
+ */
+function filterHostiles(entity) {
+    if (entity.type === 'hostile') { return 1 }
+    if (entity.name === 'slime') {
+        if (entity.metadata[16]) { return 1 }
+        return 0
+    }
+    
+    return null
+}
+
 module.exports = {
     error,
     itemsDelta,
@@ -203,4 +218,5 @@ module.exports = {
     lerpRad,
     rotationToVector,
     backNForthSort,
+    filterHostiles,
 }

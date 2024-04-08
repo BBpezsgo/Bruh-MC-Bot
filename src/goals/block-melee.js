@@ -113,7 +113,8 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
      */
     static getHazard(context) {
         return context.bot.nearestEntity((entity) => {
-            if (entity.type !== 'hostile') {
+            if (entity.type !== 'hostile' &&
+                entity.name !== 'slime') {
                 return false
             }
 
@@ -122,8 +123,7 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
             }
 
             if (entity.name === 'skeleton' ||
-                entity.name === 'stray' ||
-                entity.name === 'creeper') {
+                entity.name === 'stray') {
                 return false
             }
 

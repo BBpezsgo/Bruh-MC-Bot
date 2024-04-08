@@ -29,7 +29,7 @@ const BlockMeleeGoal = require('./goals/block-melee')
 const SleepGoal = require('./goals/sleep')
 const FlyToGoal = require('./goals/fly-to')
 const fJSON = require('./serializing')
-const { error, timeout, randomInt, deg2rad, lerp, lerpDeg, lerpRad } = require('./utils')
+const { error, timeout, randomInt, deg2rad, lerp, lerpDeg, lerpRad, filterHostiles } = require('./utils')
 const GatherItemGoal = require('./goals/gather-item')
 const SmeltGoal = require('./goals/smelt')
 const MC = require('./mc')
@@ -43,6 +43,8 @@ const HarvestGoal = require('./goals/harvest')
 const CompostGoal = require('./goals/compost')
 const FollowPlayerGoal = require('./goals/follow-player')
 const Hands = require('./hands')
+const DumpToChestGoal = require('./goals/dump-to-chest')
+const { Entity } = require('prismarine-entity')
 
 const goals = new Goals()
 
@@ -94,6 +96,11 @@ function getCriticalGoal() {
         return new BlockExplosionGoal(null)
     }
 
+    if (aimingEntities.length > 0) {
+        const entity = aimingEntities[0]
+        console.log(`${entity?.displayName ?? entity?.name ?? 'Someone'} aiming at me`)
+    }
+    
     // if (BlockMeleeGoal.getHazard(context) &&
     //     context.searchItem('shield')) {
     //     console.warn('AAAAAAAA')
@@ -104,9 +111,10 @@ function getCriticalGoal() {
 }
 
 function getSurvivalGoal() {
-    const hostile = bot.nearestEntity(entity => (
-        entity.type === 'hostile'
-    ))
+    let hostile = bot.nearestEntity(entity => {
+        if (filterHostiles(entity)) { return true }
+        return false
+    })
 
     if (hostile) {
         const distance = bot.entity.position.distanceTo(hostile.position)
@@ -281,6 +289,11 @@ let context = null
 
 World.backup('bruh')
 
+/**
+ * @type {Array<Entity>}
+ */
+let aimingEntities = [ ]
+
 bot.once('spawn', () => {
     bot.loadPlugin(MineFlayerPathfinder.pathfinder)
     bot.loadPlugin(MineFlayerCollectBlock)
@@ -293,11 +306,15 @@ bot.once('spawn', () => {
     
     bot.pathfinder.setMovements(context.permissiveMovements)
 
-    console.log(`Gamemode is ${bot.player.gamemode}`)
-
     lastPosition = bot.entity.position.clone()
 
     goals.idlingStarted = performance.now()
+
+    bot.on('target_aiming_at_you', (entity, arrowTrajectory) => {
+        aimingEntities.push(entity)
+    })
+
+    // bot.hawkEye.startRadar()
 })
 
 bot.on('physicsTick', () => {
@@ -310,11 +327,13 @@ bot.on('physicsTick', () => {
             goals.critical.push(criticalGoal)
         }
     }
-    
+
     handleSurviving()
 
     goals.tick(context)
 
+    aimingEntities = [ ]
+    
     {
         const now = performance.now()
         let i = 0
@@ -583,28 +602,17 @@ bot.on('chat', (username, message) => {
         const make = message.replace('make', '').trimStart()
 
         if (make === 'farm') {
-            const target = bot.players[username]?.entity
-            if (!target) {
-                bot.chat(`I can't find you`)
-                return
-            }
-
-            const water = context.bot.findBlock({
-                matching: [ context.mc.data.blocksByName['water'].id ],
-                point: target.position.clone(),
-                maxDistance: 4,
-            })
-            if (!water) {
-                bot.chat(`There is no water`)
+            const goal = HoeingGoal.atPlayer(context, username)
+            if ('error' in goal) {
+                bot.chat(goal.error.toString())
                 return
             }
 
             bot.chat(`Okay`)
-            const goal = new HoeingGoal(null, water.position.clone(), false)
-            goal.then(() => {
+            goal.result.then(() => {
                 bot.chat(`Done`)
             })
-            goals.normal.push(goal)
+            goals.normal.push(goal.result)
 
             return
         }
@@ -614,12 +622,28 @@ bot.on('chat', (username, message) => {
     }
 
     if (message === 'farm') {
+
+        const goal = HoeingGoal.atPlayer(context, username)
+
+        if ('error' in goal) {
+            bot.chat(`Okay`)
+            const goal = new PlantSeedGoal(null, context.mc.simpleSeeds, null)
+            goal.then(() => {
+                bot.chat(`Done`)
+            })
+            goals.normal.push(goal)
+            return
+        }
+
         bot.chat(`Okay`)
-        const goal = new PlantSeedGoal(null, context.mc.simpleSeeds, null)
-        goal.then(() => {
-            bot.chat(`Done`)
+        goal.result.finally(() => {
+            const goal = new PlantSeedGoal(null, context.mc.simpleSeeds, null)
+            goal.then(() => {
+                bot.chat(`Done`)
+            })
+            goals.normal.push(goal)
         })
-        goals.normal.push(goal)
+        goals.normal.push(goal.result)
 
         return
     }
@@ -652,6 +676,36 @@ bot.on('chat', (username, message) => {
             bot.chat(`Done`)
         })
         goals.normal.push(goal)
+
+        return
+    }
+
+    if (message.startsWith('dump ')) {
+        let itemName = message.replace('dump', '').trimStart()
+        let count = 1
+
+        if (itemName.split(' ')[0] === 'all') {
+            count = Infinity
+            itemName = itemName.substring(itemName.split(' ')[0].length).trimStart()
+        } else if (!Number.isNaN(Number.parseInt(itemName.split(' ')[0]))) {
+            count = Number.parseInt(itemName.split(' ')[0])
+            itemName = itemName.substring(itemName.split(' ')[0].length).trimStart()
+        }
+
+        bot.chat('Okay')
+
+        const item = context.mc.getCorrectItems(itemName)
+
+        if (!item) {
+            bot.chat(`I don't know what ${itemName} it is`)
+            return
+        }
+
+        const goal = new DumpToChestGoal(null, item.id, count)
+        goals.normal.push(goal)
+        goal.then((result) => {
+            bot.chat(`Done`)
+        })
 
         return
     }
@@ -735,6 +789,48 @@ bot.on('chat', (username, message) => {
                 console.log(`I have gathered ${builder}`)
             })
         } catch (error) { }
+
+        return
+    }
+
+    if (message === 'wyh') {
+        const items = bot.inventory.items()
+
+        /**
+         * @type {Array<{ count: number; item: Item; }>}
+         */
+        const normal = [ ]
+        for (const item of items) {
+            let found = false
+            for (const item2 of normal) {
+                if (item2.item.type === item.type) {
+                    item2.count += item.count
+                    found = true
+                    break
+                }
+            }
+            if (!found) {
+                normal.push({
+                    count: item.count,
+                    item: item,
+                })
+            }
+        }
+
+        let builder = ''
+        for (let i = 0; i < normal.length; i++) {
+            const item = normal[i]
+            if (i > 0) { builder += ' ; ' }
+            if (item.count === 1) {
+                builder += `${item.item.displayName}`
+            } else if (item.count >= item.item.stackSize) {
+                builder += `${Math.round((item.count / item.item.stackSize) * 10) / 10} stack ${item.item.displayName}`
+            } else {
+                builder += `${item.count} ${item.item.displayName}`
+            }
+        }
+
+        bot.chat(builder)
 
         return
     }
@@ -907,7 +1003,9 @@ bot.on('kicked', (reason) => console.warn(`Kicked:`, reason))
 bot.on('error', console.error)
 
 bot.on('end', (reason) => {
-    World.save('bruh', getWorldData())
+    if (context) {
+        World.save('bruh', getWorldData())
+    }
 
     goals.cancel(true, true, true)
 

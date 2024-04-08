@@ -61,7 +61,15 @@ module.exports = class AttackGoal extends AsyncGoal {
                 await context.bot.equip(shield.type, 'off-hand')
             }
 
-            await context.bot.lookAt(this.entity.position.offset(0, this.entity.height, 0), true)
+            let height
+
+            if (this.entity.type === 'player') {
+                height = 1.6
+            } else {
+                height = this.entity.height / 2
+            }
+
+            await context.bot.lookAt(this.entity.position.offset(0, height, 0), true)
 
             if (distance <= 3) {
                 const meleeWeapon = context.bestMeleeWeapon()
@@ -94,9 +102,9 @@ module.exports = class AttackGoal extends AsyncGoal {
                 continue
             }
 
-            deactivateShield(shield)
-
             if (distance > 7) {
+                deactivateShield(shield)
+
                 const weapon = context.searchRangeWeapon()
                 if (weapon && weapon.ammo > 0) {
                     const grade = context.bot.hawkEye.getMasterGrade(this.entity, context.bot.entity.velocity, weapon.weapon)

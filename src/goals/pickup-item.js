@@ -73,6 +73,12 @@ module.exports = class PickupItemGoal extends AsyncGoal {
 
         const item = nearest.result.getDroppedItem()
         
+        if (item) {
+            if (context.isInventoryFull(item.type)) {
+                return error(`${this.indent} Inventory is full`)
+            }
+        }
+
         {
             const subresult = await (new GotoGoal(this, nearest.result.position.clone(), 0, context.restrictedMovements)).wait()
             if ('error' in subresult) return error(subresult.error)
@@ -112,6 +118,7 @@ module.exports = class PickupItemGoal extends AsyncGoal {
      *   inAir?: boolean;
      *   maxDistance?: number;
      *   point?: Vec3;
+     *   evenIfFull?: boolean;
      * }} options
      * @returns {import('../result').Result<Entity>}
      */
@@ -120,13 +127,15 @@ module.exports = class PickupItemGoal extends AsyncGoal {
         if (!options.inAir) { options.inAir = false }
         if (!options.maxDistance) { options.maxDistance = 10 }
         if (!options.point) { options.point = context.bot.entity.position.clone() }
+        if (!options.evenIfFull) { options.evenIfFull = false }
 
-        const nearestEntity = context.bot.nearestEntity(entity => (
-            entity.name === 'item' &&
-            (options.inAir || entity.onGround) &&
-            (options.inAir || entity.velocity.distanceTo(new Vec3(0, 0, 0)) < 0.01) &&
-            (!filter || filter(entity.getDroppedItem()))
-        ))
+        const nearestEntity = context.bot.nearestEntity(entity => {
+            if (entity.name !== 'item') { return false }
+            if (!options.inAir && entity.velocity.distanceTo(new Vec3(0, 0, 0)) > 0.01) { return false }
+            if (filter && !filter(entity.getDroppedItem())) { return false }
+            if (!options.evenIfFull && context.isInventoryFull(entity.getDroppedItem().type)) { return false }
+            return true
+        })
         if (!nearestEntity) { return { error: `No items found` } }
 
         const distance = nearestEntity.position.distanceTo(options.point)

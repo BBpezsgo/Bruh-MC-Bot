@@ -7,6 +7,7 @@ const MC = require('../mc')
 const GotoBlockGoal = require('./goto-block')
 const { Block } = require('prismarine-block')
 const GotoGoal = require('./goto')
+const Context = require('../context')
 
 module.exports = class HoeingGoal extends AsyncGoal {
     /**
@@ -41,21 +42,46 @@ module.exports = class HoeingGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
-        while (true) {
-            if (context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]?.type !== context.mc.data.itemsByName['wooden_hoe'].id) {
-                const hoe = context.searchItem('wooden_hoe')
-                if (!hoe) {
-                    if (!this.gatherTool) {
-                        return error(`${this.indent} I don't have a hoe`)
+        const hoes = [
+            context.mc.data.itemsByName['wooden_hoe'].id,
+            context.mc.data.itemsByName['stone_hoe'].id,
+            context.mc.data.itemsByName['iron_hoe'].id,
+            context.mc.data.itemsByName['golden_hoe'].id,
+            context.mc.data.itemsByName['diamond_hoe'].id,
+            context.mc.data.itemsByName['netherite_hoe'].id,
+        ]
+
+        /** @type {() => Promise<import('../result').Result<true>>} */ 
+        const equipHoe = async() => {
+            for (const hoe of hoes) {
+                const hoeItem = context.searchItem(hoe)
+                if (hoeItem) {
+                    if (context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]?.type !== hoe) {
+                        await context.bot.equip(hoe, 'hand')
                     }
-                    const gatherResult = await (new GatherItemGoal(this, context.mc.data.itemsByName['wooden_hoe'].id, 1, false, false, false)).wait()
-                    if ('error' in gatherResult) {
-                        return gatherResult
-                    }
-                    await context.bot.equip(context.mc.data.itemsByName['wooden_hoe'].id, 'hand')
-                } else {
-                    await context.bot.equip(hoe, 'hand')
+                    return { result: true }
+                } else if (context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]?.type === hoe) {
+                    return { result: true }
                 }
+            }
+
+            if (!this.gatherTool) {
+                return error(`${this.indent} I don't have a hoe`)
+            }
+
+            const gatherResult = await (new GatherItemGoal(this, context.mc.data.itemsByName['wooden_hoe'].id, 1, false, false, false)).wait()
+            if ('error' in gatherResult) {
+                return gatherResult
+            }
+
+            await context.bot.equip(context.mc.data.itemsByName['wooden_hoe'].id, 'hand')
+            return { result: true }
+        }
+
+        while (true) {
+            const equipHoeResult = await equipHoe()
+            if ('error' in equipHoeResult) {
+                return equipHoeResult
             }
 
             const filterBlock = (/** @type {Block} */ block) => {
@@ -105,14 +131,9 @@ module.exports = class HoeingGoal extends AsyncGoal {
                     await context.bot.dig(above, true)
                 }
 
-                const hoe = context.searchItem('wooden_hoe')
-                if (!hoe) {
-                    shouldContinue = true
+                const equipHoeResult = await equipHoe()
+                if ('error' in equipHoeResult) {
                     break
-                }
-
-                if (context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]?.type !== context.mc.data.itemsByName['wooden_hoe'].id) {
-                    await context.bot.equip(hoe, 'hand')
                 }
 
                 await sleep(100)
@@ -127,6 +148,29 @@ module.exports = class HoeingGoal extends AsyncGoal {
         }
 
         return { result: true }
+    }
+
+    /**
+     * @param {Context} context
+     * @param {string} username
+     * @returns {import('../result').Result<HoeingGoal>}
+     */
+    static atPlayer(context, username) {
+        const target = context.bot.players[username]?.entity
+        if (!target) {
+            return { error: `I can't find you` }
+        }
+
+        const water = context.bot.findBlock({
+            matching: [ context.mc.data.blocksByName['water'].id ],
+            point: target.position.clone(),
+            maxDistance: 4,
+        })
+        if (!water) {
+            return { error: `There is no water` }
+        }
+
+        return { result: new HoeingGoal(null, water.position.clone(), false) }
     }
 
     /**

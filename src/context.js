@@ -5,6 +5,8 @@ const { Movements } = require('mineflayer-pathfinder')
 const { Item } = require('prismarine-item')
 const MeleeWeapons = require('./melee-weapons')
 const { Block } = require('prismarine-block')
+const { Chest } = require('mineflayer')
+const { filterHostiles } = require('./utils')
 
 module.exports = class Context {
     /**
@@ -601,9 +603,7 @@ module.exports = class Context {
 
     possibleDirectHostileAttack() {
         return this.bot.nearestEntity((entity) => {
-            if (entity.type !== 'hostile') {
-                return false
-            }
+            if (!filterHostiles(entity)) { return false }
 
             if (!entity.name) {
                 return false
@@ -614,10 +614,6 @@ module.exports = class Context {
             if (entity.name === 'skeleton' ||
                 entity.name === 'stray') {
                 return distance <= 20
-            }
-
-            if (entity.name === 'creeper') {
-                return distance <= 15
             }
 
             return distance < 10
@@ -716,6 +712,52 @@ module.exports = class Context {
 
             if (this.mc.simpleSeeds.includes(_drop.drop.id)) {
                 return _drop.drop.id
+            }
+        }
+        
+        return null
+    }
+
+    /**
+     * @param {number | null} item
+     */
+    isInventoryFull(item = null) {
+        const slotIds = [
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        for (let i = this.bot.inventory.inventoryStart; i <= this.bot.inventory.inventoryEnd; i++) {
+            slotIds.push(i)
+        }
+
+        for (const slotId of slotIds) {
+            const slot = this.bot.inventory.slots[slotId]
+            if (!slot) { return false }
+            if (slot.count >= slot.stackSize) { continue }
+            if (item && item === slot.type) { return false }
+        }
+
+        return true
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window<any>} chest
+     * @param {number | null} item
+     * @returns {number | null}
+     */
+    static firstFreeSlot(chest, item = null) {
+        let empty = chest.firstEmptyContainerSlot()
+        if (empty !== null && empty !== undefined) {
+            return empty
+        }
+
+        if (item) {
+            const items = chest.containerItems()
+            for (const _item of items) {
+                if (_item.count >= _item.stackSize) { continue }
+                if (_item.type !== item) { continue }
+                return _item.slot
             }
         }
         
