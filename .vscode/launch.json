@@ -7,7 +7,7 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
+            "name": "Run Bot",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -16,7 +16,7 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Test",
+            "name": "Test Bot",
             "skipFiles": [
                 "<node_internals>/**"
             ],

@@ -24,7 +24,6 @@ function config() {
                 value: {
                     host: 'string',
                     port: 'number',
-                    username: 'string',
                 },
             },
             minecraft: {

@@ -191,16 +191,57 @@ function backNForthSort(blocks) {
 
 /**
  * @param {Entity} entity
+ * @param {Vec3 | null} point
  * @returns {number | null}
  */
-function filterHostiles(entity) {
-    if (entity.type === 'hostile') { return 1 }
+function filterHostiles(entity, point = null) {
+    if (entity.metadata[2]) { return null }
+
     if (entity.name === 'slime') {
         if (entity.metadata[16]) { return 1 }
         return 0
     }
-    
-    return null
+
+    if (entity.type !== 'hostile') { return null }
+
+    if (entity.name === 'zombified_piglin') {
+        return 0
+    }
+
+    if (point) {
+        const hostileAttackDistance = {
+            'creeper': 15,
+            'zombie': 35,
+            'skeleton': 16,
+            'cave_spider': 16,
+            'endermite': 16,
+            'evoker': 12,
+            'hoglin': 16,
+            'magma_cube': 16,
+            'husk': 35,
+            'piglin': null,
+            'piglin_brute': null,
+            'pillager': null,
+            'slime': 16,
+            'silverfish': null,
+            'ravager': 32,
+            'spider': 16,
+            'stray': 16,
+            'zoglin': null,
+            'wither_skeleton': 16,
+            'witch': 16,
+            'vindicator': null,
+            'zombie_villager': 35,
+        }[entity.name]
+        if (hostileAttackDistance) {
+            const distnace = point.distanceTo(entity.position)
+            if (distnace > hostileAttackDistance) {
+                return 0
+            }
+        }
+    }
+
+    return 1
 }
 
 module.exports = {

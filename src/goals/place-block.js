@@ -37,6 +37,10 @@ module.exports = class PlaceBlockAnywhereGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't place block in quiet mode`)
+        }
+
         const searchRadius = 5
         const searchHeight = 1
         const faceVector = new Vec3(0, 1, 0)

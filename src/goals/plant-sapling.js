@@ -44,6 +44,10 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't plant sapling in quiet mode`)
+        }
+
         let plantedSaplingCount = 0
 
         if (this.harvestedSaplings) {

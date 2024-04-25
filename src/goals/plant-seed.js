@@ -140,6 +140,10 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
     async plant(context, placeOn, seedItem) {
         const above = context.bot.blockAt(placeOn.position.offset(0, 1, 0))
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't plant in quiet mode`)
+        }
+
         if (above.name !== 'air') {
             return error(`${this.indent} Can't plant seed: block above it is "${above.name}"`)
         }

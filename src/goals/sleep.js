@@ -81,6 +81,10 @@ module.exports = class SleepGoal extends AsyncGoal {
 
         const block = context.bot.blockAt(context.myBed)
 
+        if (!block) {
+            return null
+        }
+
         if (!context.bot.isABed(block)) {
             return null
         }

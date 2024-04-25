@@ -8,8 +8,8 @@ const { sleep, error, costDepth } = require('../utils')
 const { Weapons } = require('minecrafthawkeye')
 const { Item } = require('prismarine-item')
 const MeleeWeapons = require('../melee-weapons')
-const Hands = require('../hands')
 const { goals } = require('mineflayer-pathfinder')
+const Interval = require('../interval')
 
 module.exports = class AttackGoal extends AsyncGoal {
     /**
@@ -35,56 +35,74 @@ module.exports = class AttackGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
-        let lastPunch = performance.now()
+        if (context.quietMode) {
+            return error(`${this.indent} Can't attack in quiet mode`)
+        }
+
+        let lastPunch = 0
+        let cooldown = 500
+        
+        /** @type {(MeleeWeapons.MeleeWeapon & { item: Item }) | null}*/
+        let meleeWeapon = null
+        /** @type {Item | null} */
+        let shield = context.searchItem('shield')
+
+        const checkInterval = new Interval(5000)
 
         const deactivateShield = function(/** @type {Item} */ shield) {
-            if (shield && Hands.isLeftActive) {
-                Hands.deactivate()
+            if (shield && context.isLeftHandActive) {
+                context.deactivateHand()
                 return true
             }
             return false
         }
 
         const activateShield = function(/** @type {Item} */ shield) {
-            if (shield && !Hands.isLeftActive) {
-                Hands.activate('left')
+            if (shield && !context.isLeftHandActive) {
+                context.activateHand('left')
                 return true
             }
             return false
         }
 
+        const equipMeleeWeapon = async function() {
+            meleeWeapon = context.bestMeleeWeapon()
+            const holds = context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]
+            if (meleeWeapon) {
+                if (!holds || holds.type !== meleeWeapon.item.type) {
+                    lastPunch = performance.now()
+                    await context.bot.equip(meleeWeapon.item.type, 'hand')
+                }
+            } else {
+                if (holds) {
+                    await context.bot.unequip('hand')
+                }
+            }
+            cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : 500
+        }
+
+        await equipMeleeWeapon()
+
         while (this.entity && this.entity.isValid) {
             const distance = context.bot.entity.position.distanceTo(this.entity.position)
 
-            const shield = context.searchItem('shield')
-            if (shield && !context.holdsShield()) {
-                await context.bot.equip(shield.type, 'off-hand')
+            /*
+            if (distance <= 2 && !context.bot.pathfinder.goal) {
+                context.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(this.entity, 3)), true)
             }
-
-            let height
-
-            if (this.entity.type === 'player') {
-                height = 1.6
-            } else {
-                height = this.entity.height / 2
-            }
-
-            await context.bot.lookAt(this.entity.position.offset(0, height, 0), true)
+            */
 
             if (distance <= 3) {
-                const meleeWeapon = context.bestMeleeWeapon()
-                const holds = context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]
-                if (meleeWeapon) {
-                    if (!holds || holds.type !== meleeWeapon.item.type) {
-                        await context.bot.equip(meleeWeapon.item.type, 'hand')
-                    }
-                } else {
-                    if (holds) {
-                        await context.bot.unequip('hand')
-                    }
+                if (checkInterval.is()) {
+                    shield = context.searchItem('shield')
+                    await equipMeleeWeapon()
                 }
-                const cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : 500
-
+                
+                if (shield && !context.holdsShield()) {
+                    await context.bot.equip(shield.type, 'off-hand')
+                    await context.bot.lookAt(this.entity.position.offset(0, this.entity.height, 0), true)
+                }
+    
                 const now = performance.now()
                 if (now - lastPunch > cooldown) {
                     if (deactivateShield(shield)) {
@@ -126,19 +144,19 @@ module.exports = class AttackGoal extends AsyncGoal {
                             weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
 
                         if (!isCharged) {
-                            Hands.activate('right')
+                            context.activateHand('right')
                             const chargeTime = context.getChargeTime(weapon.weapon)
                             await sleep(Math.max(100, chargeTime))
-                            Hands.deactivate()
+                            context.deactivateHand()
                         }
 
                         if (this.entity && this.entity.isValid) {
-                            Hands.activate('right')
+                            context.activateHand('right')
                             await sleep(40)
-                            Hands.deactivate()
+                            context.deactivateHand()
                         }
                     } else {
-                        Hands.activate('right')
+                        context.activateHand('right')
                         const chargeTime = context.getChargeTime(weapon.weapon)
                         await sleep(Math.max(100, chargeTime))
                         if (!this.entity || !this.entity.isValid) {
@@ -146,7 +164,8 @@ module.exports = class AttackGoal extends AsyncGoal {
                                 console.warn(`${this.indent} Unnecessary shot`)
                             }
                         }
-                        Hands.deactivate()
+                        await context.bot.look(grade.yaw, grade.pitch, true)
+                        context.deactivateHand()
                     }
                     continue
                 }
@@ -158,8 +177,8 @@ module.exports = class AttackGoal extends AsyncGoal {
             }
         }
 
-        if (Hands.isLeftActive) {
-            Hands.deactivate()
+        if (context.isLeftHandActive) {
+            context.deactivateHand()
         }
 
         return { result: true }

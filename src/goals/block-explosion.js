@@ -2,7 +2,6 @@ const { goals } = require('mineflayer-pathfinder')
 const { sleep, error } = require('../utils')
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
-const Hands = require('../hands')
 
 /**
  * @extends {AsyncGoal<boolean>}
@@ -45,7 +44,7 @@ module.exports = class BlockExplosionGoal extends AsyncGoal {
         context.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalNear(hazard.position.x, hazard.position.y, hazard.position.z, 8)), true)
 
         while (hazard && context.holdsShield()) {
-            Hands.activate('left')
+            context.activateHand('left')
 
             await context.bot.lookAt(hazard.position.offset(0, 1, 0), true)
             await sleep(100)
@@ -53,7 +52,7 @@ module.exports = class BlockExplosionGoal extends AsyncGoal {
             hazard = context.explodingCreeper()
         }
 
-        Hands.deactivate()
+        context.deactivateHand()
         context.bot.pathfinder.setGoal(null)
         context.bot.pathfinder.setMovements(context.permissiveMovements)
 

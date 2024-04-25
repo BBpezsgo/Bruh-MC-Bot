@@ -44,6 +44,8 @@ module.exports = class FleeGoal extends AsyncGoal {
         }
 
         try {
+            context.bot.pathfinder.setMovements(context.restrictedMovements)
+
             await context.bot.pathfinder.goto(new goals.GoalInvert(new goals.GoalNear(this.point.x, this.point.y, this.point.z, this.distance)))
         } catch (error) {
             return { error: error }

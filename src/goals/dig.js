@@ -24,12 +24,15 @@ module.exports = class DigGoal extends AsyncGoal {
     gatherTool
 
     /**
+     * @param {import('../context')} context
      * @param {Goal<any>} parent
      * @param {Block} block
      * @param {boolean} gatherTool
      */
-    constructor(parent, block, gatherTool) {
+    constructor(context, parent, block, gatherTool) {
         super(parent)
+
+        context.bot.viewer.drawBoxGrid(this.GUID, block.position)
 
         this.block = block
         this.gatherTool = gatherTool
@@ -42,6 +45,10 @@ module.exports = class DigGoal extends AsyncGoal {
      */
     async run(context) {
         super.run(context)
+
+        if (context.quietMode) {
+            return error(`${this.indent} Can't dig in quiet mode`)
+        }
 
         console.log(`${this.indent} Digging ${this.block.displayName} (${this.block.position}) ...`)
     
@@ -127,6 +134,14 @@ module.exports = class DigGoal extends AsyncGoal {
         }
     
         return { result: true }
+    }
+
+    /**
+     * @override
+     * @param {import("../context")} context
+     */
+    cleanup(context) {
+        context.bot.viewer.erase(this.GUID)
     }
 
     /**

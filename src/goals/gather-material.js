@@ -58,7 +58,7 @@ module.exports = class GatherMaterialGoal extends AsyncGoal {
 
         while (foundBlock) {
             console.log(`${this.indent} Digging block ${foundBlock.displayName} ...`)
-            const digged = await (new DigGoal(this, foundBlock, false)).wait()
+            const digged = await (new DigGoal(context, this, foundBlock, false)).wait()
             if ('error' in digged) return error(digged.error)
             if (!digged) {
                 console.error(`${this.indent} Failed to dig ${foundBlock.displayName}`)

@@ -1,4 +1,3 @@
-const Hands = require('../hands')
 const { error, sleep } = require('../utils')
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
@@ -22,6 +21,10 @@ module.exports = class EatGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't eat in quiet mode`)
+        }
+
         if (context.bot.food > 19) {
             return { result: 'full' }
         }
@@ -35,8 +38,8 @@ module.exports = class EatGoal extends AsyncGoal {
         const food = foods[0]
         
         await context.bot.equip(food, 'hand')
-        Hands.deactivate()
-        Hands.activate('right')
+        context.deactivateHand()
+        context.activateHand('right')
         
         const eatStarted = performance.now()
         const eatTime = (food.name === 'dried_kelp') ? (900 /* 0.865 */) : (1700 /* 1610 */)

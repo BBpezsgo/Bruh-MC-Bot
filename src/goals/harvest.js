@@ -1,7 +1,7 @@
 const { Vec3 } = require('vec3')
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
-const { backNForthSort } = require('../utils')
+const { backNForthSort, error } = require('../utils')
 const GotoGoal = require('./goto')
 const PickupItemGoal = require('./pickup-item')
 const PlantSeedGoal = require('./plant-seed')
@@ -38,6 +38,10 @@ module.exports = class HarvestGoal extends AsyncGoal {
      */
     async run(context) {
         super.run(context)
+
+        if (context.quietMode) {
+            return error(`${this.indent} Can't harvest in quiet mode`)
+        }
 
         /**
          * @type {Array<{ position: Vec3; item: string; }>}

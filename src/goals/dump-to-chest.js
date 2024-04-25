@@ -53,6 +53,10 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
         
+        if (context.quietMode) {
+            return error(`${this.indent} Can't open chest in quiet mode`)
+        }
+
         // @ts-ignore
         this.originalCount = context.itemCount(this.item)
         

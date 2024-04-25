@@ -13,6 +13,11 @@ module.exports = class GotoBlockGoal extends AsyncGoal {
     destination
 
     /**
+     * @type {Movements | null}
+     */
+    movements
+
+    /**
      * @param {Goal<any>} parent
      * @param {Vec3} destination
      * @param {Movements} movements
@@ -23,11 +28,6 @@ module.exports = class GotoBlockGoal extends AsyncGoal {
         this.destination = destination
         this.movements = movements
     }
-
-    /**
-     * @type {Movements | null}
-     */
-    movements
 
     /**
      * @override
@@ -43,23 +43,11 @@ module.exports = class GotoBlockGoal extends AsyncGoal {
             return { result: 'here' }
         }
 
-        const oldMovements = this.movements ? context.bot.pathfinder.movements : null
-
         try {
-            if (this.movements) {
-                context.bot.pathfinder.setMovements(this.movements)
-            }
+            context.bot.pathfinder.setMovements(this.movements ?? context.restrictedMovements)
 
             await context.bot.pathfinder.goto(new goals.GoalGetToBlock(this.destination.x, this.destination.y, this.destination.z))
-            
-            if (oldMovements) {
-                context.bot.pathfinder.setMovements(oldMovements)
-            }
         } catch (error) {
-            if (oldMovements) {
-                context.bot.pathfinder.setMovements(oldMovements)
-            }
-
             return { error: error }
         }
         

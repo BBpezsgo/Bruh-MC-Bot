@@ -24,6 +24,10 @@ module.exports = class CompostGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't compost in quiet mode`)
+        }
+
         while (true) {
             let item = CompostGoal.getItem(context, false)
             if (!item) {
@@ -111,7 +115,8 @@ module.exports = class CompostGoal extends AsyncGoal {
                 !includeNono) {
                 continue
             }
-            const compostableId = context.mc.data.itemsByName[compostable].id
+            const compostableId = context.mc.data.itemsByName[compostable]?.id
+            if (!compostableId) { continue }
             const item = context.searchItem(compostableId)
             if (item) {
                 return item

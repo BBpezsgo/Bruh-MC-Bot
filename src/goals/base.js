@@ -1,7 +1,14 @@
+const uuid = require('uuid')
+
 /**
  * @template {any} [TResult = true]
  */
 class Goal {
+    /**
+     * @readonly
+     */
+    GUID
+
     /**
      * @readonly
      * @type {Goal | null}
@@ -69,6 +76,7 @@ class Goal {
      * @param {Goal<null> | null} parent
      */
     constructor(parent) {
+        this.GUID = uuid.v4()
         this.goals = [ ]
         this.started = false
         this.quiet = false
@@ -97,6 +105,14 @@ class Goal {
         // @ts-ignore
         this.started = true
         return { result: null }
+    }
+
+    /**
+     * @virtual
+     * @param {import('../context')} context
+     */
+    cleanup(context) {
+
     }
 
     /**

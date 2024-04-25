@@ -42,6 +42,10 @@ module.exports = class HoeingGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
+        if (context.quietMode) {
+            return error(`${this.indent} Can't hoe in quiet mode`)
+        }
+
         const hoes = [
             context.mc.data.itemsByName['wooden_hoe'].id,
             context.mc.data.itemsByName['stone_hoe'].id,
@@ -96,7 +100,7 @@ module.exports = class HoeingGoal extends AsyncGoal {
                 const dy = Math.abs(block.y - this.water.y)
                 const dz = Math.abs(block.z - this.water.z)
                 if (dx > 4 || dz > 4) { return false }
-                if (dy > 2) { return false }
+                if (dy > 0) { return false }
                 return true
             }
 

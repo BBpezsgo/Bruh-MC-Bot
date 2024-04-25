@@ -93,7 +93,7 @@ module.exports = class Goals {
         const isDone = this.runGoal(context, goals[0], depth, type)
 
         if (isDone) {
-            goals.shift()
+            goals.shift()?.cleanup(context)
         }
     }
 
@@ -109,6 +109,9 @@ module.exports = class Goals {
         if (this.shouldCancel &&
             this.shouldCancel[type]) {
             goal.finish(error(`${indent} Cancelled`))
+            if ('cancel' in goal && typeof goal.cancel === 'function') {
+                goal.cancel(context)
+            }
             return true
         }
 

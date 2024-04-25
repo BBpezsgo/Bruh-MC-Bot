@@ -51,6 +51,31 @@ module.exports = class Context {
     gentleMovements
 
     /**
+     * @type {boolean}
+     */
+    quietMode
+
+    /**
+     * @private
+     * @type {boolean}
+     */
+    _isLeftHandActive
+    
+    /**
+     * @private
+     * @type {boolean}
+     */
+    _isRightHandActive
+
+    get isLeftHandActive() { return this._isLeftHandActive }
+    get isRightHandActive() { return this._isRightHandActive }
+
+    /**
+     * @type {((soundName: string | number) => void) | null}
+     */
+    onHeard
+
+    /**
      * @param {import('mineflayer').Bot} bot
      */
     constructor(bot) {
@@ -58,6 +83,17 @@ module.exports = class Context {
         this.mc = new MC(bot.version)
         this.chatAwaits = [ ]
         this.myBed = null
+        this.quietMode = true
+        this._isLeftHandActive = false
+        this._isRightHandActive = false
+        
+        this.bot.on('soundEffectHeard', (soundName) => {
+            if (this.onHeard) { this.onHeard(soundName) }
+        })
+
+        this.bot.on('hardcodedSoundEffectHeard', (soundId, soundCategory) => {
+            if (this.onHeard) { this.onHeard(soundId) }
+        })
 
         this.permissiveMovements = new Movements(bot)
         this.restrictedMovements = new Movements(bot)
@@ -66,6 +102,31 @@ module.exports = class Context {
         Context.setPermissiveMovements(this.permissiveMovements, this.mc)
         Context.setRestrictedMovements(this.restrictedMovements, this.mc)
         Context.setGentleMovements(this.gentleMovements, this.mc)
+    }
+
+    /**
+     * @param {'right' | 'left'} hand
+     */
+    activateHand(hand) {
+        if (hand === 'right') {
+            this._isRightHandActive = true
+            this.bot.activateItem(false)
+            return
+        }
+
+        if (hand === 'left') {
+            this._isLeftHandActive = true
+            this.bot.activateItem(true)
+            return
+        }
+
+        throw new Error(`Invalid hand "${hand}"`)
+    }
+
+    deactivateHand() {
+        this._isLeftHandActive = false
+        this._isRightHandActive = false
+        this.bot.deactivateItem()
     }
 
     /**
@@ -130,6 +191,7 @@ module.exports = class Context {
         const blocksToAvoid = [
             'campfire',
             'composter',
+            'sculk_sensor',
         ]
 
         for (const blockToAvoid of blocksToAvoid) {
@@ -592,9 +654,7 @@ module.exports = class Context {
     explodingCreeper() {
         return this.bot.nearestEntity(entity => {
             return (
-                entity.name &&
                 entity.name === 'creeper' &&
-                entity.metadata[16] &&
                 // @ts-ignore
                 entity.metadata[16] === 1
             )

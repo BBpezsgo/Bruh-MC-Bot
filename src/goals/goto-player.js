@@ -78,23 +78,11 @@ module.exports = class GotoPlayerGoal extends AsyncGoal {
             }
         }
 
-        const oldMovements = this.movements ? context.bot.pathfinder.movements : null
-
         try {
-            if (this.movements) {
-                context.bot.pathfinder.setMovements(this.movements)
-            }
+            context.bot.pathfinder.setMovements(this.movements ?? context.restrictedMovements)
 
             await context.bot.pathfinder.goto(new goals.GoalNear(target.position.x, target.position.y, target.position.z, this.distance))
-        
-            if (oldMovements) {
-                context.bot.pathfinder.setMovements(oldMovements)
-            }
         } catch (error) {
-            if (oldMovements) {
-                context.bot.pathfinder.setMovements(oldMovements)
-            }
-
             return { error: error }
         }
         

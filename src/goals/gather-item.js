@@ -113,42 +113,15 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 break
             }
 
-            let fromEnvResult = null
             if (!hasRecipe) {
-                fromEnvResult = await this.gatherFromEnvironment(context, requiredCount)
+                const fromEnvResult = await this.gatherFromEnvironment(context, requiredCount)
                 if ('result' in fromEnvResult) {
                     return fromEnvResult
                 }
-                
-                const SmeltGoal = require('./smelt')
-    
-                const cookingRecipes = context.getCookingRecipesFromResult(this.item)
-                const best = SmeltGoal.findBestFurnace(context, cookingRecipes, true)
-        
-                if (best) {
-                    let hasRecipe = false
-                    for (const recipe of best.recipes) {
-                        if (context.searchItem(...recipe.ingredient)) {
-                            hasRecipe = true
-                        }
-                    }
-                    
-                    if (!hasRecipe) {
-                        for (const recipe of best.recipes) {
-                            for (const ingredient of recipe.ingredient) {
-                                const gatherResult = await (new GatherItemGoal(this, context.mc.data.itemsByName[ingredient].id, requiredCount, false, this.canDig, this.canKill, this.item, ...this.baseItems)).wait()
-                                if ('result' in gatherResult) {
-                                    hasRecipe = true
-                                    break
-                                }
-                            }
-                        }
-                    }
 
-                    const smeltResult = await (new SmeltGoal(this, context.getCookingRecipesFromResult(this.item), true)).wait()
-                    if ('result' in smeltResult) {
-                        return { result: 'smelted' }
-                    }
+                const smeltResult = await this.smelt(context, requiredCount)
+                if ('result' in smeltResult) {
+                    return { result: 'smelted' }
                 }
             }
 
@@ -158,9 +131,24 @@ module.exports = class GatherItemGoal extends AsyncGoal {
 
             const craftResult = await this.craft(context, requiredCount)
             if ('error' in craftResult) {
-                if (fromEnvResult) {
+                console.log(`${this.indent} Crafting failed, trying to smelt ...`)
+
+                const smeltResult = await this.smelt(context, requiredCount)
+                if ('result' in smeltResult) {
+                    return { result: 'smelted' }
+                }
+
+                console.log(`${this.indent} Smelting failed, trying to gather from environment ...`)
+
+                if (!this.canDig && !this.canKill) {
+                    return error(`${this.indent} Can't gather ${context.mc.data.items[this.item]?.displayName ?? this.item} because I'm not allowed to dig or kill`)
+                }
+        
+                const fromEnvResult = await this.gatherFromEnvironment(context, requiredCount)
+                if ('result' in fromEnvResult) {
                     return fromEnvResult
                 }
+
                 return craftResult
             }
 
@@ -180,6 +168,43 @@ module.exports = class GatherItemGoal extends AsyncGoal {
     }
 
     /**
+     * @returns {Promise<import('../result').Result<Item>>}
+     * @param {import('../context')} context
+     * @param {number} requiredCount
+     */
+    async smelt(context, requiredCount) {
+        const SmeltGoal = require('./smelt')
+    
+        const cookingRecipes = context.getCookingRecipesFromResult(this.item)
+        const best = SmeltGoal.findBestFurnace(context, cookingRecipes, true)
+
+        if (!best) {
+            return error(`${this.indent} No furnace found`)
+        }
+
+        let hasRecipe = false
+        for (const recipe of best.recipes) {
+            if (context.searchItem(...recipe.ingredient)) {
+                hasRecipe = true
+            }
+        }
+        
+        if (!hasRecipe) {
+            for (const recipe of best.recipes) {
+                for (const ingredient of recipe.ingredient) {
+                    const gatherResult = await (new GatherItemGoal(this, context.mc.data.itemsByName[ingredient].id, requiredCount, false, this.canDig, this.canKill, this.item, ...this.baseItems)).wait()
+                    if ('result' in gatherResult) {
+                        hasRecipe = true
+                        break
+                    }
+                }
+            }
+        }
+
+        return await (new SmeltGoal(this, context.getCookingRecipesFromResult(this.item), true)).wait()
+    }
+
+    /**
      * @param {import('../context')} context
      * @param {number} requiredCount
      * @returns {import('./base').AsyncGoalReturn<'digged' | 'looted'>}
@@ -196,7 +221,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 console.log(`${this.indent} Digging ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
         
                 const DigGoal = require('./dig')
-                const digged = await (new DigGoal(this, block, true)).wait()
+                const digged = await (new DigGoal(context, this, block, true)).wait()
                 if ('error' in digged) return error(digged.error)
 
                 const _requiredCount = this.requiredCount(context)
