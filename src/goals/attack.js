@@ -161,7 +161,7 @@ module.exports = class AttackGoal extends AsyncGoal {
                         await sleep(Math.max(100, chargeTime))
                         if (!this.entity || !this.entity.isValid) {
                             if (!(await context.clearMainHand())) {
-                                console.warn(`${this.indent} Unnecessary shot`)
+                                console.warn(`[Bot "${context.bot.username}"] ${this.indent} Unnecessary shot`)
                             }
                         }
                         await context.bot.look(grade.yaw, grade.pitch, true)

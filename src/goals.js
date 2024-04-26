@@ -129,25 +129,25 @@ module.exports = class Goals {
             try {
                 goal.finish(goal.resolvedValue)
             } catch (error) {
-                console.error(error)
+                console.error(`[Bot "${context.bot.username}"]`, error)
             }
             if ('error' in goal.resolvedValue) {
                 if (typeof goal.resolvedValue.error === 'string') {
-                    if (!goal.quiet) console.error(`${indent} Goal ${goal.constructor.name} errored: ${goal.resolvedValue.error}`)
+                    if (!goal.quiet) console.error(`[Bot "${context.bot.username}"] ${indent} Goal ${goal.constructor.name} errored: ${goal.resolvedValue.error}`)
                     if (depth === 0 &&
                         !goal.quiet) {
                         context.bot.chat(goal.resolvedValue.error)
                     }
                 }
             } else {
-                if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} finished: ${goal.resolvedValue.result}`)
+                if (!goal.quiet) console.log(`[Bot "${context.bot.username}"] ${indent} Goal ${goal.constructor.name} finished: ${goal.resolvedValue.result}`)
             }
             return true
         }
 
         const alreadyStarted = goal.started
 
-        if (!alreadyStarted && !goal.quiet) console.log(`${indent} Running goal ${goal.constructor.name} ...`)
+        if (!alreadyStarted && !goal.quiet) console.log(`[Bot "${context.bot.username}"] ${indent} Running goal ${goal.constructor.name} ...`)
 
         /**
          * @type {import('./goals/base').AsyncGoalReturn<any> | import('./goals/base').GoalReturn<any>}
@@ -162,7 +162,7 @@ module.exports = class Goals {
         try {
             goalResult = goal.run(context)
         } catch (error) {
-            console.error(error)
+            console.error(`[Bot "${context.bot.username}"]`, error)
             goalResult = { error: error.toString() }
         }
 
@@ -178,16 +178,16 @@ module.exports = class Goals {
                 goal.resolvedValue = { error: reason }
             })
 
-            // if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} promised to finish ...`)
+            // if (!goal.quiet) console.log(`[Bot "${context.bot.username}"] ${indent} Goal ${goal.constructor.name} promised to finish ...`)
             return false
         }
 
         if ('error' in goalResult) {
-            if (!goal.quiet) console.error(`${indent} Goal ${goal.constructor.name} errored: ${goalResult.error}`)
+            if (!goal.quiet) console.error(`[Bot "${context.bot.username}"] ${indent} Goal ${goal.constructor.name} errored: ${goalResult.error}`)
         } else {
-            if (!goal.quiet) console.log(`${indent} Goal ${goal.constructor.name} finished: ${goalResult.result}`)
+            if (!goal.quiet) console.log(`[Bot "${context.bot.username}"] ${indent} Goal ${goal.constructor.name} finished: ${goalResult.result}`)
         }
-        // if (!goal.quiet) console.log(`${indent} Finishing goal ${goal.constructor.name} ...`)
+        // if (!goal.quiet) console.log(`[Bot "${context.bot.username}"] ${indent} Finishing goal ${goal.constructor.name} ...`)
         goal.finish(goalResult)
         return true
     }
@@ -244,7 +244,7 @@ module.exports = class Goals {
                 }
 
                 this.shouldCancel = null
-                console.log(`Cancelled`)
+                console.log(`[Bot "${context.bot.username}"] Cancelled`)
             }
         }
 
@@ -257,7 +257,7 @@ module.exports = class Goals {
                 this.runGoals(context, this.normal, 0, 'normal')
             }
         } catch (error) {
-            console.error(error)
+            console.error(`[Bot "${context.bot.username}"]`, error)
         }
 
         if (this.has(false)) {

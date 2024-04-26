@@ -54,28 +54,28 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
             let i = 0
             while (i < this.harvestedSaplings.length) {
                 const replantPosition = this.harvestedSaplings[i]
-                console.log(`${this.indent} Try plant "${replantPosition.item}" at ${replantPosition.position}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant "${replantPosition.item}" at ${replantPosition.position}`)
     
                 const sapling = context.bot.inventory.findInventoryItem(context.mc.data.itemsByName[replantPosition.item].id, null, false)
                 if (!sapling) {
-                    console.warn(`${this.indent} Can't replant this: doesn't have "${replantPosition.item}"`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Can't replant this: doesn't have "${replantPosition.item}"`)
                     i++
                     continue
                 }
                 
                 const placeOn = this.getPlantableBlock(context, replantPosition.position)
                 if (!placeOn) {
-                    console.warn(`${this.indent} Place on is null`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Place on is null`)
                     i++
                     continue
                 }
     
-                console.log(`${this.indent} Try plant on ${placeOn.name}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant on ${placeOn.name}`)
     
                 const plantResult = await this.plant(context, placeOn, sapling)
     
                 if ('result' in plantResult) {
-                    console.log(`${this.indent} Sapling ${replantPosition.item} successfully planted`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Sapling ${replantPosition.item} successfully planted`)
                     this.harvestedSaplings.splice(i, 1)
                     plantedSaplingCount++
                 } else {
@@ -84,7 +84,7 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
             }
         } else {
             while (true) {
-                console.log(`Try plant`)
+                console.log(`[Bot "${context.bot.username}"] Try plant`)
 
                 const sapling = context.searchItem(
                     'oak_sapling',
@@ -104,16 +104,16 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
 
                 const placeOn = this.getPlantableBlock(context, null)
                 if (!placeOn) {
-                    console.warn(`${this.indent} Place on is null`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Place on is null`)
                     break
                 }
     
-                console.log(`${this.indent} Try plant on ${placeOn.name}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant on ${placeOn.name}`)
 
                 const plantResult = await this.plant(context, placeOn, sapling)
     
                 if ('result' in plantResult) {
-                    console.log(`${this.indent} Sapling ${sapling.name} successfully planted`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Sapling ${sapling.name} successfully planted`)
                     plantedSaplingCount++
                 } else {
                     break
@@ -165,10 +165,10 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
                 return error(`${this.indent} Can't replant this: block above it is "${above.name}" and I'm not allowed to clear grass`)
             }
 
-            console.log(`${this.indent} Planting ... Going to ${placeOn.position} (destroying grass)`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting ... Going to ${placeOn.position} (destroying grass)`)
             const subresult = await (new GotoGoal(this, placeOn.position.clone(), 2, context.restrictedMovements)).wait()
             if ('error' in subresult) return error(subresult.error)
-            console.log(`${this.indent} Planting ... Destroy grass`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting ... Destroy grass`)
             await context.bot.dig(above, true)
 
             canPlace = true
@@ -178,12 +178,12 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
             return error(`${this.indent} Can't replant this: block above it is "${above.name}"`)
         }
 
-        console.log(`${this.indent} Planting ... Going to ${placeOn.position}`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting ... Going to ${placeOn.position}`)
         const subresult = await (new GotoGoal(this, placeOn.position.clone(), 2, context.restrictedMovements)).wait()
         if ('error' in subresult) return error(subresult.error)
-        console.log(`${this.indent} Planting ... Equiping item`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting ... Equiping item`)
         await context.bot.equip(sapling, 'hand')
-        console.log(`${this.indent} Planting ... Place block`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting ... Place block`)
         await context.bot.placeBlock(placeOn, new Vec3(0, 1, 0))
         return { result: true }
     }

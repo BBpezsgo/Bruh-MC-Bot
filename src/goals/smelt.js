@@ -142,7 +142,7 @@ module.exports = class SmeltGoal extends AsyncGoal {
             for (const ingredient of recipe.ingredient) {
                 const _i = context.mc.data.itemsByName[ingredient]
                 if (!_i) {
-                    console.warn(`${this.indent} Unknown ingredient "${ingredient}"`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Unknown ingredient "${ingredient}"`)
                     continue
                 }
                 if (!context.searchItem(_i.id)) {
@@ -332,7 +332,7 @@ module.exports = class SmeltGoal extends AsyncGoal {
         for (const ingredient of recipe.ingredient) {
             const _i = context.mc.data.itemsByName[ingredient]
             if (!_i) {
-                console.warn(`${this.indent} Unknown ingredient "${ingredient}"`)
+                console.warn(`[Bot "${context.bot.username}"] ${this.indent} Unknown ingredient "${ingredient}"`)
                 continue
             }
             item = context.searchItem(_i.id)
@@ -358,7 +358,7 @@ module.exports = class SmeltGoal extends AsyncGoal {
             const dropped = collected.getDroppedItem()
             if (!dropped) { return }
             if (dropped.type !== result.id) { return }
-            console.log(`Item ${dropped.displayName} collected`)
+            console.log(`[Bot "${context.bot.username}"] Item ${dropped.displayName} collected`)
             pickedUp = true
             context.bot.removeListener('playerCollect', onPickUp)
         }

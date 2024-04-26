@@ -49,7 +49,7 @@ module.exports = class GatherMaterialGoal extends AsyncGoal {
         let tool = context.mc.getCorrectTool(foundBlock, context.bot)
 
         if (tool && tool.has) {
-            console.log(`${this.indent} Equiping ${tool.item.displayName} ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Equiping ${tool.item.displayName} ...`)
             await context.bot.equip(tool.item.id, 'hand')
         }
 
@@ -57,11 +57,11 @@ module.exports = class GatherMaterialGoal extends AsyncGoal {
         const inventoryBefore = context.bot.inventory.items()
 
         while (foundBlock) {
-            console.log(`${this.indent} Digging block ${foundBlock.displayName} ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Digging block ${foundBlock.displayName} ...`)
             const digged = await (new DigGoal(context, this, foundBlock, false)).wait()
             if ('error' in digged) return error(digged.error)
             if (!digged) {
-                console.error(`${this.indent} Failed to dig ${foundBlock.displayName}`)
+                console.error(`[Bot "${context.bot.username}"] ${this.indent} Failed to dig ${foundBlock.displayName}`)
                 break
             }
 
@@ -73,7 +73,7 @@ module.exports = class GatherMaterialGoal extends AsyncGoal {
 
             count++
             if (count > 10) {
-                console.log(`${this.indent} Max digging reached`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Max digging reached`)
                 break
             }
         }

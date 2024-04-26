@@ -86,19 +86,19 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         // @ts-ignore
         this.originalCount = context.itemCount(this.item)
 
-        console.log(`${this.indent} Gathering ${this.count} of "${context.mc.data.items[this.item]?.displayName ?? this.item}" ...`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering ${this.count} of "${context.mc.data.items[this.item]?.displayName ?? this.item}" ...`)
 
         let requiredCount = this.requiredCount(context)
-        console.log(`${this.indent} Required ${requiredCount}`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Required ${requiredCount}`)
 
         if (requiredCount <= 0) {
-            console.log(`${this.indent} Already have`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Already have`)
             return { result: 'have' }
         }
 
         let endlessSafe = 50
         const hasRecipe = context.bot.recipesAll(this.item, null, true).length > 0
-        console.log(`${this.indent} Has recipe:`, hasRecipe)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Has recipe:`, hasRecipe)
 
         while (requiredCount > 0) {
             let requiredCount = this.requiredCount(context)
@@ -109,7 +109,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
             }
 
             if (requiredCount <= 0) {
-                console.log(`${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully gathered`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully gathered`)
                 break
             }
 
@@ -131,14 +131,14 @@ module.exports = class GatherItemGoal extends AsyncGoal {
 
             const craftResult = await this.craft(context, requiredCount)
             if ('error' in craftResult) {
-                console.log(`${this.indent} Crafting failed, trying to smelt ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting failed, trying to smelt ...`)
 
                 const smeltResult = await this.smelt(context, requiredCount)
                 if ('result' in smeltResult) {
                     return { result: 'smelted' }
                 }
 
-                console.log(`${this.indent} Smelting failed, trying to gather from environment ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Smelting failed, trying to gather from environment ...`)
 
                 if (!this.canDig && !this.canKill) {
                     return error(`${this.indent} Can't gather ${context.mc.data.items[this.item]?.displayName ?? this.item} because I'm not allowed to dig or kill`)
@@ -155,7 +155,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
             continue
         }
 
-        console.log(`${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully crafted`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully crafted`)
         return { result: 'crafted' }
     }
 
@@ -218,7 +218,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
             const block = context.findBlockWithDrop(this.item, 16)
 
             if (block && this.canDig) {
-                console.log(`${this.indent} Digging ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Digging ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
         
                 const DigGoal = require('./dig')
                 const digged = await (new DigGoal(context, this, block, true)).wait()
@@ -231,7 +231,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 requiredCount = _requiredCount
 
                 if (requiredCount <= 0) {
-                    console.log(`${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully gathered`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully gathered`)
                     return { result: 'digged' }
                 }
 
@@ -245,7 +245,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
             const entity = context.findEntityWithDrop(this.item)
 
             if (entity && this.canKill) {
-                console.log(`${this.indent} Looting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Looting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
         
                 const entityPosition = entity.position.clone()
                 {
@@ -270,7 +270,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 requiredCount = _requiredCount
 
                 if (requiredCount <= 0) {
-                    console.log(`${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully looted`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Item ${context.mc.data.items[this.item]?.displayName ?? this.item} successfully looted`)
                     return { result: 'looted' }
                 }
 
@@ -311,16 +311,16 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         })
 
         if (craftingTable) {
-            console.log(`${this.indent} Crafting table is there`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting table is there`)
             return { result: craftingTable }
         }
 
         if (!craftingTable) {
-            console.log(`${this.indent} Searching for crafting table ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Searching for crafting table ...`)
 
             const craftingTableInInventory = context.searchItem('crafting_table')
             if (craftingTableInInventory) {
-                console.log(`${this.indent} Found in inventory, placing down ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Found in inventory, placing down ...`)
                 const subresult = await (new PlaceBlockAnywhereGoal(this, craftingTableInInventory.type, true)).wait()
                 if ('error' in subresult) return error(subresult.error)
             }
@@ -332,7 +332,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         }
 
         if (!craftingTable) {
-            console.log(`${this.indent} Gathering crafting table ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering crafting table ...`)
 
             {
                 const subresult = await (new GatherItemGoal(this, context.mc.data.itemsByName['crafting_table'].id, 1, false, this.canDig, this.canKill)).wait()
@@ -341,11 +341,11 @@ module.exports = class GatherItemGoal extends AsyncGoal {
 
             const craftingTableInInventory = context.searchItem('crafting_table')
             if (craftingTableInInventory) {
-                console.log(`${this.indent} Crafting table gathered, placing down ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting table gathered, placing down ...`)
                 const subresult = await (new PlaceBlockAnywhereGoal(this, craftingTableInInventory.type, true)).wait()
                 if ('error' in subresult) return error(subresult.error)
             } else {
-                console.error(`${this.indent} Failed to gather crafting table`)
+                console.error(`[Bot "${context.bot.username}"] ${this.indent} Failed to gather crafting table`)
                 return error(`${this.indent} Failed to gather crafting table`)
             }
 
@@ -366,9 +366,9 @@ module.exports = class GatherItemGoal extends AsyncGoal {
     async craft(context, requiredCount) {
         const needCraftingTable = context.bot.recipesAll(this.item, null, null).length === 0
 
-        console.log(`${this.indent} Crafting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
 
-        console.log(`${this.indent} Need crafting table:`, needCraftingTable)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Need crafting table:`, needCraftingTable)
 
         let craftingTable = null
         if (needCraftingTable) {
@@ -381,20 +381,20 @@ module.exports = class GatherItemGoal extends AsyncGoal {
 
         let recipes = context.bot.recipesFor(this.item, null, null, craftingTable)
         if (recipes.length > 0) {
-            console.log(`${this.indent} Has all the ingredients`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Has all the ingredients`)
             if (craftingTable) {
-                console.log(`${this.indent} Goto crafing table ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Goto crafing table ...`)
                 const subresult = await (new GotoBlockGoal(this, craftingTable.position.clone(), context.restrictedMovements)).wait()
                 if ('error' in subresult) return error(subresult.error)
             } else if (recipes[0].requiresTable) {
                 return error(`${this.indent} No crafing table found`)
             }
 
-            console.log(`${this.indent} Crafting ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting ...`)
             await context.bot.craft(recipes[0], 1, craftingTable)
             return { result: recipes[0].result.count }
         } else {
-            console.log(`${this.indent} Doesn't have all the ingredients ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Doesn't have all the ingredients ...`)
         }
 
         recipes = context.bot.recipesAll(this.item, null, craftingTable)
@@ -418,15 +418,15 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         for (const recipe of recipes) {
             const ingredients = context.mc.getIngredients(recipe)
 
-            console.log(`${this.indent} Gathering ingredients for recipe { req: [ ${recipe.delta.filter(v => v.count < 0).map(v => context.mc.data.items[v.id]?.displayName ?? v.id).join(', ')} ], res: ${recipe.delta.filter(v => v.count > 0).map(v => context.mc.data.items[v.id]?.displayName ?? v.id).join(', ')} } ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering ingredients for recipe { req: [ ${recipe.delta.filter(v => v.count < 0).map(v => context.mc.data.items[v.id]?.displayName ?? v.id).join(', ')} ], res: ${recipe.delta.filter(v => v.count > 0).map(v => context.mc.data.items[v.id]?.displayName ?? v.id).join(', ')} } ...`)
 
             for (const ingredient of ingredients) {
                 if (ingredient.id === -1) {
-                    console.warn(`${this.indent} Skipping ingredient`, ingredient)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Skipping ingredient`, ingredient)
                     continue
                 }
 
-                console.log(`${this.indent} Gathering ingredient ${context.mc.data.items[ingredient.id]?.displayName ?? ingredient.id} ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering ingredient ${context.mc.data.items[ingredient.id]?.displayName ?? ingredient.id} ...`)
 
                 const gathered = await (new GatherItemGoal(this, ingredient.id, ingredient.count, false, this.canDig, this.canKill, this.item, ...this.baseItems)).wait()
                 if ('error' in gathered) { continue }
@@ -438,12 +438,12 @@ module.exports = class GatherItemGoal extends AsyncGoal {
             const goodRecipes = context.bot.recipesFor(this.item, null, null, craftingTable)
             if (goodRecipes.length > 0) {
                 if (craftingTable) {
-                    console.log(`${this.indent} Goto crafing table ...`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Goto crafing table ...`)
                     const subresult = await (new GotoBlockGoal(this, craftingTable.position.clone(), context.restrictedMovements)).wait()
                     if ('error' in subresult) return error(subresult.error)
                 }
 
-                console.log(`${this.indent} Crafting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting ${context.mc.data.items[this.item]?.displayName ?? this.item} ...`)
 
                 await context.bot.craft(goodRecipes[0], 1, craftingTable)
                 

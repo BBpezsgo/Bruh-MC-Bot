@@ -209,6 +209,8 @@ module.exports = class BruhBot {
      * @param {string} username
      */
     constructor(config, worldName, username) {
+        console.log(`[Bot "${username}"] Launching ...`)
+
         worldName = worldName + '_' + username
 
         this.goals = new Goals()
@@ -254,13 +256,16 @@ module.exports = class BruhBot {
         this.worldName = worldName
 
         this.bot.once('spawn', () => {
-            console.log(`Spawned`)
+            console.log(`[Bot "${username}"] Spawned`)
 
+            console.log(`[Bot "${username}"] Loading plugins ...`)
             this.bot.loadPlugin(MineFlayerPathfinder.pathfinder)
             this.bot.loadPlugin(MineFlayerCollectBlock)
             this.bot.loadPlugin(MineFlayerArmorManager)
             this.bot.loadPlugin(MineFlayerHawkEye)
             this.bot.loadPlugin(MineFlayerElytra)
+
+            console.log(`[Bot "${username}"] Loading ...`)
 
             // @ts-ignore
             this.context = new Context(this.bot)
@@ -280,6 +285,7 @@ module.exports = class BruhBot {
             // const app = require('express')()
             // const http = require('http').createServer(app)
 
+            // @ts-ignore
             MineflayerViewer.mineflayer(this.bot, {
                 port: 3000,
                 // _app: app,
@@ -298,6 +304,8 @@ module.exports = class BruhBot {
             // http.listen(80)
 
             // bot.hawkEye.startRadar()
+        
+            console.log(`[Bot "${username}"] Ready`)
         })
 
         this.bot.on('physicsTick', () => {
@@ -489,12 +497,15 @@ module.exports = class BruhBot {
         this.bot.on('whisper', (username, message) => this.handleChat(username, message, (response) => { this.bot.whisper(username, response) }))
 
         this.bot.on('death', () => {
+            console.log(`[Bot "${username}"] Died`)
             this.goals.cancel(false, true, true)
             this.deathPosition = this.lastPosition
         })
 
-        this.bot.on('kicked', (reason) => console.warn(`Kicked:`, reason))
-        this.bot.on('error', console.error)
+        this.bot.on('kicked', (reason) => console.warn(`[Bot "${username}"] Kicked:`, reason))
+        this.bot.on('error', (error) => console.error(`[Bot "${username}"]`, error))
+
+        this.bot.on('login', () => { console.log(`[Bot "${username}"] Logged in`) })
 
         this.bot.on('end', (reason) => {
             if (this.context) {
@@ -508,7 +519,7 @@ module.exports = class BruhBot {
 
             this.goals.cancel(true, true, true)
 
-            console.log(`Ended:`, reason)
+            console.log(`[Bot "${username}"] Ended:`, reason)
         })
         
         this.bot.on('path_update', (r) => {
@@ -981,7 +992,7 @@ module.exports = class BruhBot {
                         }
                         builder = builder.trim()
                     }
-                    console.log(`I have gathered ${builder}`)
+                    console.log(`[Bot "${username}"] I have gathered ${builder}`)
                 })
             } catch (error) { }
 
@@ -1095,7 +1106,7 @@ module.exports = class BruhBot {
                     respond(result.toString())
                 })
                 .catch((reason) => {
-                    console.error(reason)
+                    console.error(`[Bot "${username}"]`, reason)
                     if (reason === 'Time Limit Exceeded') {
                         respond(`I don't know`)
                     }
@@ -1206,13 +1217,25 @@ module.exports = class BruhBot {
      * @private
      */
     getCriticalGoal() {
-        if (this.context.explodingCreeper()) {
-            return new BlockExplosionGoal(null)
+        let creeper = this.context.explodingCreeper()
+
+        if (creeper) {
+            if (this.context.searchItem('shield')) {
+                return new BlockExplosionGoal(null)
+            } else {
+                return new FleeGoal(null, creeper.position.clone(), 8)
+            }
+        }
+
+        creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
+
+        if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
+            return new FleeGoal(null, creeper.position.clone(), 8)
         }
 
         if (this.aimingEntities.length > 0) {
             const entity = this.aimingEntities[0]
-            console.log(`${entity?.displayName ?? entity?.name ?? 'Someone'} aiming at me`)
+            console.log(`[Bot "${this.bot.username}"] ${entity?.displayName ?? entity?.name ?? 'Someone'} aiming at me`)
         }
 
         // if (BlockMeleeGoal.getHazard(context) &&
@@ -1248,7 +1271,7 @@ module.exports = class BruhBot {
                     if (this.defendMyselfGoal.entity === hostile) {
                         return null
                     }
-                    console.warn(`Changing target`)
+                    console.warn(`[Bot "${this.bot.username}"]Changing target`)
                     this.defendMyselfGoal.entity = hostile
                     return null
                 }

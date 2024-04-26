@@ -50,24 +50,24 @@ module.exports = class DigGoal extends AsyncGoal {
             return error(`${this.indent} Can't dig in quiet mode`)
         }
 
-        console.log(`${this.indent} Digging ${this.block.displayName} (${this.block.position}) ...`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Digging ${this.block.displayName} (${this.block.position}) ...`)
     
         /** @type {{ has: boolean; item: getMcData.Item; } | null} */
         let tool = null
     
         if (!this.block.canHarvest(context.bot.heldItem?.type ?? null)) {
-            console.log(`${this.indent} Can't harvest ${this.block.displayName} with ${context.bot.heldItem?.displayName ?? 'hand'} ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Can't harvest ${this.block.displayName} with ${context.bot.heldItem?.displayName ?? 'hand'} ...`)
     
             tool = context.mc.getCorrectTool(this.block, context.bot)
     
             if (!tool) {
-                return error(`${this.indent} I don't know any tool that can dig ${this.block.displayName}`)
+                return error(`[Bot "${context.bot.username}"] ${this.indent} I don't know any tool that can dig ${this.block.displayName}`)
             }
     
             if (!tool.has &&
                 !this.block.canHarvest(null)) {
                 if (this.gatherTool) {
-                    console.log(`${this.indent} Gathering ${tool.item.displayName} ...`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering ${tool.item.displayName} ...`)
                     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false)).wait()
                     if ('error' in toolGathered) return error(toolGathered.error)
                 } else {
@@ -87,16 +87,16 @@ module.exports = class DigGoal extends AsyncGoal {
             }
         }
     
-        console.log(`${this.indent} Tool:`, tool)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Tool:`, tool)
 
         {
-            console.log(`${this.indent} Goto block ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Goto block ...`)
             const subresult = await (new GotoBlockGoal(this, this.block.position.clone(), context.restrictedMovements)).wait()
             if ('error' in subresult) return error(subresult.error)
         }
         
         if (tool?.has) {
-            console.log(`${this.indent} Equiping "${tool.item.displayName}" ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Equiping "${tool.item.displayName}" ...`)
             await context.bot.equip(tool.item.id, 'hand')
         }
     
@@ -104,7 +104,7 @@ module.exports = class DigGoal extends AsyncGoal {
             return error(`${this.indent} Can't harvest ${this.block.displayName} with ${context.bot.heldItem?.displayName ?? 'hand'}`)
         }
     
-        console.log(`${this.indent} Digging ...`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Digging ...`)
         await context.bot.dig(this.block)
     
         {
@@ -119,7 +119,7 @@ module.exports = class DigGoal extends AsyncGoal {
             if (!nearestEntity) { break }
             const distance = context.bot.entity.position.distanceTo(nearestEntity.position)
             if (distance < 1.5) {
-                console.log(`${this.indent} Picking up item ...`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Picking up item ...`)
                 {
                     const subresult = await (new GotoGoal(this, nearestEntity.position.clone(), .5, context.permissiveMovements)).wait()
                     if ('error' in subresult) return error(subresult.error)

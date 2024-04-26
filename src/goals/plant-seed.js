@@ -48,28 +48,28 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
             let i = 0
             while (i < this.harvestedCrops.length) {
                 const harvestedCrop = this.harvestedCrops[i]
-                console.log(`${this.indent} Try plant "${harvestedCrop.item}" at ${harvestedCrop.position}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant "${harvestedCrop.item}" at ${harvestedCrop.position}`)
 
                 const seed = context.bot.inventory.findInventoryItem(context.mc.data.itemsByName[harvestedCrop.item].id, null, false)
                 if (!seed) {
-                    console.warn(`${this.indent} Can't replant this: doesn't have "${harvestedCrop.item}"`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Can't replant this: doesn't have "${harvestedCrop.item}"`)
                     i++
                     continue
                 }
 
                 const placeOn = this.getFreeFarmland(context, harvestedCrop.position)
                 if (!placeOn) {
-                    console.warn(`${this.indent} Place on is null`)
+                    console.warn(`[Bot "${context.bot.username}"] ${this.indent} Place on is null`)
                     i++
                     continue
                 }
 
-                console.log(`${this.indent} Try plant on ${placeOn.name}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant on ${placeOn.name}`)
 
                 const plantResult = await this.plant(context, placeOn, seed)
 
                 if ('result' in plantResult) {
-                    console.log(`${this.indent} Seed ${harvestedCrop.item} successfully planted`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Seed ${harvestedCrop.item} successfully planted`)
                     this.harvestedCrops.splice(i, 1)
                     palntedCount++
                 } else {
@@ -82,7 +82,7 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
             }
 
             while (true) {
-                console.log(`Try plant seed`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant seed`)
 
                 const seed = context.searchItem(...this.seedItems)
 
@@ -95,12 +95,12 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
                     break
                 }
 
-                console.log(`${this.indent} Try plant ${seed.displayName} on ${placeOn.name}`)
+                console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant ${seed.displayName} on ${placeOn.name}`)
 
                 const plantResult = await this.plant(context, placeOn, seed)
 
                 if ('result' in plantResult) {
-                    console.log(`${this.indent} Seed successfully planted`)
+                    console.log(`[Bot "${context.bot.username}"] ${this.indent} Seed successfully planted`)
                     palntedCount++
                 }
             }
@@ -148,15 +148,15 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
             return error(`${this.indent} Can't plant seed: block above it is "${above.name}"`)
         }
 
-        console.log(`${this.indent} Planting seed ... Going to ${placeOn.position}`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting seed ... Going to ${placeOn.position}`)
         const subresult = await (new GotoGoal(this, placeOn.position.clone(), 2, context.gentleMovements)).wait()
         if ('error' in subresult) return error(subresult.error)
         
-        console.log(`${this.indent} Planting seed ... Equiping item`)
+        console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting seed ... Equiping item`)
         await context.bot.equip(seedItem, 'hand')
 
         if (context.bot.heldItem) {
-            console.log(`${this.indent} Planting seed ... Place block`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Planting seed ... Place block`)
             try {
                 await context.bot.placeBlock(placeOn, new Vec3(0, 1, 0))
             } catch (_error) {

@@ -32,19 +32,19 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
 
         const shield = context.searchItem('shield')
         if (!shield) {
-            console.warn(`${this.indent} Has no shield`)
+            console.warn(`[Bot "${context.bot.username}"] ${this.indent} Has no shield`)
             return { result: false }
         }
 
         let hazard = BlockMeleeGoal.getHazard(context)
 
         if (!hazard) {
-            console.warn(`${this.indent} There are no hazards`)
+            console.warn(`[Bot "${context.bot.username}"] ${this.indent} There are no hazards`)
             return { result: false }
         }
 
         if (!context.holdsShield()) {
-            console.warn(`${this.indent} Equiping shield`)
+            console.warn(`[Bot "${context.bot.username}"] ${this.indent} Equiping shield`)
             await context.bot.equip(shield.type, 'off-hand')
         }
 
@@ -61,7 +61,7 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
         // Source: https://github.com/PrismarineJS/mineflayer-pvp/blob/master/src/PVP.ts
 
         let distance = context.bot.entity.position.distanceTo(hazard.position)
-        console.warn(`${this.indent} Distance: ${Math.round(distance * 10) / 10}`)
+        console.warn(`[Bot "${context.bot.username}"] ${this.indent} Distance: ${Math.round(distance * 10) / 10}`)
 
         while ((
                 hazard &&
@@ -71,13 +71,13 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
             )) {
                 context.activateHand('left')
 
-            console.warn(`${this.indent} Blocking melee attack ...`)
+            console.warn(`[Bot "${context.bot.username}"] ${this.indent} Blocking melee attack ...`)
             await context.bot.lookAt(hazard.position.offset(0, hazard.height, 0), true)
             // context.bot.setControlState('back', true)
             await sleep(50)
 
             distance = context.bot.entity.position.distanceTo(hazard.position)
-            console.warn(`${this.indent} Distance: ${Math.round(distance * 10) / 10}`)
+            console.warn(`[Bot "${context.bot.username}"] ${this.indent} Distance: ${Math.round(distance * 10) / 10}`)
 
             if (this.fleeResult) {
                 if ('error' in this.fleeResult) {
