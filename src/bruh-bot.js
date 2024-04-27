@@ -1337,15 +1337,16 @@ module.exports = class BruhBot {
      */
     getWorldData() {
         return {
-            harvested: {
+            'harvested': {
                 saplings: this.harvestedSaplings,
                 crops: this.harvestedCrops,
             },
-            positions: {
+            'positions': {
                 idlePosition: this.idlePosition,
                 deathPosition: this.deathPosition,
                 bed: this.context.myBed,
             },
+            'my_chests': this.context.myChests,
         }
     }
 
@@ -1384,6 +1385,12 @@ module.exports = class BruhBot {
             this.idlePosition = fJSON.toVec3(positions, 'idlePosition')
             this.deathPosition = fJSON.toVec3(positions, 'deathPosition')
             this.context.myBed = fJSON.toVec3(positions, 'bed')
+        }
+
+        if (data['my_chests']) {
+            const myChests = data['my_chests']
+            // @ts-ignore
+            this.context.myChests = myChests
         }
     }
 

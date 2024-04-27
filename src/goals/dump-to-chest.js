@@ -74,18 +74,8 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
                 return { result: true }
             }
 
-            const chestBlock = context.bot.findBlock({
-                matching: context.mc.data.blocksByName['chest'].id,
-                useExtraInfo: (block) => {
-                    for (const fullChest of this.fullChests) {
-                        if (fullChest.equals(block.position)) {
-                            return false
-                        }
-                    }
-                    return true
-                }
-            })
-    
+            const chestBlock = DumpToChestGoal.getChest(context, this.fullChests)
+
             if (!chestBlock) {
                 return error(`${this.indent} There is no chest`)
             }
@@ -96,6 +86,20 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
             }
     
             const chest = await context.bot.openChest(chestBlock)
+
+            {
+                let isNewChest = true
+                for (const myChest of context.myChests) {
+                    if (myChest.equals(chestBlock.position)) {
+                        isNewChest = false
+                        break
+                    }
+                }
+                
+                if (isNewChest) {
+                    context.myChests.push(chestBlock.position.clone())
+                }
+            }
     
             if (Context.firstFreeSlot(chest, this.item) === null) {
                 this.fullChests.push(chestBlock.position.clone())
@@ -113,6 +117,33 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
             chest.close()
             await (new Wait(this, 200)).wait()
         }
+    }
+
+    /**
+     * @param {import('../context')} context
+     * @param {Array<Vec3> | null} fullChests
+     * @returns {import('prismarine-block').Block | null}
+     */
+    static getChest(context, fullChests = null) {
+        for (const myChest of context.myChests) {
+            const myChestBlock = context.bot.blockAt(myChest, true)
+            if (myChestBlock && myChestBlock.type === context.mc.data.blocksByName['chest'].id) {
+                return myChestBlock
+            }
+        }
+        return context.bot.findBlock({
+            matching: context.mc.data.blocksByName['chest'].id,
+            useExtraInfo: (block) => {
+                if (fullChests) {
+                    for (const fullChest of fullChests) {
+                        if (fullChest.equals(block.position)) {
+                            return false
+                        }
+                    }
+                }
+                return true
+            }
+        })
     }
 
     /**

@@ -56,6 +56,12 @@ module.exports = class Context {
     quietMode
 
     /**
+     * @readonly
+     * @type {Array<Vec3>}
+     */
+    myChests
+
+    /**
      * @private
      * @type {boolean}
      */
@@ -82,6 +88,7 @@ module.exports = class Context {
         this.bot = bot
         this.mc = new MC(bot.version)
         this.chatAwaits = [ ]
+        this.myChests = [ ]
         this.myBed = null
         this.quietMode = true
         this._isLeftHandActive = false
