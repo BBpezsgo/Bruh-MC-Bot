@@ -1,7 +1,6 @@
 const { error, sleep } = require("../utils")
 const AsyncGoal = require("./async-base")
 const { Goal } = require("./base")
-const { Vec3 } = require("vec3")
 const { Block } = require('prismarine-block')
 const GotoBlockGoal = require("./goto-block")
 
@@ -46,6 +45,7 @@ module.exports = class SleepGoal extends AsyncGoal {
         context.myBed = bed.position.clone()
 
         while (context.bot.isSleeping) {
+            context.refreshTime()
             await sleep(500)
         }
 
@@ -105,14 +105,6 @@ module.exports = class SleepGoal extends AsyncGoal {
                     return false
                 }
 
-                /**
-                 * @type {{
-                 *      part: boolean;
-                 *      occupied: number;
-                 *      facing: number;
-                 *      headOffset: Vec3;
-                 *  }}
-                 */ // @ts-ignore
                 const _bed = context.bot.parseBedMetadata(block)
 
                 if (_bed.occupied) {

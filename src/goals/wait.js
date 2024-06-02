@@ -33,7 +33,7 @@ module.exports = class Wait extends Goal {
     run(context) {
         super.run(context)
 
-        if ((performance.now() - this.startTime) >= this.waitTime) {
+        if ((context.time - this.startTime) >= this.waitTime) {
             return { result: true }
         }
         
@@ -46,6 +46,6 @@ module.exports = class Wait extends Goal {
      * @returns {string}
      */
     toReadable(context) {
-        return `Wait for ${(Math.round(this.waitTime / 100) / 10)} seconds (${(Math.round(Math.max(this.waitTime - (performance.now() - this.startTime), 0) / 100) / 10)} sec remaining)`
+        return `Wait for ${(Math.round(this.waitTime / 100) / 10)} seconds (${(Math.round(Math.max(this.waitTime - (context.time - this.startTime), 0) / 100) / 10)} sec remaining)`
     }
 }

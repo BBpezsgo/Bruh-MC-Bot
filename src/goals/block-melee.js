@@ -49,6 +49,7 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
         }
 
         context.bot.pathfinder.stop()
+        context.bot.pathfinder.thinkTimeout = 500
         context.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalFollow(hazard, 100)))
         // this.flee(hazard, context)
         //     .then((_result) => {
@@ -69,7 +70,8 @@ module.exports = class BlockMeleeGoal extends AsyncGoal {
                 context.holdsShield() &&
                 distance < 2
             )) {
-                context.activateHand('left')
+            context.refreshTime()
+            context.activateHand('left')
 
             console.warn(`[Bot "${context.bot.username}"] ${this.indent} Blocking melee attack ...`)
             await context.bot.lookAt(hazard.position.offset(0, hazard.height, 0), true)

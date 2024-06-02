@@ -23,17 +23,24 @@ module.exports = class GotoGoal extends AsyncGoal {
     movements
 
     /**
+     * @type {number}
+     */
+    thinkTimeout
+
+    /**
      * @param {Goal<any>} parent
      * @param {Vec3} destination
      * @param {number} distance
      * @param {Movements} movements
+     * @param {number} [thinkTimeout = 5000]
      */
-    constructor(parent, destination, distance, movements) {
+    constructor(parent, destination, distance, movements, thinkTimeout = 5000) {
         super(parent)
 
         this.destination = destination
         this.distance = distance
         this.movements = movements
+        this.thinkTimeout = thinkTimeout
     }
 
     /**
@@ -52,13 +59,22 @@ module.exports = class GotoGoal extends AsyncGoal {
 
         try {
             context.bot.pathfinder.setMovements(this.movements ?? context.restrictedMovements)
-
+            context.bot.pathfinder.thinkTimeout = this.thinkTimeout
             await context.bot.pathfinder.goto(new goals.GoalNear(this.destination.x, this.destination.y, this.destination.z, this.distance))
         } catch (error) {
             return { error: error }
         }
         
         return { result: 'done' }
+    }
+
+    /**
+     * @override
+     * @param {import('../context')} context
+     */
+    cancel(context) {
+        context.bot.pathfinder.stop()
+        super.cancel(context)
     }
 
     /**

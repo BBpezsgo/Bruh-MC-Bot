@@ -1,10 +1,7 @@
 const { goals, Movements } = require('mineflayer-pathfinder')
 const { Goal } = require('./base')
 const AsyncGoal = require('./async-base')
-const { error, sleep } = require('../utils')
-const { Weapons } = require('minecrafthawkeye')
-const Wait = require('./wait')
-const { Vec3 } = require('vec3')
+const { error } = require('../utils')
 
 /**
  * @extends {AsyncGoal<'here' | 'done'>}
@@ -26,17 +23,24 @@ module.exports = class GotoPlayerGoal extends AsyncGoal {
     movements
 
     /**
+     * @type {number}
+     */
+    thinkTimeout
+
+    /**
      * @param {Goal<any>} parent
      * @param {string} player
      * @param {number} distance
      * @param {Movements} movements
+     * @param {number} [thinkTimeout = 5000]
      */
-    constructor(parent, player, distance, movements) {
+    constructor(parent, player, distance, movements, thinkTimeout = 5000) {
         super(parent)
 
         this.player = player
         this.distance = distance
         this.movements = movements
+        this.thinkTimeout = thinkTimeout
     }
 
     /**
@@ -47,46 +51,44 @@ module.exports = class GotoPlayerGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
         
-        const target = context.bot.players[this.player]?.entity
+        let target = context.bot.players[this.player]?.entity?.position
+
+        if (!target) {
+            target = context.playerPositions[this.player]
+            if (target) {
+                console.warn(`[Bot "${context.bot.username}"] Using saved player position`)
+            }
+        }
 
         if (!target) {
             return error(`${this.indent} Can't find ${this.player}`)
         }
 
-        const distance = context.bot.entity.position.distanceTo(target.position)
+        const distance = context.bot.entity.position.distanceTo(target)
 
         if (distance <= this.distance) {
             return { result: 'here' }
         }
 
-        if (false && distance > 20) {
-            const enderpearl = context.searchItem('ender_pearl')
-            if (enderpearl) {
-                const grade = context.bot.hawkEye.getMasterGrade(target, new Vec3(0, 0, 0), Weapons.ender_pearl)
-                if (grade) {
-                    if (!grade.blockInTrayect) {
-                        await context.bot.look(grade.yaw, grade.pitch, true)
-                        await sleep(500)
-                        await context.bot.look(grade.yaw, grade.pitch, true)
-                        await sleep(500)
-                        await context.bot.equip(enderpearl, 'hand')
-                        context.bot.activateItem(false)
-                        await (new Wait(this, 5000)).wait()
-                        return { result: 'done' }
-                    }
-                }
-            }
-        }
-
         try {
             context.bot.pathfinder.setMovements(this.movements ?? context.restrictedMovements)
+            context.bot.pathfinder.thinkTimeout = this.thinkTimeout
 
-            await context.bot.pathfinder.goto(new goals.GoalNear(target.position.x, target.position.y, target.position.z, this.distance))
+            await context.bot.pathfinder.goto(new goals.GoalNear(target.x, target.y, target.z, this.distance))
         } catch (error) {
             return { error: error }
         }
         
         return { result: 'done' }
+    }
+
+    /**
+     * @override
+     * @param {import("../context")} context
+     */
+    cancel(context) {
+        context.bot.pathfinder.stop()
+        super.cancel(context)
     }
 
     /**

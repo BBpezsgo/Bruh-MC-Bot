@@ -57,6 +57,7 @@ module.exports = class GatherMaterialGoal extends AsyncGoal {
         const inventoryBefore = context.bot.inventory.items()
 
         while (foundBlock) {
+            context.refreshTime()
             console.log(`[Bot "${context.bot.username}"] ${this.indent} Digging block ${foundBlock.displayName} ...`)
             const digged = await (new DigGoal(context, this, foundBlock, false)).wait()
             if ('error' in digged) return error(digged.error)

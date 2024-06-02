@@ -49,7 +49,7 @@ module.exports = class World {
 
     /**
      * @param {string} name
-     * @returns {{ [filename: string]: any }}
+     * @returns {{ [filename: string]: any } | null}
      */
     static load(name) {
         const folder = path.join(__dirname, '..', 'worlds', name)

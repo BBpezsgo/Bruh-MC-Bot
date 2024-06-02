@@ -5,7 +5,6 @@ const { Movements } = require('mineflayer-pathfinder')
 const { Item } = require('prismarine-item')
 const MeleeWeapons = require('./melee-weapons')
 const { Block } = require('prismarine-block')
-const { Chest } = require('mineflayer')
 const { filterHostiles } = require('./utils')
 
 module.exports = class Context {
@@ -14,7 +13,11 @@ module.exports = class Context {
      * @type {import('mineflayer').Bot}
      */
     bot
-    
+
+    /** @type {number} */
+    // get time() { return performance.now() }
+    time
+
     /**
      * @readonly
      * @type {MC}
@@ -31,6 +34,27 @@ module.exports = class Context {
      * @type {Vec3 | null}
      */
     myBed
+
+    /** @type {boolean} */
+    doingMLG
+
+    /** @type {boolean} */
+    didMLG
+
+    /** @readonly
+     * @type {Array<({
+     *   type: 'water'
+     *   position: Vec3
+     * } | {
+     *   type: 'block'
+     *   blockName: string
+     *   position: Vec3
+     * } | {
+     *   type: 'boat'
+     *   id: number
+     * })>}
+     */
+    mlgJunkBlocks
 
     /**
      * @readonly
@@ -56,7 +80,6 @@ module.exports = class Context {
     quietMode
 
     /**
-     * @readonly
      * @type {Array<Vec3>}
      */
     myChests
@@ -72,6 +95,18 @@ module.exports = class Context {
      * @type {boolean}
      */
     _isRightHandActive
+
+    /**
+     * @readonly
+     * @type {Array<number>}
+     */
+    myArrows
+
+    /**
+     * @readonly
+     * @type {{ [username: string]: Vec3 }}
+     */
+    playerPositions
 
     get isLeftHandActive() { return this._isLeftHandActive }
     get isRightHandActive() { return this._isRightHandActive }
@@ -93,7 +128,12 @@ module.exports = class Context {
         this.quietMode = true
         this._isLeftHandActive = false
         this._isRightHandActive = false
-        
+        this.time = performance.now()
+        this.doingMLG = false
+        this.mlgJunkBlocks = [ ]
+        this.myArrows = [ ]
+        this.playerPositions = { }
+
         this.bot.on('soundEffectHeard', (soundName) => {
             if (this.onHeard) { this.onHeard(soundName) }
         })
@@ -829,5 +869,9 @@ module.exports = class Context {
         }
         
         return null
+    }
+
+    refreshTime() {
+        this.time = performance.now()
     }
 }

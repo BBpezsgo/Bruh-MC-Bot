@@ -42,6 +42,21 @@ const config = require('./config')
  */
 
 /**
+ * @typedef {{
+ *   hurtTime: number
+ *   fallDamageVelocity: number
+ * }} GeneralData
+ */
+
+/**
+ * @typedef {{
+ *   boats: Array<string>
+ *   mlgBlocks: Array<string>
+ *   vehicles: Array<string>
+ * }} MlgData
+ */
+
+/**
  * @exports
  * @typedef {{ type: 'smelting' } & CookingRecipeBase} SmeltingRecipe
  */
@@ -143,6 +158,18 @@ module.exports = class MinecraftData {
     tags
 
     /**
+     * @readonly
+     * @type {GeneralData}
+     */
+    general
+
+    /**
+     * @readonly
+     * @type {MlgData}
+     */
+    mlg
+
+    /**
      * @param {string} path
      */
     constructor(path) {
@@ -156,6 +183,8 @@ module.exports = class MinecraftData {
 
         this.fuels = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'fuels.json'), 'utf8'))
         this.compost = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compost.json'), 'utf8'))
+        this.general = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'general.json'), 'utf8'))
+        this.mlg = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'mlg.json'), 'utf8'))
         const compacting = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compacting.json'), 'utf8'))
 
         this.sortedFuels = [ ]

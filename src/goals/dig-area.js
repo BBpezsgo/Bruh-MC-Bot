@@ -1,13 +1,7 @@
 const { Goal } = require('./base')
-const { Block } = require('prismarine-block')
-const getMcData = require('minecraft-data')
-const GatherItemGoal = require('./gather-item')
-const Wait = require('./wait')
-const GotoGoal = require('./goto')
-const GotoBlockGoal = require('./goto-block')
 const AsyncGoal = require('./async-base')
 const DigGoal = require('./dig')
-const { error, costDepth } = require('../utils')
+const { error } = require('../utils')
 const { Vec3 } = require('vec3')
 
 /**
@@ -78,6 +72,7 @@ module.exports = class DigAreaGoal extends AsyncGoal {
         for (let y = max.y; y >= min.y; y--) {
             for (let x = min.x; x <= max.x; x++) {
                 for (let z = min.z; z <= max.z; z++) {
+                    context.refreshTime()
                     context.bot.viewer.drawBoxGrid(this.GUID, this.a, this.b)
                     const block = context.bot.blockAt(new Vec3(x, y, z))
                     if (!block || skip.includes(block.type)) { continue }

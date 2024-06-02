@@ -188,7 +188,7 @@ module.exports = class MC {
      * @returns {{ has: boolean, item: getMcData.Item | null } | null}
      */
     getCorrectTool(blockToBreak, bot) {
-        /** @ts-ignore @type {[(keyof MC.tools)]} */
+        /** @ts-ignore @type {[ keyof MC.tools ]} */
         const toolNames = Object.keys(MC.tools)
 
         /** @type {Array<{ time: number, item: getMcData.Item }>} */

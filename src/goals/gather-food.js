@@ -1,10 +1,7 @@
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
 const GatherItemGoal = require('./gather-item')
-const { error, sortCosts, costDepth } = require('../utils')
-const MC = require('../mc')
-const GotoBlockGoal = require('./goto-block')
-const SmeltGoal = require('./smelt')
+const { error } = require('../utils')
 
 /**
  * @extends {AsyncGoal<'have' | import('minecraft-data').Food>}

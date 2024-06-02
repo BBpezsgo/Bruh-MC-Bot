@@ -1,26 +1,33 @@
+const Context = require("./context")
+
 module.exports = class Timeout {
     /**
      * @readonly
      * @type {number}
      */
-    started
+    startTime
 
     /**
      * @readonly
      * @type {number}
      */
-    time    
+    time
 
     /**
+     * @private @readonly
+     * @type {Context}
+     */
+    context
+
+    /**
+     * @param {Context} context
      * @param {number} time
      */
-    constructor(time) {
-        this.started = performance.now()
+    constructor(context, time) {
+        this.context = context
+        this.startTime = context.time
         this.time = time
     }
 
-    is() {
-        const waited = performance.now() - this.started
-        return waited >= this.time
-    }
+    is() { return this.context.time - this.startTime >= this.time }
 }

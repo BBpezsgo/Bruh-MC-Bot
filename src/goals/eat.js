@@ -41,13 +41,14 @@ module.exports = class EatGoal extends AsyncGoal {
         context.deactivateHand()
         context.activateHand('right')
         
-        const eatStarted = performance.now()
+        const eatStarted = context.time
         const eatTime = (food.name === 'dried_kelp') ? (900 /* 0.865 */) : (1700 /* 1610 */)
 
         while (
-            performance.now() - eatStarted < eatTime &&
+            context.time - eatStarted < eatTime &&
             context.bot.inventory.slots[context.bot.getEquipmentDestSlot('hand')]?.name === food.name
         ) {
+            context.refreshTime()
             await sleep(100)
         }
 

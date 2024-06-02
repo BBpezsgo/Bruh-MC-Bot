@@ -80,17 +80,18 @@ module.exports = class Goals {
     }
 
     /**
+     * @private
      * @param {Context} context
      * @param {Array<Goal<any>>} goals
      * @param {number} depth
      * @param {'normal' | 'survival' | 'critical'} type
      */
-    runGoals(context, goals, depth, type) {
+    tickGoals(context, goals, depth, type) {
         if (goals.length === 0) {
             return
         }
 
-        const isDone = this.runGoal(context, goals[0], depth, type)
+        const isDone = this.tickGoal(context, goals[0], depth, type)
 
         if (isDone) {
             goals.shift()?.cleanup(context)
@@ -98,25 +99,23 @@ module.exports = class Goals {
     }
 
     /**
+     * @private
      * @param {Context} context
      * @param {Goal<any>} goal
      * @param {number} depth
      * @param {'normal' | 'survival' | 'critical'} type
      */
-    runGoal(context, goal, depth, type) {
+    tickGoal(context, goal, depth, type) {
         const indent = (''.padStart(depth * 2, ' '))
 
         if (this.shouldCancel &&
             this.shouldCancel[type]) {
-            goal.finish(error(`${indent} Cancelled`))
-            if ('cancel' in goal && typeof goal.cancel === 'function') {
-                goal.cancel(context)
-            }
+            goal.cancel(context)
             return true
         }
 
         if (goal.goals.length > 0) {
-            this.runGoals(context, goal.goals, depth + 1, type)
+            this.tickGoals(context, goal.goals, depth + 1, type)
             return false
         }
 
@@ -250,11 +249,11 @@ module.exports = class Goals {
 
         try {
             if (this.critical.length > 0) {
-                this.runGoals(context, this.critical, 0, 'critical')
+                this.tickGoals(context, this.critical, 0, 'critical')
             } else if (this.survival.length > 0) {
-                this.runGoals(context, this.survival, 0, 'survival')
+                this.tickGoals(context, this.survival, 0, 'survival')
             } else {
-                this.runGoals(context, this.normal, 0, 'normal')
+                this.tickGoals(context, this.normal, 0, 'normal')
             }
         } catch (error) {
             console.error(`[Bot "${context.bot.username}"]`, error)
@@ -263,7 +262,7 @@ module.exports = class Goals {
         if (this.has(false)) {
             this.idlingStarted = 0
         } else if (this.idlingStarted === 0) {
-            this.idlingStarted = performance.now()
+            this.idlingStarted = context.time
         }
     }
 }

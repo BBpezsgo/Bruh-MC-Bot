@@ -1,3 +1,5 @@
+const Context = require("./context")
+
 module.exports = class Interval {
     /**
      * @type {number}
@@ -8,24 +10,32 @@ module.exports = class Interval {
      * @private
      * @type {number}
      */
-    lastCheck
+    startTime
 
     /**
+     * @private @readonly
+     * @type {Context}
+     */
+    context
+
+    /**
+     * @param {Context} context
      * @param {number} time
      */
-    constructor(time) {
+    constructor(context, time) {
+        this.context = context
         this.time = time
-        this.lastCheck = 0
+        this.startTime = 0
     }
 
     /**
      * @returns {boolean}
      */
     is(justRead = false) {
-        const waited = performance.now() - this.lastCheck
-        if (waited >= this.time) {
+        const now = this.context.time
+        if (now - this.startTime >= this.time) {
             if (!justRead) {
-                this.lastCheck = performance.now()
+                this.startTime = now
             }
             return true
         }
@@ -33,6 +43,6 @@ module.exports = class Interval {
     }
 
     restart() {
-        this.lastCheck = performance.now()
+        this.startTime = this.context.time
     }
 }

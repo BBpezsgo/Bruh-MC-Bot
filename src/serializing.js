@@ -1,7 +1,7 @@
 const { Vec3 } = require('vec3')
 
 /**
- * @param {unknown} json
+ * @param {any} json
  * @param {string} property
  * @returns {Vec3 | null}
  */
@@ -14,13 +14,9 @@ function toVec3(json, property) {
         return null
     }
 
-    // @ts-ignore
     if (property in json && typeof json[property] === 'object') {
-        // @ts-ignore
         const x = toNumber(json[property], 'x')
-        // @ts-ignore
         const y = toNumber(json[property], 'y')
-        // @ts-ignore
         const z = toNumber(json[property], 'z')
         if (x && y && z) {
             return new Vec3(x, y, z)
@@ -31,7 +27,7 @@ function toVec3(json, property) {
 }
 
 /**
- * @param {unknown} json
+ * @param {any} json
  * @param {string} property
  * @returns {number | null}
  */
@@ -44,9 +40,7 @@ function toNumber(json, property) {
         return null
     }
 
-    // @ts-ignore
     if (property in json && typeof json[property] === 'number') {
-        // @ts-ignore
         return json[property]
     }
 
@@ -54,7 +48,7 @@ function toNumber(json, property) {
 }
 
 /**
- * @param {unknown} json
+ * @param {any} json
  * @param {string} property
  * @returns {string | null}
  */
@@ -67,9 +61,7 @@ function toString(json, property) {
         return null
     }
 
-    // @ts-ignore
     if (property in json && typeof json[property] === 'string') {
-        // @ts-ignore
         return json[property]
     }
 
@@ -93,7 +85,7 @@ function toString(json, property) {
  */
 
 /**
- * @param {unknown} json
+ * @param {any} json
  * @param {Semantics} semantics
  * @returns {any}
  */
@@ -129,11 +121,10 @@ function fromSemantics(json, semantics) {
         }
         
         if (semantics.type === 'object') {
-            let result = { }
+            /** @type {any} */
+            const result = { }
             for (const key in semantics.value) {
-                // @ts-ignore
                 if (json[key] === undefined) { throw new Error(`Invalid JSON`) }
-                // @ts-ignore
                 result[key] = fromSemantics(json[key], semantics.value[key])
             }
             return result

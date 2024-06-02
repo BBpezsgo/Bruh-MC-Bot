@@ -1,4 +1,3 @@
-const { Recipe } = require('prismarine-recipe')
 const AsyncGoal = require('./async-base')
 const { Goal } = require('./base')
 const GotoBlockGoal = require('./goto-block')
@@ -9,6 +8,7 @@ const { Item } = require('prismarine-item')
 const { Block } = require('prismarine-block')
 const PickupItemGoal = require('./pickup-item')
 const { Entity } = require('prismarine-entity')
+const Timeout = require('../timeout')
 
 /**
  * @extends {AsyncGoal<Item>}
@@ -79,6 +79,7 @@ module.exports = class SmeltGoal extends AsyncGoal {
             let furnace = await context.bot.openFurnace(furnaceBlock)
 
             while (furnace.inputItem() && furnace.fuel > 0) {
+                context.refreshTime()
                 await (new Wait(this, 1000)).wait()
             }
 
@@ -158,6 +159,7 @@ module.exports = class SmeltGoal extends AsyncGoal {
             }
 
             while (!furnace.outputItem()) {
+                context.refreshTime()
                 if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                     furnace.close()
     
@@ -367,14 +369,13 @@ module.exports = class SmeltGoal extends AsyncGoal {
         await context.bot.activateBlock(campfire)
         context.bot.addListener('playerCollect', onPickUp)
 
-        const startedAt = performance.now()
-        const cookTime = recipe.time * 1000
-
+        const timer = new Timeout(context, (recipe.time * 1000) + finishingWait)
         const itemFilter = { inAir: true, point: campfire.position }
 
         while (true) {
-            const waited = performance.now() - startedAt
-            if (waited - cookTime > finishingWait) {
+            context.refreshTime()
+
+            if (timer.is()) {
                 if (!pickedUp) {
                     context.bot.removeListener('playerCollect', onPickUp)
                     return error(`${this.indent} This isn't cooking`)

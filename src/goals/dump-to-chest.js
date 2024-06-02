@@ -27,7 +27,7 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
     count
     
     /**
-     * @readonly
+     * @private
      * @type {number}
      */
     originalCount
@@ -57,7 +57,6 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
             return error(`${this.indent} Can't open chest in quiet mode`)
         }
 
-        // @ts-ignore
         this.originalCount = context.itemCount(this.item)
         
         if (context.itemCount(this.item) === 0) {
@@ -65,6 +64,8 @@ module.exports = class DumpToChestGoal extends AsyncGoal {
         }
 
         while (true) {
+            context.refreshTime()
+
             const have = context.itemCount(this.item)
             if (have === 0) {
                 return { result: true }

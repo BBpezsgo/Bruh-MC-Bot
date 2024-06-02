@@ -1,4 +1,4 @@
-const { goals, Movements } = require('mineflayer-pathfinder')
+const { Movements } = require('mineflayer-pathfinder')
 const { Goal } = require('./base')
 const AsyncGoal = require('./async-base')
 const { error } = require('../utils')
@@ -44,6 +44,7 @@ module.exports = class FollowPlayerGoal extends AsyncGoal {
         super.run(context)
 
         while (true) {
+            context.refreshTime()
             const target = context.bot.players[this.player]?.entity
     
             if (!target) {

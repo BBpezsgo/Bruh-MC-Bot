@@ -3,14 +3,23 @@ const { Vec3 } = require('vec3')
 
 /**
  * @param {import('./result').GoalError | Error} error
+ * @param {import('./context')} [context = null] 
  * @returns {import('./result').ErroredResult}
  */
-function error(error) {
+function error(error, context = null) {
     if (typeof error === 'string') {
-        console.error(error)
+        if (context) {
+            console.error(`[Bot "${context.bot.username}"] ${error}`)
+        } else {
+            console.error(error)
+        }
         return { error: error.trim() }
     } else if (error instanceof Error) {
-        console.error(error)
+        if (context) {
+            console.error(`[Bot "${context.bot.username}"]`, error)
+        } else {
+            console.error(error)
+        }
         return { error: error.message }
     } else {
         return { error: { inner: error } }
@@ -196,15 +205,24 @@ function backNForthSort(blocks) {
  */
 function filterHostiles(entity, point = null) {
     if (entity.metadata[2]) { return null }
+    if (entity.metadata[6] === 7) { return null }
 
     if (entity.name === 'slime') {
         if (entity.metadata[16]) { return 1 }
         return 0
     }
 
+    if (entity.name === 'ghast') {
+        return 50
+    }
+
     if (entity.type !== 'hostile') { return null }
 
     if (entity.name === 'zombified_piglin') {
+        return 0
+    }
+
+    if (entity.name === 'enderman') {
         return 0
     }
 
@@ -244,6 +262,22 @@ function filterHostiles(entity, point = null) {
     return 1
 }
 
+/**
+ * @param {Array<Vec3>} trajectory
+ * @param {number} speed
+ * @returns {number}
+ */
+function trajectoryTime(trajectory, speed) {
+    let time = 0
+    for (let i = 1; i < trajectory.length; i++) {
+        const a = trajectory[i - 1]
+        const b = trajectory[i]
+        const d = a.distanceTo(b)
+        time += d / speed
+    }
+    return time
+}
+
 module.exports = {
     error,
     itemsDelta,
@@ -260,4 +294,5 @@ module.exports = {
     rotationToVector,
     backNForthSort,
     filterHostiles,
+    trajectoryTime,
 }

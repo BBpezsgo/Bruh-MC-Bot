@@ -41,9 +41,11 @@ module.exports = class BlockExplosionGoal extends AsyncGoal {
 
         context.bot.pathfinder.setGoal(null)
         context.bot.pathfinder.setMovements(context.restrictedMovements)
+        context.bot.pathfinder.thinkTimeout = 1000
         context.bot.pathfinder.setGoal(new goals.GoalInvert(new goals.GoalNear(hazard.position.x, hazard.position.y, hazard.position.z, 8)), true)
 
         while (hazard && context.holdsShield()) {
+            context.refreshTime()
             context.activateHand('left')
 
             await context.bot.lookAt(hazard.position.offset(0, 1, 0), true)

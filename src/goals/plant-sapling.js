@@ -53,6 +53,8 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
         if (this.harvestedSaplings) {
             let i = 0
             while (i < this.harvestedSaplings.length) {
+                context.refreshTime()
+
                 const replantPosition = this.harvestedSaplings[i]
                 console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant "${replantPosition.item}" at ${replantPosition.position}`)
     
@@ -84,6 +86,7 @@ module.exports = class PlantSaplingGoal extends AsyncGoal {
             }
         } else {
             while (true) {
+                context.refreshTime()
                 console.log(`[Bot "${context.bot.username}"] Try plant`)
 
                 const sapling = context.searchItem(

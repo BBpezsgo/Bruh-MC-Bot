@@ -5,6 +5,8 @@
         "target": "ES2020",
         "allowImportingTsExtensions": false,
         "checkJs": true,
+        "skipDefaultLibCheck": true,
+        "skipLibCheck": true,
 
         "noFallthroughCasesInSwitch": true,
         "noImplicitAny": true,

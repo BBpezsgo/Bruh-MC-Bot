@@ -29,6 +29,8 @@ module.exports = class CompostGoal extends AsyncGoal {
         }
 
         while (true) {
+            context.refreshTime()
+
             let item = CompostGoal.getItem(context, false)
             if (!item) {
                 break
@@ -85,7 +87,7 @@ module.exports = class CompostGoal extends AsyncGoal {
      */
     async waitCompost(context, composter) {
         if (composter.getProperties()['level'] === 7) {
-            const timeout = new Timeout(2000)
+            const timeout = new Timeout(context, 2000)
             while (!timeout.is() && composter.getProperties()['level'] !== 8) {
                 await (new Wait(this, 500)).wait()
             }

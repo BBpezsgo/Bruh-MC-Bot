@@ -39,6 +39,8 @@ module.exports = class FishGoal extends AsyncGoal {
         let didSomething = false
 
         while (true) {
+            context.refreshTime()
+
             const fishingRod = context.searchItem('fishing_rod')
             if (!fishingRod) {
                 if (didSomething) { return { result: true } }
@@ -80,12 +82,13 @@ module.exports = class FishGoal extends AsyncGoal {
                 if (soundName !== 'entity.bobber.splash' &&
                     soundName !== 459) { return }
                 if (!this.bobber || !this.bobber.isValid) { return }
-                this.splashHeard = performance.now()
+                this.splashHeard = context.time
                 context.onHeard = null
             }
 
-            while ((!this.splashHeard || performance.now() - this.splashHeard < 500) &&
+            while ((!this.splashHeard || context.time - this.splashHeard < 500) &&
                    this.bobber && this.bobber.isValid) {
+                context.refreshTime()
                 await (new Wait(this, 500)).wait()
             }
 
@@ -100,6 +103,7 @@ module.exports = class FishGoal extends AsyncGoal {
     }
 
     /**
+     * @override
      * @param {import('../context')} context
      */
     async cancel(context) {
@@ -109,6 +113,8 @@ module.exports = class FishGoal extends AsyncGoal {
             this.bobber && this.bobber.isValid) {
             context.bot.activateItem(false)
         }
+
+        super.cancel(context)
     }
 
     /**

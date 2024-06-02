@@ -47,6 +47,8 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
         if (this.harvestedCrops) {
             let i = 0
             while (i < this.harvestedCrops.length) {
+                context.refreshTime()
+
                 const harvestedCrop = this.harvestedCrops[i]
                 console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant "${harvestedCrop.item}" at ${harvestedCrop.position}`)
 
@@ -82,6 +84,7 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
             }
 
             while (true) {
+                context.refreshTime()
                 console.log(`[Bot "${context.bot.username}"] ${this.indent} Try plant seed`)
 
                 const seed = context.searchItem(...this.seedItems)
@@ -120,7 +123,7 @@ module.exports = class PlantSeedGoal extends AsyncGoal {
                 context.mc.data.blocksByName['farmland'].id,
             ],
             point: point,
-            maxDistance: 5,
+            maxDistance: 10,
             useExtraInfo: (block) => {
                 const above = context.bot.blockAt(block.position.offset(0, 1, 0)).name
                 return (

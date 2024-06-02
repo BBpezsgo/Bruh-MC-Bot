@@ -3,7 +3,7 @@ const { Block } = require('prismarine-block')
 const GotoBlockGoal = require('./goto-block')
 const PlaceBlockAnywhereGoal = require('./place-block')
 const AsyncGoal = require('./async-base')
-const { error, costDepth, sortCosts } = require('../utils')
+const { error, costDepth } = require('../utils')
 const AttackGoal = require('./attack')
 const GotoGoal = require('./goto')
 const PickupItemGoal = require('./pickup-item')
@@ -30,7 +30,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
     baseItems
 
     /**
-     * @readonly
+     * @private
      * @type {number}
      */
     originalCount
@@ -83,7 +83,6 @@ module.exports = class GatherItemGoal extends AsyncGoal {
     async run(context) {
         super.run(context)
 
-        // @ts-ignore
         this.originalCount = context.itemCount(this.item)
 
         console.log(`[Bot "${context.bot.username}"] ${this.indent} Gathering ${this.count} of "${context.mc.data.items[this.item]?.displayName ?? this.item}" ...`)
@@ -101,6 +100,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         console.log(`[Bot "${context.bot.username}"] ${this.indent} Has recipe:`, hasRecipe)
 
         while (requiredCount > 0) {
+            context.refreshTime()
             let requiredCount = this.requiredCount(context)
 
             endlessSafe--
@@ -215,6 +215,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
         }
 
         while (true) {
+            context.refreshTime()
             const block = context.findBlockWithDrop(this.item, 16)
 
             if (block && this.canDig) {
@@ -259,6 +260,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 }
 
                 while (true) {
+                    context.refreshTime()
                     const subresult = await (new PickupItemGoal(this, { inAir: true }, null)).wait()
                     if ('error' in subresult) break
                 }
@@ -390,7 +392,7 @@ module.exports = class GatherItemGoal extends AsyncGoal {
                 return error(`${this.indent} No crafing table found`)
             }
 
-            console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting ...`)
+            console.log(`[Bot "${context.bot.username}"] ${this.indent} Crafting ...`, recipes[0])
             await context.bot.craft(recipes[0], 1, craftingTable)
             return { result: recipes[0].result.count }
         } else {

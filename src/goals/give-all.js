@@ -49,6 +49,7 @@ module.exports = class GiveAllGoal extends AsyncGoal {
         {
             items = context.bot.inventory.items()
             while (items.length > 0) {
+                context.refreshTime()
                 for (const item of items) {
                     await context.bot.tossStack(item)
                     tossedSomething = true

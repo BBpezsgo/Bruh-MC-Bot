@@ -69,7 +69,7 @@ module.exports = class FlyToGoal extends AsyncGoal {
             await context.bot.equip(elytraItem, 'torso')
         }
 
-        const flyStarted = performance.now()
+        const flyStarted = context.time
 
         context.bot.addListener('elytraFlyGoalReached', this.goalReached)
 
@@ -83,6 +83,8 @@ module.exports = class FlyToGoal extends AsyncGoal {
 
         try {
             while (!this.done) {
+                context.refreshTime()
+
                 context.bot.elytrafly.elytraFlyTo(this.destination.clone())
                 if (this.isTimeout) {
                     context.bot.removeListener('elytraFlyGoalReached', this.goalReached)
@@ -90,7 +92,7 @@ module.exports = class FlyToGoal extends AsyncGoal {
                     return error(`Bruh`)
                 }
 
-                const now = performance.now()
+                const now = context.time
                 if (now - flyStarted > 10) {
                     context.bot.elytrafly.stop()
                     await (new GotoGoal(this, this.destination.clone(), 5, context.restrictedMovements)).wait()

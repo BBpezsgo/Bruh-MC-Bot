@@ -1,4 +1,5 @@
 const uuid = require('uuid')
+const { error } = require('../utils')
 
 /**
  * @template {any} [TResult = true]
@@ -187,6 +188,16 @@ class Goal {
     toReadable(context) {
         return this.constructor.name
     }
+
+    /**
+     * @virtual
+     * @param {import('../context')} context
+     */
+    cancel(context) {
+        this.finish(error(`${this.indent} Cancelled`))
+    }
+
+    yield() { const w = require('./wait'); return (new w(this, 0)).wait() }
 }
 
 /**

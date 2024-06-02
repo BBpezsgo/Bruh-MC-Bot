@@ -4,7 +4,6 @@ const { Goal } = require('./base')
 const { Vec3 } = require('vec3')
 const GatherItemGoal = require('./gather-item')
 const MC = require('../mc')
-const GotoBlockGoal = require('./goto-block')
 const { Block } = require('prismarine-block')
 const GotoGoal = require('./goto')
 const Context = require('../context')
@@ -83,6 +82,8 @@ module.exports = class HoeingGoal extends AsyncGoal {
         }
 
         while (true) {
+            context.refreshTime()
+
             const equipHoeResult = await equipHoe()
             if ('error' in equipHoeResult) {
                 return equipHoeResult

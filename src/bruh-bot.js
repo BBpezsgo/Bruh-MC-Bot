@@ -21,7 +21,7 @@ const BlockExplosionGoal = require('./goals/block-explosion')
 const SleepGoal = require('./goals/sleep')
 const FlyToGoal = require('./goals/fly-to')
 const fJSON = require('./serializing')
-const { timeout, randomInt, deg2rad, filterHostiles } = require('./utils')
+const { timeout, randomInt, deg2rad, filterHostiles, sleep } = require('./utils')
 const GatherItemGoal = require('./goals/gather-item')
 const SmeltGoal = require('./goals/smelt')
 const MC = require('./mc')
@@ -35,13 +35,17 @@ const CompostGoal = require('./goals/compost')
 const DumpToChestGoal = require('./goals/dump-to-chest')
 const { Entity } = require('prismarine-entity')
 const FleeGoal = require('./goals/flee')
-const FleeFromEndermanGoal = require('./goals/flee-from-enderman')
+const EnderpearlToGoal = require('./goals/enderpearl-to')
 const FishGoal = require('./goals/fish')
 /** @ts-ignore @type {import('mineflayer-web-inventory').default} */
 const MineflayerWebInventory = require('mineflayer-web-inventory')
 const MineflayerViewer = require('prismarine-viewer')
 const DigAreaGoal = require('./goals/dig-area')
 const GeneralGoal = require('./goals/general')
+const AnyAsyncGoal = require('./goals/any-async-goal')
+const GotoBlockGoal = require('./goals/goto-block')
+const DigGoal = require('./goals/dig')
+const Wait = require('./goals/wait')
 
 module.exports = class BruhBot {
     /**
@@ -147,7 +151,6 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @readonly
      * @type {Array<Entity>}
      */
     aimingEntities
@@ -197,6 +200,12 @@ module.exports = class BruhBot {
     userQuiet
 
     /**
+     * @private
+     * @type {Vec3 | null}
+     */
+    guardPosition
+
+    /**
      * @param {Readonly<{
      *   [key: string]: any;
      *   dataPath: string;
@@ -215,15 +224,6 @@ module.exports = class BruhBot {
 
         this.goals = new Goals()
 
-        this.trySleepInterval = new Interval(5000)
-        this.tryAutoCookInterval = new Interval(10000)
-        this.tryAutoGatherFoodInterval = new Interval(5000)
-        this.tryAutoHarvestInterval = new Interval(60000)
-        this.checkQuietInterval = new Interval(500)
-
-        this.randomLookInterval = new Interval(10000)
-        this.unshieldInterval = new Interval(5000)
-
         this.followPlayer = null
         this.harvestedSaplings = []
         this.harvestedCrops = []
@@ -231,6 +231,7 @@ module.exports = class BruhBot {
         this.deathPosition = null
         this.lastPosition = null
         this.defendMyselfGoal = null
+        this.guardPosition = null
 
         this.autoPickUpItems = ('autoPickUpItems' in config) ? config.autoPickUpItems : true
         this.autoSmeltItems = ('autoSmeltItems' in config) ? config.autoSmeltItems : true
@@ -251,6 +252,7 @@ module.exports = class BruhBot {
             host: config['bot']['host'],
             port: config['bot']['port'],
             username: username,
+            logErrors: false,
         })
 
         this.worldName = worldName
@@ -269,12 +271,30 @@ module.exports = class BruhBot {
 
             // @ts-ignore
             this.context = new Context(this.bot)
+
+            // @ts-ignore
+            this.trySleepInterval = new Interval(this.context, 5000)
+            // @ts-ignore
+            this.tryAutoCookInterval = new Interval(this.context, 10000)
+            // @ts-ignore
+            this.tryAutoGatherFoodInterval = new Interval(this.context, 5000)
+            // @ts-ignore
+            this.tryAutoHarvestInterval = new Interval(this.context, 60000)
+            // @ts-ignore
+            this.checkQuietInterval = new Interval(this.context, 500)
+
+            // @ts-ignore
+            this.randomLookInterval = new Interval(this.context, 10000)
+            // @ts-ignore
+            this.unshieldInterval = new Interval(this.context, 5000)
+
             World.backup(worldName)
             this.setWorldData(World.load(this.worldName))
 
             this.bot.pathfinder.setMovements(this.context.permissiveMovements)
 
             this.lastPosition = this.bot.entity.position.clone()
+            this.idlePosition = this.bot.entity.position.clone()
 
             this.goals.idlingStarted = performance.now()
 
@@ -285,21 +305,19 @@ module.exports = class BruhBot {
             // const app = require('express')()
             // const http = require('http').createServer(app)
 
-            // @ts-ignore
-            MineflayerViewer.mineflayer(this.bot, {
-                port: 3000,
-                // _app: app,
-                // _http: http,
-                // prefix: '/view',
-            })
-            // @ts-ignore
-            MineflayerWebInventory(this.bot, {
-                port: 3001,
-                // app: app,
-                // http: http,
-                // path: '/inventory',
-                // startOnLoad: false,
-            })
+            // MineflayerViewer.mineflayer(this.bot, {
+            //     port: 3000,
+            //     // _app: app,
+            //     // _http: http,
+            //     // prefix: '/view',
+            // })
+            // MineflayerWebInventory(this.bot, {
+            //     port: 3001,
+            //     // app: app,
+            //     // http: http,
+            //     // path: '/inventory',
+            //     // startOnLoad: false,
+            // })
 
             // http.listen(80)
 
@@ -308,10 +326,162 @@ module.exports = class BruhBot {
             console.log(`[Bot "${username}"] Ready`)
         })
 
+        this.bot.on('move', async (position) => {
+            if (!this.context) { return }
+
+            if (this.bot.entity.velocity.y < this.context.mc.data2.general.fallDamageVelocity) {
+                if (this.context.didMLG) {
+                    console.log(`[Bot "${this.bot.username}"]: Already did MLG, just falling ...`)
+                    return
+                }
+                await mlg(this.context)
+                return
+            }
+            
+            if (this.context.doingMLG) {
+                this.context.doingMLG = false
+            }
+
+            if (this.context.didMLG) {
+                this.context.didMLG = false
+            }
+        })
+
+        this.bot.on('playerUpdated', (player) => {
+            this.context.playerPositions[player.username] = player.entity?.position.clone() ?? this.context.playerPositions[player.username]
+        })
+
+        /**
+         * @param {Context} context
+         */
+        async function mlg(context) {
+            context.doingMLG = true
+        
+            const neighbour = context.bot.nearestEntity()
+            if (neighbour &&
+                context.mc.data2.mlg.vehicles.includes(neighbour.name) &&
+                context.bot.entity.position.distanceTo(neighbour.position) < 6) {
+                console.log(`[Bot "${context.bot.username}"]: MLG: Mounting "${neighbour.name}" ...`)
+                context.bot.mount(neighbour)
+                context.didMLG = true
+                await sleep(100)
+                context.bot.dismount()
+                return
+            }
+        
+            try {
+                let haveMlgItem = 0
+                for (const item of context.bot.inventory.slots) {
+                    if (!item) { continue }
+
+                    if (context.mc.data2.mlg.boats.includes(item.name) &&
+                        haveMlgItem < 1) {
+                        await context.bot.equip(item.type, 'hand')
+                        haveMlgItem = 1
+                        continue
+                    }
+
+                    if (context.mc.data2.mlg.mlgBlocks.includes(item.name) &&
+                        haveMlgItem < 2) {
+                        await context.bot.equip(item.type, 'hand')
+                        haveMlgItem = 2
+                        break
+                    }
+                }
+
+                if (!haveMlgItem) {
+                    console.warn(`[Bot "${context.bot.username}"]: MLG: No suitable item found`)
+                    return
+                }
+
+                console.log(`[Bot "${context.bot.username}"]: MLG: Will use ${context.bot.heldItem?.name ?? 'null'} ...`)
+
+                await context.bot.look(context.bot.entity.yaw, -Math.PI / 2, true)
+
+                const reference = context.bot.blockAtCursor(5)
+                if (!reference) {
+                    console.warn(`[Bot "${context.bot.username}"]: MLG: No reference block`)
+                    return
+                }
+                
+                if (!context.bot.heldItem) {
+                    console.warn(`[Bot "${context.bot.username}"]: MLG: Not holding anything`)
+                    return
+                }
+                
+                if (context.bot.heldItem.name === 'bucket') {
+                    console.warn(`[Bot "${context.bot.username}"]: MLG: This is a bucket`)
+                    return
+                }
+
+                console.log(`[Bot "${context.bot.username}"]: MLG: Using "${context.bot.heldItem.name ?? 'null'}" ...`)
+
+                if (context.bot.heldItem.name === 'water_bucket') {
+                    console.log(`[Bot "${context.bot.username}"]: MLG: Placing water ...`)
+                    context.bot.activateItem()
+                    context.didMLG = true
+
+                    await sleep(40)
+                    
+                    const junkBlock = context.bot.blockAt(reference.position.offset(0, 1, 0))
+                    if (junkBlock) {
+                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk water saved`)
+                        context.mlgJunkBlocks.push({
+                            type: 'water',
+                            position: junkBlock.position.clone(),
+                        })
+                    } else {
+                        console.log(`[Bot "${context.bot.username}"]: MLG: Possible junk water saved`)
+                        context.mlgJunkBlocks.push({
+                            type: 'water',
+                            position: reference.position.offset(0, 1, 0),
+                        })
+                    }
+                } else if (context.mc.data2.mlg.boats.includes(context.bot.heldItem.name)) {
+                    console.log(`[Bot "${context.bot.username}"]: MLG: Activating item ...`)
+                    context.bot.activateItem()
+
+                    await sleep(40)
+
+                    const junkBoat = context.bot.nearestEntity(v => v.name === 'boat')
+                    if (junkBoat) {
+                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk boat saved`)
+                        context.mlgJunkBlocks.push({
+                            type: 'boat',
+                            id: junkBoat.id,
+                        })
+                    }
+                } else {
+                    console.log(`[Bot "${context.bot.username}"]: MLG: Placing block ...`)
+                    await context.bot.placeBlock(reference, new Vec3(0, 1, 0))
+                    context.didMLG = true
+
+                    await sleep(40)
+                    
+                    const junkBlock = context.bot.blockAt(reference.position.offset(0, 1, 0))
+                    if (junkBlock) {
+                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk block saved`)
+                        context.mlgJunkBlocks.push({
+                            type: 'block',
+                            blockName: junkBlock.name,
+                            position: junkBlock.position.clone(),
+                        })
+                    } else {
+                        console.warn(`[Bot "${context.bot.username}"]: MLG: No junk block saved`)
+                    }
+                }
+            } catch (error) {
+                console.error(error)
+            }
+        }
+        
         this.bot.on('physicsTick', () => {
             if (!this.context) { return }
 
+            this.context.refreshTime()
             this.lastPosition = this.bot.entity.position.clone()
+
+            if (this.context.doingMLG) { return }
 
             if (this.checkQuietInterval.is()) {
                 let shouldBeQuiet = this.userQuiet
@@ -351,17 +521,16 @@ module.exports = class BruhBot {
 
             this.goals.tick(this.context)
 
-            // @ts-ignore
             this.aimingEntities = []
 
             {
-                const now = performance.now()
+                const now = this.context.time
                 let i = 0
                 while (i < this.context.chatAwaits.length) {
-                    const item = this.context.chatAwaits[i]
-                    if (item.timeout !== 0 &&
-                        now >= item.timeout + item.time) {
-                        item.timedout()
+                    const chatAwait = this.context.chatAwaits[i]
+                    if (chatAwait.timeout !== 0 &&
+                        now >= chatAwait.timeout + chatAwait.time) {
+                            chatAwait.timedout()
                         this.context.chatAwaits.splice(i, 1)
                     } else {
                         i++
@@ -382,6 +551,87 @@ module.exports = class BruhBot {
                         return
                     }
                 }
+            }
+
+            if (this.goals.isIdle(1000) &&
+                !this.goals.has(true) &&
+                this.context.mlgJunkBlocks.length > 0) {
+                const clearJunk = new AnyAsyncGoal(this.context, null, async () => {
+                    console.log(`[Bot "${this.bot.username}"]: Clearing MLG junk ...`, this.context.mlgJunkBlocks)
+                    for (let i = this.context.mlgJunkBlocks.length - 1; i >= 0; i--) {
+                        const junk = this.context.mlgJunkBlocks.pop()
+
+                        switch (junk.type) {
+                            case 'water': {
+                                const junkBlock = this.bot.findBlock({
+                                    matching: [
+                                        this.context.mc.data.blocksByName['water'].id
+                                    ],
+                                    maxDistance: 2,
+                                    point: junk.position,
+                                })
+        
+                                if (!junkBlock) {
+                                    console.warn(`[Bot "${this.bot.username}"]: No water at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
+                                    continue
+                                }
+        
+                                if (junkBlock.name !== 'water') {
+                                    console.warn(`[Bot "${this.bot.username}"]: Unknown MLG junk: "${junkBlock.name}"`)
+                                    break
+                                }
+
+                                console.log(`[Bot "${this.bot.username}"]: Clearing MLG junk: water ...`)
+                                await (new GotoBlockGoal(clearJunk, junkBlock.position.clone(), this.context.restrictedMovements)).wait()
+
+                                console.log(`[Bot "${this.bot.username}"]: Equip bucket ...`)
+                                const bucket = this.context.searchItem('bucket')
+                                if (!bucket) {
+                                    console.warn(`[Bot "${this.bot.username}"]: No bucket found`)
+                                    break
+                                }
+                                await this.bot.equip(bucket, 'hand')
+
+                                await this.bot.lookAt(junkBlock.position, true)
+                                this.bot.activateItem()
+
+                                break
+                            }
+                            case 'block': {
+                                const junkBlock = this.bot.findBlock({
+                                    matching: [
+                                        this.context.mc.data.blocksByName[junk.blockName].id
+                                    ],
+                                    maxDistance: 2,
+                                    point: junk.position,
+                                })
+        
+                                if (!junkBlock) {
+                                    console.warn(`[Bot "${this.bot.username}"]: No "${junk.blockName}" found at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
+                                    continue
+                                }
+        
+                                await (new DigGoal(this.context, clearJunk, junkBlock, false)).wait()
+                                break
+                            }
+                            case 'boat': {
+                                const junkBoat = this.bot.nearestEntity(v => v.id === junk.id)
+                                if (!junkBoat) {
+                                    console.warn(`[Bot "${this.bot.username}"]: Junk boat not found`)
+                                    continue
+                                }
+
+                                await (new AttackGoal(clearJunk, junkBoat, true, false, false)).wait()
+                                break
+                            }
+                            default:
+                                debugger
+                                break
+                        }
+                    }
+                })
+                clearJunk.quiet = true
+                this.goals.normal.push(clearJunk)
             }
 
             if (this.goals.isIdle(6000) &&
@@ -407,6 +657,32 @@ module.exports = class BruhBot {
             }
             */
 
+            if (this.context.myArrows.length > 0 &&
+                this.goals.isIdle(2000) &&
+                !this.goals.has(true)) {
+                const pickUpArrowGoal = new AnyAsyncGoal(this.context, null, async () => {
+                    const myArrow = this.context.myArrows.shift()
+                    if (!myArrow) {
+                        return
+                    }
+                    const entity = this.bot.nearestEntity(v => v.id === myArrow)
+                    if (!entity) {
+                        console.warn(`[Bot "${this.bot.username}"] Can't find the arrow`)
+                        return
+                    }
+                    await (new GotoGoal(pickUpArrowGoal, entity.position.clone(), 1, this.context.restrictedMovements)).wait()
+                    await (new Wait(pickUpArrowGoal, 1000)).wait()
+                    if (entity.isValid) {
+                        console.warn(`[Bot "${this.bot.username}"] Can't pick up this arrow`)
+                    } else {
+                        console.log(`[Bot "${this.bot.username}"] Arrow picked up`)
+                    }
+                })
+                pickUpArrowGoal.quiet = true
+                this.goals.normal.push(pickUpArrowGoal)
+                return
+            }
+
             if (this.autoPickUpItems &&
                 this.goals.isIdle(5000) &&
                 !this.goals.has(true)) {
@@ -419,6 +695,19 @@ module.exports = class BruhBot {
                     this.goals.normal.push(goal)
                     return
                 }
+            }
+
+            if (this.guardPosition &&
+                this.goals.isIdle(100) &&
+                !this.goals.has(true)) {
+                const d = this.bot.entity.position.distanceTo(this.guardPosition)
+                if (d > 2) {
+                    const goal = new GotoGoal(null, this.guardPosition, 1, this.context.restrictedMovements)
+                    goal.quiet = true
+                    this.goals.normal.push(goal)
+                    return
+                }
+                return
             }
 
             if (this.autoSmeltItems &&
@@ -463,6 +752,7 @@ module.exports = class BruhBot {
                 }
             }
 
+            /*
             if (!this.followPlayer &&
                 !this.goals.has(true) &&
                 this.idlePosition) {
@@ -474,6 +764,7 @@ module.exports = class BruhBot {
                     return
                 }
             }
+            */
 
             if (this.idleLooking &&
                 this.goals.isIdle(1000) &&
@@ -502,8 +793,41 @@ module.exports = class BruhBot {
             this.deathPosition = this.lastPosition
         })
 
-        this.bot.on('kicked', (reason) => console.warn(`[Bot "${username}"] Kicked:`, reason))
-        this.bot.on('error', (error) => console.error(`[Bot "${username}"]`, error))
+        this.bot.on('kicked', (reason) => {
+            if (typeof reason === 'string') {
+                console.warn(`[Bot "${username}"] Kicked:`, reason)
+                return
+            }
+
+            if (typeof reason === 'object' &&
+                'type' in reason &&
+                'value' in reason &&
+                reason.type === 'compound') {
+                console.warn(`[Bot "${username}"] Kicked:`, reason.value)
+            }
+            
+            console.warn(`[Bot "${username}"] Kicked:`, reason)
+        })
+        this.bot.on('error', (error) => {
+            // @ts-ignore
+            if (error instanceof AggregateError) {
+                // @ts-ignore
+                for (const suberror of error.errors) {
+                    if ('syscall' in suberror && suberror.syscall === 'connect') {
+                        console.error(`[Bot "${username}"] Failed to connect to ${suberror.address}: ${(() => {
+                            switch (suberror.code) {
+                                case 'ECONNREFUSED': return 'Connection refused'
+                                default: return suberror.code
+                            }
+                        })()}`)
+                    } else {
+                        console.error(`[Bot "${username}"]`, suberror)
+                    }
+                }
+            } else {
+                console.error(`[Bot "${username}"]`, error)
+            }
+        })
 
         this.bot.on('login', () => { console.log(`[Bot "${username}"] Logged in`) })
 
@@ -512,14 +836,24 @@ module.exports = class BruhBot {
                 World.save(this.worldName, this.getWorldData())
             }
 
-            // @ts-ignore
-            if (this.bot.webInventory) { this.bot.webInventory.stop() }
-            // @ts-ignore
-            if (this.bot.viewer) { this.bot.viewer.close() }
+            this.bot.webInventory?.stop()
+            this.bot.viewer?.close()
 
             this.goals.cancel(true, true, true)
 
-            console.log(`[Bot "${username}"] Ended:`, reason)
+            switch (reason) {
+                case 'socketClosed':
+                    console.warn(`[Bot "${username}"] Ended: Socket closed`)
+                    break
+                    
+                case 'disconnect.quitting':
+                    console.log(`[Bot "${username}"] Quit`)
+                    break
+            
+                default:
+                    console.log(`[Bot "${username}"] Ended:`, reason)
+                    break
+            }
         })
         
         this.bot.on('path_update', (r) => {
@@ -527,15 +861,15 @@ module.exports = class BruhBot {
             for (const node of r.path) {
                 path.push(new Vec3(node.x, node.y + 0.5, node.z ))
             }
-            this.bot.viewer.drawLine('path', path, 0xffffff)
+            this.bot.viewer?.drawLine('path', path, 0xffffff)
         })
         
         this.bot.on('path_reset', (reason) => {
-            this.bot.viewer.erase('path')
+            this.bot.viewer?.erase('path')
         })
         
         this.bot.on('path_stop', () => {
-            this.bot.viewer.erase('path')
+            this.bot.viewer?.erase('path')
         })
     }
 
@@ -586,6 +920,32 @@ module.exports = class BruhBot {
             return
         }
 
+        if (message === 'tp') {
+            let target = this.bot.players[username]?.entity?.position
+
+            if (!target) {
+                target = this.context.playerPositions[username]
+            }
+
+            if (!target) {
+                respond(`Can't find you`)
+                return
+            }
+
+            respond('Okay')
+
+            const goal = new EnderpearlToGoal(null, target.clone())
+            this.goals.normal.push(goal)
+            try {
+                goal.then(() => {
+                    this.idlePosition = this.bot.entity.position.clone()
+                    respond(`I'm here`)
+                })
+            } catch (error) { }
+
+            return
+        }
+
         if (message === 'fish') {
             respond('Okay')
 
@@ -621,7 +981,7 @@ module.exports = class BruhBot {
             }
 
             const goal = new AttackGoal(null, targetPlayer.entity)
-            goal.then((result) => {
+            goal.then(result => {
                 respond(`Done`)
             })
             this.goals.normal.push(goal)
@@ -660,6 +1020,18 @@ module.exports = class BruhBot {
             respond(`Okay`)
         }
 
+        if (message === 'guard') {
+            const target = this.bot.players[username]?.entity
+            if (!target) {
+                respond(`I can't find you`)
+                return
+            }
+
+            this.guardPosition = target.position.clone()
+            respond(`Okay`)
+            return
+        }
+
         if (message === 'stop quiet' ||
             message === 'cancel quiet') {
             if (!this.userQuiet) {
@@ -675,10 +1047,20 @@ module.exports = class BruhBot {
         if (message === 'stop' ||
             message === 'cancel') {
             if (this.goals.normal.length === 0) {
+                let hadTasks = false
                 if (this.followPlayer) {
                     respond(`I stopped following ${(username === this.followPlayer.username) ? 'you' : this.followPlayer}`)
                     this.followPlayer = null
-                } else {
+                    hadTasks = true
+                }
+
+                if (this.guardPosition) {
+                    respond(`I stopped guarding ${this.guardPosition.x} ${this.guardPosition.y} ${this.guardPosition.z}`)
+                    this.guardPosition = null
+                    hadTasks = true
+                }
+                
+                if (!hadTasks) {
                     respond(`I don't have any tasks`)
                 }
                 return
@@ -773,7 +1155,7 @@ module.exports = class BruhBot {
                 return
             }
 
-            respond(`I down't know how to make it`)
+            respond(`I don't know how to make it`)
             return
         }
 
@@ -1259,7 +1641,7 @@ module.exports = class BruhBot {
         if (hostile) {
             const distance = this.bot.entity.position.distanceTo(hostile.position)
 
-            if (distance < 5) {
+            if (distance < 10) {
                 if (this.context.quietMode) {
                     return new FleeGoal(null, hostile.position, 5)
                 }
@@ -1269,11 +1651,11 @@ module.exports = class BruhBot {
                     this.defendMyselfGoal.entity &&
                     this.defendMyselfGoal.entity.isValid) {
                     if (this.defendMyselfGoal.entity === hostile) {
-                        return null
+                        return this.defendMyselfGoal
                     }
-                    console.warn(`[Bot "${this.bot.username}"]Changing target`)
+                    console.warn(`[Bot "${this.bot.username}"] Changing target`)
                     this.defendMyselfGoal.entity = hostile
-                    return null
+                    return this.defendMyselfGoal
                 }
                 this.defendMyselfGoal = attackGoal
                 attackGoal.finally(() => { if (this.defendMyselfGoal === attackGoal) this.defendMyselfGoal = null })
@@ -1295,12 +1677,11 @@ module.exports = class BruhBot {
         }
 
         if (this.bot.food < 18 && !this.context.quietMode) {
-            if (false &&
-                this.bot.food < 10 &&
-                !EatGoal.hasFood(this.context) &&
-                this.tryAutoGatherFoodInterval.is()) {
-                return new GatherFood(null, false)
-            }
+            // if (this.bot.food < 10 &&
+            //     !EatGoal.hasFood(this.context) &&
+            //     this.tryAutoGatherFoodInterval.is()) {
+            //     return new GatherFood(null, false)
+            // }
 
             if (EatGoal.hasFood(this.context)) {
                 return new EatGoal(null)
@@ -1314,20 +1695,23 @@ module.exports = class BruhBot {
      * @private
      */
     handleSurviving() {
+        if (this.goals.survival.length > 0) { return }
+
         const survivalGoal = this.getSurvivalGoal()
-        if (this.goals.survival.length === 0 && survivalGoal) {
-            survivalGoal.quiet = true
-            if (survivalGoal instanceof AttackGoal) {
-                survivalGoal.then(() => {
-                    if (survivalGoal.entity && survivalGoal.entity.position) {
-                        const pickupItems = new PickupItemGoal(null, { inAir: true, point: survivalGoal.entity.position.clone() }, this.harvestedSaplings)
-                        pickupItems.quiet = true
-                        this.goals.normal.push(pickupItems)
-                    }
-                })
-            }
-            this.goals.survival.push(survivalGoal)
+        
+        if (!survivalGoal) { return }
+
+        survivalGoal.quiet = true
+        if (survivalGoal instanceof AttackGoal) {
+            survivalGoal.then(() => {
+                if (survivalGoal.entity && survivalGoal.entity.position) {
+                    const pickupItems = new PickupItemGoal(null, { inAir: true, point: survivalGoal.entity.position.clone() }, this.harvestedSaplings)
+                    pickupItems.quiet = true
+                    this.goals.normal.push(pickupItems)
+                }
+            })
         }
+        this.goals.survival.push(survivalGoal)
     }
 
     //#region World Data
@@ -1352,7 +1736,7 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @param {{ [key: string]: any }} data
+     * @param {{ [key: string]: any } | null} data
      */
     setWorldData(data) {
         if (!data) {
@@ -1389,7 +1773,6 @@ module.exports = class BruhBot {
 
         if (data['my_chests']) {
             const myChests = data['my_chests']
-            // @ts-ignore
             this.context.myChests = myChests
         }
     }
