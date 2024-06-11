@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../mineflayer-pathfinder"
+		},
+		{
+			"path": "../mineflayer-web-inventory"
+		},
+		{
+			"path": "../prismarine-viewer"
+		},
+		{
+			"path": "../Minecraft-Resource-Pack-Converter"
+		}
+	],
+	"settings": {}
+}
