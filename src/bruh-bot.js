@@ -974,6 +974,68 @@ module.exports = class BruhBot {
                 return
             }
 
+            if (target === 'all') {
+                const goal = new AnyAsyncGoal(this.context, null, async () => {
+                    let killed = 0
+                    const origin = this.context.bot.entity.position.clone()
+                    while (true) {
+                        this.context.refreshTime()
+                        const entity = this.context.bot.nearestEntity(e => {
+                            if (e.type === 'global') { return false }
+                            if (e.type === 'object') { return false }
+                            if (e.type === 'orb') { return false }
+                            if (e.type === 'projectile') { return false }
+                            if (e.type === 'other') { return false }
+                            if (e.type === 'player') { return false }
+                            if (!e.name) { return false }
+                            if (e.position.distanceTo(origin) > 20) { return false }
+                            switch (e.name) {
+                                case 'chicken':
+                                case 'cow':
+                                case 'sheep':
+                                case 'goat':
+                                case 'frog':
+                                case 'fox':
+                                case 'llama':
+                                case 'mooshroom':
+                                case 'mule':
+                                case 'ocelot':
+                                case 'panda':
+                                case 'pig':
+                                case 'polar_bear':
+                                case 'rabbit':
+                                case 'sniffer':
+                                case 'snow_golem':
+                                case 'slime':
+                                case 'trader_llama':
+                                case 'slime':
+                                case 'turtle':
+                                    return true
+                                default:
+                                    console.log(e.name)
+                                    return false
+                            }
+                        })
+                        if (!entity) { break }
+                        const attacked = await (new AttackGoal(goal, entity)).wait()
+                        if ('result' in attacked) {
+                            killed++
+                        }
+                    }
+                    return killed
+                })
+                goal.then(result => {
+                    if (result > 0) {
+                        respond(`I killed ${result} mobs`)
+                    } else {
+                        respond(`There is nobody to kill`)
+                    }
+                })
+                this.goals.normal.push(goal)
+                respond(`Okay`)
+                return
+            }
+
             const targetPlayer = this.bot.players[target]
             if (!targetPlayer) {
                 respond(`Can't find ${target}`)
