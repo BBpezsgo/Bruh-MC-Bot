@@ -185,7 +185,7 @@ module.exports = class MinecraftData {
         this.compost = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compost.json'), 'utf8'))
         this.general = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'general.json'), 'utf8'))
         this.mlg = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'mlg.json'), 'utf8'))
-        const compacting = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compacting.json'), 'utf8'))
+        this.compacting = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compacting.json'), 'utf8'))
 
         this.sortedFuels = [ ]
         this.tags = { }

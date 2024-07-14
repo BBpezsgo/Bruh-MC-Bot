@@ -168,7 +168,7 @@ module.exports = class MC {
 
     /**
      * @param {string} name
-     * @returns {getMcData.Item}
+     * @returns {getMcData.Item | null}
      */
     getCorrectItems(name) {
         if (this.data.itemsByName[name]) {

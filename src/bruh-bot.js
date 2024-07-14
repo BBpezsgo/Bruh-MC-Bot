@@ -5,65 +5,93 @@ const MineFlayerCollectBlock = require('mineflayer-collectblock').plugin
 const MineFlayerElytra = require('mineflayer-elytrafly').elytrafly
 const MineFlayerHawkEye = require('minecrafthawkeye').default
 const MineFlayerArmorManager = require('mineflayer-armor-manager')
-const { Item } = require('prismarine-item')
-const GotoGoal = require('./goals/goto')
-const GotoPlayerGoal = require('./goals/goto-player')
-const Context = require('./context')
-const GatherMaterialGoal = require('./goals/gather-material')
-const PickupItemGoal = require('./goals/pickup-item')
-const GiveAllGoal = require('./goals/give-all')
-const GiveGoal = require('./goals/give')
-const PlantSaplingGoal = require('./goals/plant-sapling')
-const AttackGoal = require('./goals/attack')
-const EatGoal = require('./goals/eat')
-const GatherFood = require('./goals/gather-food')
-const BlockExplosionGoal = require('./goals/block-explosion')
-const SleepGoal = require('./goals/sleep')
-const FlyToGoal = require('./goals/fly-to')
-const fJSON = require('./serializing')
-const { timeout, randomInt, deg2rad, filterHostiles, sleep } = require('./utils')
-const GatherItemGoal = require('./goals/gather-item')
-const SmeltGoal = require('./goals/smelt')
+const TaskManager = require('./task-manager')
+const goto = require('./tasks/goto')
 const MC = require('./mc')
-const Interval = require('./interval')
-const HoeingGoal = require('./goals/hoeing')
-const World = require('./world')
-const Goals = require('./goals')
-const PlantSeedGoal = require('./goals/plant-seed')
-const HarvestGoal = require('./goals/harvest')
-const CompostGoal = require('./goals/compost')
-const DumpToChestGoal = require('./goals/dump-to-chest')
-const { Entity } = require('prismarine-entity')
-const FleeGoal = require('./goals/flee')
-const EnderpearlToGoal = require('./goals/enderpearl-to')
-const FishGoal = require('./goals/fish')
-/** @ts-ignore @type {import('mineflayer-web-inventory').default} */
-const MineflayerWebInventory = require('mineflayer-web-inventory')
-const MineflayerViewer = require('prismarine-viewer')
-const DigAreaGoal = require('./goals/dig-area')
-const GeneralGoal = require('./goals/general')
-const AnyAsyncGoal = require('./goals/any-async-goal')
-const GotoBlockGoal = require('./goals/goto-block')
-const DigGoal = require('./goals/dig')
-const Wait = require('./goals/wait')
+const { Block } = require('prismarine-block')
+const { Item } = require('prismarine-item')
+const meleeWeapons = require('./melee-weapons')
+const { filterHostiles, wrap, sleepG, Interval, randomInt, deg2rad, parseLocationH } = require('./utils')
+const hawkeye = require('minecrafthawkeye')
+const attack = require('./tasks/attack')
+const Capabilies = require('./capabilies')
+const eat = require('./tasks/eat')
+const fish = require('./tasks/fish')
+const followPlayer = require('./tasks/follow-player')
+const mlg = require('./tasks/mlg')
+const clearMlgJunk = require('./tasks/clear-mlg-junk')
+const giveAll = require('./tasks/give-all')
+const pickupItem = require('./tasks/pickup-item')
+const harvest = require('./tasks/harvest')
+const compost = require('./tasks/compost')
+// @ts-ignore
+const Environment = require('./environment')
+const Memory = require('./memory')
+const sleep = require('./tasks/sleep')
+const enderpearlTo = require('./tasks/enderpearl-to')
+const smelt = require('./tasks/smelt')
+const blockExplosion = require('./tasks/block-explosion')
 
+const priorities = Object.freeze({
+    critical: 300,
+    surviving: 200,
+    user: 100,
+    cleanup: -1,
+    low: -100,
+    unnecessary: -200,
+})
+
+// @ts-ignore
 module.exports = class BruhBot {
     /**
-     * @private
      * @readonly
-     * @type {Goals}
+     * @type {import('mineflayer').Bot}
      */
-    goals
+    bot
+
+    /**
+     * @readonly
+     * @type {MC}
+     */
+    mc
 
     /**
      * @private
      * @readonly
-     * @type {Interval}
+     * @type {TaskManager}
      */
-    trySleepInterval
+    tasks
+
     /**
-     * @private
      * @readonly
+     * @type {Capabilies}
+     */
+    capabilies
+
+    /**
+     * @readonly
+     * @type {Array<(username: string, message: string) => boolean>}
+     */
+    chatAwaits
+
+    /**
+     * @readonly
+     * @type {MineFlayerPathfinder.Movements}
+     */
+    permissiveMovements
+    /**
+     * @readonly
+     * @type {MineFlayerPathfinder.Movements}
+     */
+    restrictedMovements
+    /**
+     * @readonly
+     * @type {MineFlayerPathfinder.Movements}
+     */
+    gentleMovements
+
+    /**
+     * @private @readonly
      * @type {Interval}
      */
     tryAutoCookInterval
@@ -72,13 +100,13 @@ module.exports = class BruhBot {
      * @readonly
      * @type {Interval}
      */
-    tryAutoGatherFoodInterval
+    saveInterval
     /**
      * @private
      * @readonly
      * @type {Interval}
      */
-    tryAutoHarvestInterval
+    trySleepInterval
     /**
      * @private
      * @readonly
@@ -92,124 +120,64 @@ module.exports = class BruhBot {
      */
     randomLookInterval
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {Interval}
      */
-    unshieldInterval
+    tryAutoHarvestInterval
 
     /**
-     * @private
-     * @type {null | { username: string; respond: (message: string) => void }}
+     * @type {boolean}
      */
-    followPlayer
+    quietMode
 
     /**
      * @private
-     * @readonly
-     * @type {Array<{ position: Vec3, item: string }>}
-     */
-    harvestedSaplings
-
-    /**
-     * @private
-     * @readonly
-     * @type {Array<{ position: Vec3, item: string }>}
-     */
-    harvestedCrops
-
-    /**
-     * @private
-     * @type {Vec3}
-     */
-    idlePosition
-
-    /**
-     * @private
-     * @type {Vec3 | null}
-     */
-    deathPosition
-
-    /**
-     * @private
-     * @type {Vec3}
-     */
-    lastPosition
-
-    /**
-     * @private
-     * @type {AttackGoal | null}
-     */
-    defendMyselfGoal
-
-    /**
-     * @private
-     * @readonly
-     * @type {Context}
-     */
-    context
-
-    /**
-     * @private
-     * @type {Array<Entity>}
+     * @type {Array<import('prismarine-entity').Entity>}
      */
     aimingEntities
 
     /**
      * @private
+     * @type {boolean}
+     */
+    _isLeftHandActive
+    
+    /**
+     * @private
+     * @type {boolean}
+     */
+    _isRightHandActive
+
+    /**
+     * @type {TaskManager.AsManaged<import('./tasks/attack')> | null}
+     */
+    defendMyselfGoal
+
+    /**
+     * @type {((soundName: string | number) => void) | null}
+     */
+    onHeard
+
+    get isLeftHandActive() { return this._isLeftHandActive }
+    get isRightHandActive() { return this._isRightHandActive }
+
+    /**
      * @readonly
-     * @type {import('mineflayer').Bot}
+     * @type {Environment}
      */
-    bot
+    env
 
     /**
-     * @private
      * @readonly
-     * @type {string}
+     * @type {Memory}
      */
-    worldName
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    autoPickUpItems
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    autoSmeltItems
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    autoHarvest
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    idleLooking
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    userQuiet
-
-    /**
-     * @private
-     * @type {Vec3 | null}
-     */
-    guardPosition
+    memory
 
     /**
      * @param {Readonly<{
      *   [key: string]: any;
      *   dataPath: string;
-     *   autoPickUpItems?: boolean;
+     *   pickupItemDistance?: number;
      *   autoSmeltItems?: boolean;
      *   autoHarvest?: boolean;
      *   idleLooking?: boolean;
@@ -222,32 +190,6 @@ module.exports = class BruhBot {
 
         worldName = worldName + '_' + username
 
-        this.goals = new Goals()
-
-        this.followPlayer = null
-        this.harvestedSaplings = []
-        this.harvestedCrops = []
-        this.idlePosition = null
-        this.deathPosition = null
-        this.lastPosition = null
-        this.defendMyselfGoal = null
-        this.guardPosition = null
-
-        this.autoPickUpItems = ('autoPickUpItems' in config) ? config.autoPickUpItems : true
-        this.autoSmeltItems = ('autoSmeltItems' in config) ? config.autoSmeltItems : true
-        this.autoHarvest = ('autoHarvest' in config) ? config.autoHarvest : true
-        this.idleLooking = ('idleLooking' in config) ? config.idleLooking : true
-
-        /** @type {Context} */
-        this.context = null
-
-        this.userQuiet = false
-
-        /**
-         * @type {Array<Entity>}
-         */
-        this.aimingEntities = []
-
         this.bot = MineFlayer.createBot({
             host: config['bot']['host'],
             port: config['bot']['port'],
@@ -255,7 +197,60 @@ module.exports = class BruhBot {
             logErrors: false,
         })
 
-        this.worldName = worldName
+        this.env = new Environment(this)
+        this.memory = new Memory(this)
+        
+        this.chatAwaits = [ ]
+        this.quietMode = true
+        this._isLeftHandActive = false
+        this._isRightHandActive = false
+        this.capabilies = new Capabilies(this)
+        this.defendMyselfGoal = null
+        this.onHeard = null
+        // @ts-ignore
+        this.mc = null
+        this.aimingEntities = [ ]
+
+        this.tryAutoCookInterval = new Interval(10000)
+        this.saveInterval = new Interval(30000)
+        this.trySleepInterval = new Interval(5000)
+        this.tryAutoHarvestInterval = new Interval(5000)
+        this.checkQuietInterval = new Interval(500)
+        this.randomLookInterval = new Interval(10000)
+
+        // @ts-ignore
+        this.permissiveMovements = null
+        // @ts-ignore
+        this.restrictedMovements = null
+        // @ts-ignore
+        this.gentleMovements = null
+
+        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply)))
+        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply)))
+
+        this.bot.on('target_aiming_at_you', (entity, arrowTrajectory) => {
+            this.aimingEntities.push(entity)
+        })
+
+        this.bot.on('entityDead', (entity) => {
+            if (this.env.entitySpawnTimes[entity.id]) {
+                delete this.env.entitySpawnTimes[entity.id]
+            }
+        })
+
+        this.bot.on('entitySpawn', (entity) => {
+            this.env.entitySpawnTimes[entity.id] = performance.now()
+        })
+
+        this.bot.on('soundEffectHeard', (soundName) => {
+            if (this.onHeard) { this.onHeard(soundName) }
+        })
+
+        this.bot.on('hardcodedSoundEffectHeard', (soundId, soundCategory) => {
+            if (this.onHeard) { this.onHeard(soundId) }
+        })
+
+        this.tasks = new TaskManager()
 
         this.bot.once('spawn', () => {
             console.log(`[Bot "${username}"] Spawned`)
@@ -270,463 +265,207 @@ module.exports = class BruhBot {
             console.log(`[Bot "${username}"] Loading ...`)
 
             // @ts-ignore
-            this.context = new Context(this.bot)
+            this.mc = new MC(this.bot.version)
 
             // @ts-ignore
-            this.trySleepInterval = new Interval(this.context, 5000)
+            this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
             // @ts-ignore
-            this.tryAutoCookInterval = new Interval(this.context, 10000)
+            this.restrictedMovements = new MineFlayerPathfinder.Movements(this.bot)
             // @ts-ignore
-            this.tryAutoGatherFoodInterval = new Interval(this.context, 5000)
-            // @ts-ignore
-            this.tryAutoHarvestInterval = new Interval(this.context, 60000)
-            // @ts-ignore
-            this.checkQuietInterval = new Interval(this.context, 500)
-
-            // @ts-ignore
-            this.randomLookInterval = new Interval(this.context, 10000)
-            // @ts-ignore
-            this.unshieldInterval = new Interval(this.context, 5000)
-
-            World.backup(worldName)
-            this.setWorldData(World.load(this.worldName))
-
-            this.bot.pathfinder.setMovements(this.context.permissiveMovements)
-
-            this.lastPosition = this.bot.entity.position.clone()
-            this.idlePosition = this.bot.entity.position.clone()
-
-            this.goals.idlingStarted = performance.now()
-
-            this.bot.on('target_aiming_at_you', (entity, arrowTrajectory) => {
-                this.aimingEntities.push(entity)
-            })
-
-            // const app = require('express')()
-            // const http = require('http').createServer(app)
-
-            // MineflayerViewer.mineflayer(this.bot, {
-            //     port: 3000,
-            //     // _app: app,
-            //     // _http: http,
-            //     // prefix: '/view',
-            // })
-            // MineflayerWebInventory(this.bot, {
-            //     port: 3001,
-            //     // app: app,
-            //     // http: http,
-            //     // path: '/inventory',
-            //     // startOnLoad: false,
-            // })
-
-            // http.listen(80)
-
-            // bot.hawkEye.startRadar()
-        
+            this.gentleMovements = new MineFlayerPathfinder.Movements(this.bot)
+    
+            BruhBot.setPermissiveMovements(this.permissiveMovements, this.mc)
+            BruhBot.setRestrictedMovements(this.restrictedMovements, this.mc)
+            BruhBot.setGentleMovements(this.gentleMovements, this.mc)
+    
             console.log(`[Bot "${username}"] Ready`)
         })
 
+        this.bot.on('playerUpdated', async (player) => {
+            if (!player.entity?.position) {
+                return
+            }
+
+            this.env.setPlayerPosition(player.username, player.entity.position)
+        })
+
         this.bot.on('move', async (position) => {
-            if (!this.context) { return }
-
-            if (this.bot.entity.velocity.y < this.context.mc.data2.general.fallDamageVelocity) {
-                if (this.context.didMLG) {
-                    console.log(`[Bot "${this.bot.username}"]: Already did MLG, just falling ...`)
-                    return
-                }
-                await mlg(this.context)
+            if (!this.mc) { return }
+            if (this.bot.entity.velocity.y < this.mc.data2.general.fallDamageVelocity) {
+                this.tasks.tick()
+                this.tasks.push(this, mlg, null, priorities.critical)
                 return
-            }
-            
-            if (this.context.doingMLG) {
-                this.context.doingMLG = false
-            }
-
-            if (this.context.didMLG) {
-                this.context.didMLG = false
             }
         })
 
-        this.bot.on('playerUpdated', (player) => {
-            this.context.playerPositions[player.username] = player.entity?.position.clone() ?? this.context.playerPositions[player.username]
-        })
-
-        /**
-         * @param {Context} context
-         */
-        async function mlg(context) {
-            context.doingMLG = true
-        
-            const neighbour = context.bot.nearestEntity()
-            if (neighbour &&
-                context.mc.data2.mlg.vehicles.includes(neighbour.name) &&
-                context.bot.entity.position.distanceTo(neighbour.position) < 6) {
-                console.log(`[Bot "${context.bot.username}"]: MLG: Mounting "${neighbour.name}" ...`)
-                context.bot.mount(neighbour)
-                context.didMLG = true
-                await sleep(100)
-                context.bot.dismount()
-                return
-            }
-        
-            try {
-                let haveMlgItem = 0
-                for (const item of context.bot.inventory.slots) {
-                    if (!item) { continue }
-
-                    if (context.mc.data2.mlg.boats.includes(item.name) &&
-                        haveMlgItem < 1) {
-                        await context.bot.equip(item.type, 'hand')
-                        haveMlgItem = 1
-                        continue
-                    }
-
-                    if (context.mc.data2.mlg.mlgBlocks.includes(item.name) &&
-                        haveMlgItem < 2) {
-                        await context.bot.equip(item.type, 'hand')
-                        haveMlgItem = 2
-                        break
-                    }
-                }
-
-                if (!haveMlgItem) {
-                    console.warn(`[Bot "${context.bot.username}"]: MLG: No suitable item found`)
-                    return
-                }
-
-                console.log(`[Bot "${context.bot.username}"]: MLG: Will use ${context.bot.heldItem?.name ?? 'null'} ...`)
-
-                await context.bot.look(context.bot.entity.yaw, -Math.PI / 2, true)
-
-                const reference = context.bot.blockAtCursor(5)
-                if (!reference) {
-                    console.warn(`[Bot "${context.bot.username}"]: MLG: No reference block`)
-                    return
-                }
-                
-                if (!context.bot.heldItem) {
-                    console.warn(`[Bot "${context.bot.username}"]: MLG: Not holding anything`)
-                    return
-                }
-                
-                if (context.bot.heldItem.name === 'bucket') {
-                    console.warn(`[Bot "${context.bot.username}"]: MLG: This is a bucket`)
-                    return
-                }
-
-                console.log(`[Bot "${context.bot.username}"]: MLG: Using "${context.bot.heldItem.name ?? 'null'}" ...`)
-
-                if (context.bot.heldItem.name === 'water_bucket') {
-                    console.log(`[Bot "${context.bot.username}"]: MLG: Placing water ...`)
-                    context.bot.activateItem()
-                    context.didMLG = true
-
-                    await sleep(40)
-                    
-                    const junkBlock = context.bot.blockAt(reference.position.offset(0, 1, 0))
-                    if (junkBlock) {
-                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk water saved`)
-                        context.mlgJunkBlocks.push({
-                            type: 'water',
-                            position: junkBlock.position.clone(),
-                        })
-                    } else {
-                        console.log(`[Bot "${context.bot.username}"]: MLG: Possible junk water saved`)
-                        context.mlgJunkBlocks.push({
-                            type: 'water',
-                            position: reference.position.offset(0, 1, 0),
-                        })
-                    }
-                } else if (context.mc.data2.mlg.boats.includes(context.bot.heldItem.name)) {
-                    console.log(`[Bot "${context.bot.username}"]: MLG: Activating item ...`)
-                    context.bot.activateItem()
-
-                    await sleep(40)
-
-                    const junkBoat = context.bot.nearestEntity(v => v.name === 'boat')
-                    if (junkBoat) {
-                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk boat saved`)
-                        context.mlgJunkBlocks.push({
-                            type: 'boat',
-                            id: junkBoat.id,
-                        })
-                    }
-                } else {
-                    console.log(`[Bot "${context.bot.username}"]: MLG: Placing block ...`)
-                    await context.bot.placeBlock(reference, new Vec3(0, 1, 0))
-                    context.didMLG = true
-
-                    await sleep(40)
-                    
-                    const junkBlock = context.bot.blockAt(reference.position.offset(0, 1, 0))
-                    if (junkBlock) {
-                        console.log(`[Bot "${context.bot.username}"]: MLG: Junk block saved`)
-                        context.mlgJunkBlocks.push({
-                            type: 'block',
-                            blockName: junkBlock.name,
-                            position: junkBlock.position.clone(),
-                        })
-                    } else {
-                        console.warn(`[Bot "${context.bot.username}"]: MLG: No junk block saved`)
-                    }
-                }
-            } catch (error) {
-                console.error(error)
-            }
-        }
-        
         this.bot.on('physicsTick', () => {
-            if (!this.context) { return }
-
-            this.context.refreshTime()
-            this.lastPosition = this.bot.entity.position.clone()
-
-            if (this.context.doingMLG) { return }
-
             if (this.checkQuietInterval.is()) {
-                let shouldBeQuiet = this.userQuiet
-
-                /*
-                if (!shouldBeQuiet) {
-                    if (this.bot.findBlock({
-                        matching: this.context.mc.data.blocksByName['sculk_sensor'].id,
-                        maxDistance: 16,
-                    })) {
-                        shouldBeQuiet = true
-                    }
-                }
-                */
+                let shouldBeQuiet = false
 
                 this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
 
-                if (!shouldBeQuiet && this.bot.controlState.sneak && !this.goals.has(true)) {
+                if (!shouldBeQuiet && this.bot.controlState.sneak && this.tasks.isIdle) {
                     this.bot.setControlState('sneak', false)
                 }
 
-                this.context.permissiveMovements.sneak = shouldBeQuiet
-                this.context.restrictedMovements.sneak = shouldBeQuiet
-                this.context.gentleMovements.sneak = shouldBeQuiet
-                this.context.quietMode = shouldBeQuiet
+                this.permissiveMovements.sneak = shouldBeQuiet
+                this.restrictedMovements.sneak = shouldBeQuiet
+                this.gentleMovements.sneak = shouldBeQuiet
+                this.quietMode = shouldBeQuiet
             }
 
-            if (this.goals.critical.length === 0) {
-                const criticalGoal = this.getCriticalGoal()
-                if (criticalGoal) {
-                    criticalGoal.quiet = true
-                    this.goals.critical.push(criticalGoal)
-                }
+            if (this.saveInterval.is()) {
+                this.memory.save()
+                this.env.save()
             }
 
-            this.handleSurviving()
-
-            this.goals.tick(this.context)
-
-            this.aimingEntities = []
+            const runningTask = this.tasks.tick()
 
             {
-                const now = this.context.time
-                let i = 0
-                while (i < this.context.chatAwaits.length) {
-                    const chatAwait = this.context.chatAwaits[i]
-                    if (chatAwait.timeout !== 0 &&
-                        now >= chatAwait.timeout + chatAwait.time) {
-                            chatAwait.timedout()
-                        this.context.chatAwaits.splice(i, 1)
+                let creeper = this.env.getExplodingCreeper()
+
+                if (creeper) {
+                    if (this.searchItem('shield')) {
+                        this.tasks.push(this, blockExplosion, null, priorities.critical)
+                        return
                     } else {
-                        i++
+                        this.tasks.push(this, goto, {
+                            flee: creeper.position,
+                            distance: 8,
+                            timeout: 300,
+                        }, priorities.critical)
+                        return
                     }
+                }
+        
+                creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
+        
+                if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
+                    this.tasks.push(this, goto, {
+                        flee: creeper.position,
+                        distance: 8,
+                        timeout: 300,
+                    }, priorities.critical)
+                    return
+                }
+        
+                if (this.aimingEntities[0]) {
+                    const entity = this.aimingEntities[0]
+                    console.log(`[Bot "${this.bot.username}"] ${entity.displayName ?? entity.name ?? 'Someone'} aiming at me`)
                 }
             }
 
-            if (this.followPlayer) {
-                const player = this.bot.players[this.followPlayer.username]
-                if (!player || !player.entity) {
-                    this.followPlayer.respond(`I can't find ${this.followPlayer.username}`)
-                    this.followPlayer = null
+            if (runningTask && runningTask.getPriority() >= priorities.critical) {
+                return
+            }
+
+            const hostile = this.bot.nearestEntity(v => {
+                return filterHostiles(v, this.bot.entity.position) ? true : false
+            })
+
+            if (hostile) {
+                if (!this.defendMyselfGoal || this.defendMyselfGoal.status === 'done' || !this.tasks.has(this.defendMyselfGoal.getId())) {
+                    // @ts-ignore
+                    this.defendMyselfGoal = this.tasks.push(this, attack, {
+                        target: hostile,
+                        useBow: true,
+                        useMelee: true,
+                        useMeleeWeapon: true,
+                    }, (args) => {
+                        const distance = this.bot.entity.position.distanceSquared(args.target.position)
+                        const multiplier = (distance < 1) ? 1 : (1 / distance)
+                        const maxPriority = priorities.critical - priorities.surviving
+                        return priorities.surviving + (maxPriority * multiplier)
+                    })
                 } else {
-                    const distance = this.bot.entity.position.distanceTo(player.entity.position)
-                    if (distance > 7) {
-                        const goal = new GotoPlayerGoal(null, this.followPlayer.username, 5, this.context.restrictedMovements)
-                        this.goals.normal.push(goal)
-                        return
-                    }
+                    this.defendMyselfGoal.args.target = hostile
                 }
+                return
             }
 
-            if (this.goals.isIdle(1000) &&
-                !this.goals.has(true) &&
-                this.context.mlgJunkBlocks.length > 0) {
-                const clearJunk = new AnyAsyncGoal(this.context, null, async () => {
-                    console.log(`[Bot "${this.bot.username}"]: Clearing MLG junk ...`, this.context.mlgJunkBlocks)
-                    for (let i = this.context.mlgJunkBlocks.length - 1; i >= 0; i--) {
-                        const junk = this.context.mlgJunkBlocks.pop()
+            if (this.bot.food < 18 &&
+                !this.quietMode &&
+                (this.mc.filterFoods(this.bot.inventory.items()).length > 0)) {
+                this.tasks.push(this, eat, null, priorities.surviving)
+                return
+            }
 
-                        switch (junk.type) {
-                            case 'water': {
-                                const junkBlock = this.bot.findBlock({
-                                    matching: [
-                                        this.context.mc.data.blocksByName['water'].id
-                                    ],
-                                    maxDistance: 2,
-                                    point: junk.position,
-                                })
-        
-                                if (!junkBlock) {
-                                    console.warn(`[Bot "${this.bot.username}"]: No water at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
-                                    continue
-                                }
-        
-                                if (junkBlock.name !== 'water') {
-                                    console.warn(`[Bot "${this.bot.username}"]: Unknown MLG junk: "${junkBlock.name}"`)
-                                    break
-                                }
+            if (this.trySleepInterval.is() &&
+                sleep.can(this)) {
+                this.tasks.push(this, sleep, null, priorities.low)
+            }
 
-                                console.log(`[Bot "${this.bot.username}"]: Clearing MLG junk: water ...`)
-                                await (new GotoBlockGoal(clearJunk, junkBlock.position.clone(), this.context.restrictedMovements)).wait()
-
-                                console.log(`[Bot "${this.bot.username}"]: Equip bucket ...`)
-                                const bucket = this.context.searchItem('bucket')
-                                if (!bucket) {
-                                    console.warn(`[Bot "${this.bot.username}"]: No bucket found`)
-                                    break
-                                }
-                                await this.bot.equip(bucket, 'hand')
-
-                                await this.bot.lookAt(junkBlock.position, true)
-                                this.bot.activateItem()
-
-                                break
-                            }
-                            case 'block': {
-                                const junkBlock = this.bot.findBlock({
-                                    matching: [
-                                        this.context.mc.data.blocksByName[junk.blockName].id
-                                    ],
-                                    maxDistance: 2,
-                                    point: junk.position,
-                                })
-        
-                                if (!junkBlock) {
-                                    console.warn(`[Bot "${this.bot.username}"]: No "${junk.blockName}" found at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
-                                    continue
-                                }
-        
-                                await (new DigGoal(this.context, clearJunk, junkBlock, false)).wait()
-                                break
-                            }
-                            case 'boat': {
-                                const junkBoat = this.bot.nearestEntity(v => v.id === junk.id)
-                                if (!junkBoat) {
-                                    console.warn(`[Bot "${this.bot.username}"]: Junk boat not found`)
-                                    continue
-                                }
-
-                                await (new AttackGoal(clearJunk, junkBoat, true, false, false)).wait()
-                                break
-                            }
-                            default:
-                                debugger
-                                break
+            if (this.memory.mlgJunkBlocks.length > 0) {
+                this.tasks.push(this, clearMlgJunk, null, priorities.cleanup)
+                return
+            }
+            
+            if (this.memory.myArrows.length > 0) {
+                this.tasks.push(this, {
+                    task: function*(bot, args) {
+                        const myArrow = bot.memory.myArrows.shift()
+                        if (!myArrow) {
+                            return
                         }
-                    }
-                })
-                clearJunk.quiet = true
-                this.goals.normal.push(clearJunk)
+                        const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
+                        if (!entity) {
+                            console.warn(`[Bot "${bot.bot.username}"] Can't find the arrow`)
+                            return
+                        }
+                        yield* goto.task(bot, {
+                            destination: entity.position.clone(),
+                            range: 1,
+                        })
+                        yield* sleepG(1000)
+                        if (entity.isValid) {
+                            console.warn(`[Bot "${bot.bot.username}"] Can't pick up this arrow`)
+                        } else {
+                            console.log(`[Bot "${bot.bot.username}"] Arrow picked up`)
+                        }
+                    },
+                    id: function(args) {
+                        return `pickup-my-arrows`
+                    },
+                    humanReadableId: function(args) {
+                        return `Picking up my arrows`
+                    },
+                }, null, priorities.cleanup)
             }
-
-            if (this.goals.isIdle(6000) &&
-                !this.goals.has(true) &&
-                this.trySleepInterval.is() &&
-                SleepGoal.can(this.context)) {
-                const goal = new SleepGoal(null)
-                goal.quiet = true
-                this.goals.normal.push(goal)
-                return
+            
+            if ('result' in this.env.getClosestItem(null, { inAir: false, maxDistance: 5, minLifetime: 5000 }) ||
+                'result' in this.env.getClosestXp({ maxDistance: 5 })) {
+                this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, 1)
             }
-
-            /*
-            if (!goals.has(true) &&
-                deathPosition) {
-                const goToDeathGoal = new GotoGoal(null, deathPosition.clone(), 1, context.permissiveMovements)
-                goToDeathGoal.quiet = true
-                goals.normal.push(goToDeathGoal)
-                goToDeathGoal.then(() => {
-                    deathPosition = null
-                })
-                return
-            }
-            */
-
-            if (this.context.myArrows.length > 0 &&
-                this.goals.isIdle(2000) &&
-                !this.goals.has(true)) {
-                const pickUpArrowGoal = new AnyAsyncGoal(this.context, null, async () => {
-                    const myArrow = this.context.myArrows.shift()
-                    if (!myArrow) {
-                        return
+            
+            if (this.tryAutoHarvestInterval.is()) {
+                if (this.env.getCrops(this.bot.entity.position.clone(), true).length > 0) {
+                    const harvestTask = this.tasks.push(this, harvest, { }, priorities.unnecessary)
+                    if (harvestTask) {
+                        harvestTask.wait()
+                            .then(() => {
+                                const goal = this.tasks.push(this, compost, null, priorities.unnecessary)
+                            })
+                            .catch(() => {
+                                
+                            })
                     }
-                    const entity = this.bot.nearestEntity(v => v.id === myArrow)
-                    if (!entity) {
-                        console.warn(`[Bot "${this.bot.username}"] Can't find the arrow`)
-                        return
-                    }
-                    await (new GotoGoal(pickUpArrowGoal, entity.position.clone(), 1, this.context.restrictedMovements)).wait()
-                    await (new Wait(pickUpArrowGoal, 1000)).wait()
-                    if (entity.isValid) {
-                        console.warn(`[Bot "${this.bot.username}"] Can't pick up this arrow`)
-                    } else {
-                        console.log(`[Bot "${this.bot.username}"] Arrow picked up`)
-                    }
-                })
-                pickUpArrowGoal.quiet = true
-                this.goals.normal.push(pickUpArrowGoal)
-                return
-            }
-
-            if (this.autoPickUpItems &&
-                this.goals.isIdle(5000) &&
-                !this.goals.has(true)) {
-                const maxDistance = this.followPlayer ? 10 : 30
-                if ('result' in PickupItemGoal.getClosestItem(this.context, null, { maxDistance: maxDistance }) ||
-                    // 'result' in PickupItemGoal.getClosestArrow(context) ||
-                    'result' in PickupItemGoal.getClosestXp(this.context)) {
-                    const goal = new PickupItemGoal(null, { maxDistance: maxDistance }, this.harvestedSaplings)
-                    goal.quiet = true
-                    this.goals.normal.push(goal)
-                    return
                 }
             }
 
-            if (this.guardPosition &&
-                this.goals.isIdle(100) &&
-                !this.goals.has(true)) {
-                const d = this.bot.entity.position.distanceTo(this.guardPosition)
-                if (d > 2) {
-                    const goal = new GotoGoal(null, this.guardPosition, 1, this.context.restrictedMovements)
-                    goal.quiet = true
-                    this.goals.normal.push(goal)
-                    return
-                }
-                return
-            }
-
-            if (this.autoSmeltItems &&
-                !this.followPlayer &&
-                this.goals.isIdle(5000) &&
-                !this.goals.has(true) &&
-                this.tryAutoCookInterval.is()) {
-                const rawFood = this.context.searchItem(...MC.rawFoods)
+            if (this.tryAutoCookInterval.is()) {
+                const rawFood = this.searchItem(...MC.rawFoods)
                 if (rawFood) {
-                    if (this.context.mc.simpleSeeds.includes(rawFood.type) &&
-                        this.context.itemCount(rawFood.type) <= 1) {
+                    if (this.mc.simpleSeeds.includes(rawFood.type) &&
+                        this.itemCount(rawFood.type) <= 1) {
                         // Don't eat plantable foods
                     } else {
-                        const recipe = this.context.getCookingRecipesFromRaw(rawFood.name)
+                        const recipe = this.getCookingRecipesFromRaw(rawFood.name)
                         if (recipe.length > 0) {
-                            if (SmeltGoal.findBestFurnace(this.context, recipe, true)) {
-                                const goal = new SmeltGoal(null, recipe, true)
-                                goal.quiet = true
-                                this.goals.normal.push(goal)
+                            if (smelt.findBestFurnace(this, recipe, true)) {
+                                this.tasks.push(this, smelt, {
+                                    noFuel: true,
+                                    recipes: recipe,
+                                }, priorities.unnecessary)
                                 return
                             }
                         }
@@ -734,66 +473,29 @@ module.exports = class BruhBot {
                 }
             }
 
-            if (this.autoHarvest &&
-                !this.followPlayer &&
-                this.goals.isIdle(5000) &&
-                !this.goals.has(true) &&
-                this.tryAutoHarvestInterval.is()) {
-                if (HarvestGoal.getCrops(this.context).length > 0) {
-                    const goal = new HarvestGoal(null, null, this.harvestedCrops)
-                    goal.quiet = true
-                    goal.then(() => {
-                        const goal = new CompostGoal(null)
-                        goal.quiet = true
-                        this.goals.normal.push(goal)
-                    })
-                    this.goals.normal.push(goal)
-                    return
-                }
-            }
-
-            /*
-            if (!this.followPlayer &&
-                !this.goals.has(true) &&
-                this.idlePosition) {
-                const distanceFromIdlePosition = this.bot.entity.position.distanceTo(this.idlePosition)
-                if (distanceFromIdlePosition > 5) {
-                    const goBackGoal = new GotoGoal(null, this.idlePosition.clone(), 4, this.context.restrictedMovements)
-                    goBackGoal.quiet = true
-                    this.goals.normal.push(goBackGoal)
-                    return
-                }
-            }
-            */
-
-            if (this.idleLooking &&
-                this.goals.isIdle(1000) &&
-                !this.goals.has(true)) {
+            if (this.tasks.isIdle || (
+                    runningTask &&
+                    runningTask.getId().startsWith('follow') &&
+                    !this.bot.pathfinder.goal
+                )
+            ) {
                 if (this.lookAtNearestPlayer()) {
                     this.randomLookInterval.restart()
                     return
                 }
-            }
 
-            if (this.idleLooking &&
-                this.goals.isIdle(5000) &&
-                !this.goals.has(true) &&
-                this.randomLookInterval.is()) {
-                this.lookRandomly()
-                return
+                if (this.randomLookInterval.is()) {
+                    this.lookRandomly()
+                    return
+                }
             }
         })
-
-        this.bot.on('chat', (username, message) => this.handleChat(username, message, (response) => { this.bot.chat(response) }))
-        this.bot.on('whisper', (username, message) => this.handleChat(username, message, (response) => { this.bot.whisper(username, response) }))
 
         this.bot.on('death', () => {
             console.log(`[Bot "${username}"] Died`)
-            this.goals.cancel(false, true, true)
-            this.deathPosition = this.lastPosition
         })
 
-        this.bot.on('kicked', (reason) => {
+        this.bot.on('kicked', (/** @type {any} */ reason) => {
             if (typeof reason === 'string') {
                 console.warn(`[Bot "${username}"] Kicked:`, reason)
                 return
@@ -832,14 +534,8 @@ module.exports = class BruhBot {
         this.bot.on('login', () => { console.log(`[Bot "${username}"] Logged in`) })
 
         this.bot.on('end', (reason) => {
-            if (this.context) {
-                World.save(this.worldName, this.getWorldData())
-            }
-
-            this.bot.webInventory?.stop()
+            this.bot.webInventory?.stop?.()
             this.bot.viewer?.close()
-
-            this.goals.cancel(true, true, true)
 
             switch (reason) {
                 case 'socketClosed':
@@ -854,14 +550,19 @@ module.exports = class BruhBot {
                     console.log(`[Bot "${username}"] Ended:`, reason)
                     break
             }
+
+            this.memory.save()
+            this.env.save()
         })
         
         this.bot.on('path_update', (r) => {
-            const path = [this.bot.entity.position.offset(0, 0.5, 0)]
-            for (const node of r.path) {
-                path.push(new Vec3(node.x, node.y + 0.5, node.z ))
+            if (this.bot.viewer) {
+                const path = [this.bot.entity.position.offset(0, 0.5, 0)]
+                for (const node of r.path) {
+                    path.push(new Vec3(node.x, node.y + 0.5, node.z ))
+                }
+                this.bot.viewer.drawLine('path', path, 0xffffff)
             }
-            this.bot.viewer?.drawLine('path', path, 0xffffff)
         })
         
         this.bot.on('path_reset', (reason) => {
@@ -872,974 +573,6 @@ module.exports = class BruhBot {
             this.bot.viewer?.erase('path')
         })
     }
-
-    /**
-     * @param {string} username
-     * @param {string} message
-     * @param {(message: string) => void} respond
-     */
-    handleChat(username, message, respond) {
-        if (username === this.bot.username) return
-
-        const original = message.trim().replace(/  /g, ' ')
-        message = original.toLowerCase()
-        if (message.startsWith('.')) {
-            message = message.substring(1)
-        }
-
-        if (message === 'leave') {
-            this.bot.quit()
-
-            return
-        }
-
-        if (message === 'come') {
-            let distance = 5
-
-            respond('Okay')
-
-            if (this.goals.normal.length === 0) {
-                const target = this.bot.players[username]?.entity
-                if (target) {
-                    const _distance = this.bot.entity.position.distanceTo(target.position)
-                    if (_distance < 6) {
-                        distance = 2
-                    }
-                }
-            }
-
-            const goal = new GotoPlayerGoal(null, username, distance, this.context.restrictedMovements)
-            this.goals.normal.push(goal)
-            try {
-                goal.then(() => {
-                    this.idlePosition = this.bot.entity.position.clone()
-                    respond(`I'm here`)
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'tp') {
-            let target = this.bot.players[username]?.entity?.position
-
-            if (!target) {
-                target = this.context.playerPositions[username]
-            }
-
-            if (!target) {
-                respond(`Can't find you`)
-                return
-            }
-
-            respond('Okay')
-
-            const goal = new EnderpearlToGoal(null, target.clone())
-            this.goals.normal.push(goal)
-            try {
-                goal.then(() => {
-                    this.idlePosition = this.bot.entity.position.clone()
-                    respond(`I'm here`)
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'fish') {
-            respond('Okay')
-
-            const goal = new FishGoal(null)
-            this.goals.normal.push(goal)
-            try {
-                goal.then(() => {
-                    respond(`Done`)
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'follow') {
-            respond('Okay')
-
-            this.followPlayer = { username: username, respond: respond }
-            return
-        }
-
-        if (original.startsWith('kill ')) {
-            const target = original.replace('kill', '').trimStart()
-            if (target === 'BB_vagyok') {
-                respond(`No`)
-                return
-            }
-
-            if (target === 'all') {
-                const goal = new AnyAsyncGoal(this.context, null, async () => {
-                    let killed = 0
-                    const origin = this.context.bot.entity.position.clone()
-                    while (true) {
-                        this.context.refreshTime()
-                        const entity = this.context.bot.nearestEntity(e => {
-                            if (e.type === 'global') { return false }
-                            if (e.type === 'object') { return false }
-                            if (e.type === 'orb') { return false }
-                            if (e.type === 'projectile') { return false }
-                            if (e.type === 'other') { return false }
-                            if (e.type === 'player') { return false }
-                            if (!e.name) { return false }
-                            if (e.position.distanceTo(origin) > 20) { return false }
-                            switch (e.name) {
-                                case 'chicken':
-                                case 'cow':
-                                case 'sheep':
-                                case 'goat':
-                                case 'frog':
-                                case 'fox':
-                                case 'llama':
-                                case 'mooshroom':
-                                case 'mule':
-                                case 'ocelot':
-                                case 'panda':
-                                case 'pig':
-                                case 'polar_bear':
-                                case 'rabbit':
-                                case 'sniffer':
-                                case 'snow_golem':
-                                case 'slime':
-                                case 'trader_llama':
-                                case 'slime':
-                                case 'turtle':
-                                    return true
-                                default:
-                                    console.log(e.name)
-                                    return false
-                            }
-                        })
-                        if (!entity) { break }
-                        const attacked = await (new AttackGoal(goal, entity)).wait()
-                        if ('result' in attacked) {
-                            killed++
-                        }
-                    }
-                    return killed
-                })
-                goal.then(result => {
-                    if (result > 0) {
-                        respond(`I killed ${result} mobs`)
-                    } else {
-                        respond(`There is nobody to kill`)
-                    }
-                })
-                this.goals.normal.push(goal)
-                respond(`Okay`)
-                return
-            }
-
-            const targetPlayer = this.bot.players[target]
-            if (!targetPlayer) {
-                respond(`Can't find ${target}`)
-                return
-            }
-
-            const goal = new AttackGoal(null, targetPlayer.entity)
-            goal.then(result => {
-                respond(`Done`)
-            })
-            this.goals.normal.push(goal)
-            respond(`Okay`)
-            return
-        }
-
-        if (message.startsWith('dig ')) {
-            const parts = message.split(' ')
-            if (parts.length !== 1 + 3 + 3) {
-                respond(`Syntax: dig <x1> <y1> <z1> <x2> <y2> <z2>`)
-                return
-            }
-
-            const x1 = Number.parseInt(parts[1])
-            const y1 = Number.parseInt(parts[2])
-            const z1 = Number.parseInt(parts[3])
-            const x2 = Number.parseInt(parts[4])
-            const y2 = Number.parseInt(parts[5])
-            const z2 = Number.parseInt(parts[6])
-            if (Number.isNaN(x1) ||
-                Number.isNaN(y1) ||
-                Number.isNaN(z1) ||
-                Number.isNaN(x2) ||
-                Number.isNaN(y2) ||
-                Number.isNaN(z2)) {
-                respond(`Invalid number`)
-                return
-            }
-
-            const goal = new DigAreaGoal(null, new Vec3(x1, y1, z1), new Vec3(x2, y2, z2), false)
-            this.goals.normal.push(goal)
-            goal.then((result) => {
-                respond(`Done`)
-            })
-            respond(`Okay`)
-        }
-
-        if (message === 'guard') {
-            const target = this.bot.players[username]?.entity
-            if (!target) {
-                respond(`I can't find you`)
-                return
-            }
-
-            this.guardPosition = target.position.clone()
-            respond(`Okay`)
-            return
-        }
-
-        if (message === 'stop quiet' ||
-            message === 'cancel quiet') {
-            if (!this.userQuiet) {
-                respond(`I'm not trying to be quiet`)
-                return
-            }
-
-            respond(`Okay`)
-            this.userQuiet = false
-            return
-        }
-
-        if (message === 'stop' ||
-            message === 'cancel') {
-            if (this.goals.normal.length === 0) {
-                let hadTasks = false
-                if (this.followPlayer) {
-                    respond(`I stopped following ${(username === this.followPlayer.username) ? 'you' : this.followPlayer}`)
-                    this.followPlayer = null
-                    hadTasks = true
-                }
-
-                if (this.guardPosition) {
-                    respond(`I stopped guarding ${this.guardPosition.x} ${this.guardPosition.y} ${this.guardPosition.z}`)
-                    this.guardPosition = null
-                    hadTasks = true
-                }
-                
-                if (!hadTasks) {
-                    respond(`I don't have any tasks`)
-                }
-                return
-            }
-
-            this.followPlayer = null
-            this.goals.cancel(true, false, false, () => {
-                respond(`I stopped`)
-            })
-
-            return
-        }
-
-        if (message === 'fly') {
-            respond('Okay')
-
-            const target = this.bot.players[username]?.entity
-
-            if (!target) {
-                respond(`Can't find you`)
-                return
-            }
-
-            const goal = new FlyToGoal(null, target.position.clone())
-            this.goals.normal.push(goal)
-            try {
-                goal.then(() => {
-                    this.idlePosition = this.bot.entity.position.clone()
-                    respond(`I'm here`)
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'wyd') {
-            if (this.goals.critical.length > 0) {
-                respond(`RAAHH`)
-                return
-            }
-
-            if (this.goals.survival.length > 0) {
-                let current = this.goals.survival[0]
-                let builder = `I'm taking care of myself: `
-                while (current) {
-                    if (current.parent) {
-                        builder += ' => '
-                    }
-                    builder += current.toReadable(this.context)
-                    current = current.goals[0]
-                }
-
-                respond(builder)
-                return
-            }
-
-            if (this.goals.normal.length > 0) {
-                let current = this.goals.normal[0]
-                let builder = ''
-                while (current) {
-                    if (current.parent) {
-                        builder += ' => '
-                    }
-                    builder += current.toReadable(this.context)
-                    current = current.goals[0]
-                }
-
-                respond(builder)
-                return
-            }
-
-            respond(`Nothing`)
-            return
-        }
-
-        if (message.startsWith('make ')) {
-            const make = message.replace('make', '').trimStart()
-
-            if (make === 'farm') {
-                const goal = HoeingGoal.atPlayer(this.context, username)
-                if ('error' in goal) {
-                    respond(goal.error.toString())
-                    return
-                }
-
-                respond(`Okay`)
-                goal.result.then(() => {
-                    respond(`Done`)
-                })
-                this.goals.normal.push(goal.result)
-
-                return
-            }
-
-            respond(`I don't know how to make it`)
-            return
-        }
-
-        if (message === 'farm') {
-
-            const goal = HoeingGoal.atPlayer(this.context, username)
-
-            if ('error' in goal) {
-                respond(`Okay`)
-                const goal = new PlantSeedGoal(null, this.context.mc.simpleSeeds, null)
-                goal.then(() => {
-                    respond(`Done`)
-                })
-                this.goals.normal.push(goal)
-                return
-            }
-
-            respond(`Okay`)
-            goal.result.finally(() => {
-                const goal = new PlantSeedGoal(null, this.context.mc.simpleSeeds, null)
-                goal.then(() => {
-                    respond(`Done`)
-                })
-                this.goals.normal.push(goal)
-            })
-            this.goals.normal.push(goal.result)
-
-            return
-        }
-
-        if (message === 'harvest') {
-            const target = this.bot.players[username]?.entity
-            let farmPosition = this.bot.entity.position.clone()
-            if (target) {
-                const water = this.bot.findBlock({
-                    matching: [this.context.mc.data.blocksByName['water'].id],
-                    point: target.position.clone(),
-                    maxDistance: 4,
-                })
-                if (water) {
-                    farmPosition = water.position.clone()
-                }
-            } else {
-                const water = this.bot.findBlock({
-                    matching: [this.context.mc.data.blocksByName['water'].id],
-                    maxDistance: 4,
-                })
-                if (water) {
-                    farmPosition = water.position.clone()
-                }
-            }
-
-            respond(`Okay`)
-            const goal = new HarvestGoal(null, farmPosition, this.harvestedCrops)
-            goal.then(() => {
-                respond(`Done`)
-            })
-            this.goals.normal.push(goal)
-
-            return
-        }
-
-        if (message.startsWith('dump ')) {
-            let itemName = message.replace('dump', '').trimStart()
-            let count = 1
-
-            if (itemName === 'trash' || itemName === 'yunk' || itemName === 'junk') {
-                const notTrash = [
-                    this.context.mc.data.itemsByName['wooden_hoe']?.id,
-                    this.context.mc.data.itemsByName['fishing_rod']?.id,
-                    this.context.mc.data.itemsByName['stone_hoe']?.id,
-                    this.context.mc.data.itemsByName['stone_axe']?.id,
-                    this.context.mc.data.itemsByName['stone_sword']?.id,
-                    this.context.mc.data.itemsByName['stone_pickaxe']?.id,
-                    this.context.mc.data.itemsByName['stone_shovel']?.id,
-                    this.context.mc.data.itemsByName['iron_hoe']?.id,
-                    this.context.mc.data.itemsByName['iron_axe']?.id,
-                    this.context.mc.data.itemsByName['iron_sword']?.id,
-                    this.context.mc.data.itemsByName['iron_pickaxe']?.id,
-                    this.context.mc.data.itemsByName['iron_shovel']?.id,
-                    this.context.mc.data.itemsByName['bow']?.id,
-                    this.context.mc.data.itemsByName['crossbow']?.id,
-                    this.context.mc.data.itemsByName['arrow']?.id,
-                    this.context.mc.data.itemsByName['shield']?.id,
-                    this.context.mc.data.itemsByName['bread']?.id,
-                    this.context.mc.data.itemsByName['potato']?.id,
-                    this.context.mc.data.itemsByName['baked_potato']?.id,
-                    this.context.mc.data.itemsByName['carrot']?.id,
-                    this.context.mc.data.itemsByName['beetroot']?.id,
-                    this.context.mc.data.itemsByName['raw_cod']?.id,
-                    this.context.mc.data.itemsByName['cooked_cod']?.id,
-                    this.context.mc.data.itemsByName['raw_salmon']?.id,
-                    this.context.mc.data.itemsByName['cooked_salmon']?.id,
-                ]
-
-                const task = new GeneralGoal(null, async () => {
-                    const allItems = this.bot.inventory.items()
-                    for (const item of allItems) {
-                        if (notTrash.includes(item.type)) {
-                            continue
-                        }
-                        const goal = new DumpToChestGoal(task, item.type, item.count)
-                        await goal.wait()
-                    }
-                    return { result: true }
-                })
-
-                respond(`Okay`)
-                this.goals.normal.push(task)
-                task.then(() => {
-                    respond(`Done`)
-                })
-
-                return
-            }
-
-            if (itemName.split(' ')[0] === 'all') {
-                count = Infinity
-                itemName = itemName.substring(itemName.split(' ')[0].length).trimStart()
-            } else if (!Number.isNaN(Number.parseInt(itemName.split(' ')[0]))) {
-                count = Number.parseInt(itemName.split(' ')[0])
-                itemName = itemName.substring(itemName.split(' ')[0].length).trimStart()
-            }
-
-            respond('Okay')
-
-            const item = this.context.mc.getCorrectItems(itemName)
-
-            if (!item) {
-                respond(`I don't know what ${itemName} it is`)
-                return
-            }
-
-            const goal = new DumpToChestGoal(null, item.id, count)
-            this.goals.normal.push(goal)
-            goal.then((result) => {
-                respond(`Done`)
-            })
-
-            return
-        }
-
-        if (message.startsWith('get ')) {
-            let material = message.replace('get', '').trimStart()
-            let count = 1
-
-            if (!Number.isNaN(Number.parseInt(material.split(' ')[0]))) {
-                count = Number.parseInt(material.split(' ')[0])
-                material = material.substring(material.split(' ')[0].length).trimStart()
-            }
-
-            respond('Okay')
-
-            if (material === 'food') {
-                const goal = new GatherFood(null, true)
-                this.goals.normal.push(goal)
-                goal.then(result => {
-                    if (result === 'have') {
-                        respond(`I already have food`)
-                        return
-                    }
-                    respond(`I have gathered a ${result.displayName}`)
-                })
-                return
-            }
-
-            const item = this.context.mc.getCorrectItems(material)
-
-            if (item) {
-                const goal = new GatherItemGoal(null, item.id, count, true, false, false)
-                this.goals.normal.push(goal)
-                goal.then((result) => {
-                    switch (result) {
-                        case 'have':
-                            respond(`I already have ${item.displayName}`)
-                            break
-                        case 'crafted':
-                            respond(`I crafted ${goal.getDelta(this.context)} ${item.displayName}`)
-                            break
-                        case 'digged':
-                            respond(`I digged ${goal.getDelta(this.context)} ${item.displayName}`)
-                            break
-                        case 'looted':
-                            respond(`I looted ${goal.getDelta(this.context)} ${item.displayName}`)
-                            break
-                        case 'smelted':
-                            respond(`I smelted ${goal.getDelta(this.context)} ${item.displayName}`)
-                            break
-                        default:
-                            respond(`I gathered ${goal.getDelta(this.context)} ${item.displayName}`)
-                            break
-                    }
-                })
-                return
-            }
-
-            const goal = new GatherMaterialGoal(null, material)
-            this.goals.normal.push(goal)
-
-            try {
-                goal.then(result => {
-                    let builder = ''
-                    if (result.length === 0) {
-                        builder = 'nothing'
-                    } else {
-                        for (let i = 0; i < result.length; i++) {
-                            const item = result[i]
-                            if (i > 0) {
-                                if (i === result.length - 1) {
-                                    builder += ` and `
-                                } else {
-                                    builder += `, `
-                                }
-                            }
-                            builder += `${item.delta} of ${item.name}`
-                        }
-                        builder = builder.trim()
-                    }
-                    console.log(`[Bot "${username}"] I have gathered ${builder}`)
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'wyh') {
-            const items = this.bot.inventory.items()
-
-            /**
-             * @type {Array<{ count: number; item: Item; }>}
-             */
-            const normal = []
-            for (const item of items) {
-                let found = false
-                for (const item2 of normal) {
-                    if (item2.item.type === item.type) {
-                        item2.count += item.count
-                        found = true
-                        break
-                    }
-                }
-                if (!found) {
-                    normal.push({
-                        count: item.count,
-                        item: item,
-                    })
-                }
-            }
-
-            let builder = ''
-            for (let i = 0; i < normal.length; i++) {
-                const item = normal[i]
-                if (i > 0) { builder += ' ; ' }
-                if (item.count === 1) {
-                    builder += `${item.item.displayName}`
-                } else if (item.count >= item.item.stackSize) {
-                    builder += `${Math.round((item.count / item.item.stackSize) * 10) / 10} stack ${item.item.displayName}`
-                } else {
-                    builder += `${item.count} ${item.item.displayName}`
-                }
-            }
-
-            respond(builder)
-
-            return
-        }
-
-        if (message === 'go home') {
-            const myBed = SleepGoal.findMyBed(this.context)
-            if (!myBed) {
-                respond(`I doesn't have a bed`)
-                return
-            }
-
-            const goal = new GotoGoal(null, myBed.position.clone(), 4, this.context.restrictedMovements)
-            this.goals.normal.push(goal)
-            goal.then((result) => {
-                switch (result) {
-                    case 'here':
-                        respond(`I'm already at my bed`)
-                        break
-                    case 'done':
-                        respond(`I'm here`)
-                        break
-                    default:
-                        break
-                }
-            })
-
-            return
-        }
-
-        if (message === 'sleep') {
-            if (!SleepGoal.can(this.context)) {
-                respond(`I can't`)
-                return
-            }
-
-            const goal = new SleepGoal(null)
-            this.goals.normal.push(goal)
-
-            return
-        }
-
-        if (message === 'quiet') {
-            if (this.userQuiet) {
-                respond(`I'm already trying to be quiet`)
-                return
-            }
-
-            respond(`Okay`)
-
-            this.userQuiet = true
-
-            return
-        }
-
-        if (message.startsWith('cost ')) {
-            let itemName = message.replace('cost', '').trimStart()
-            itemName = itemName.replace(/ /g, '_').toLowerCase()
-
-            if (!this.context.mc.data.itemsByName[itemName]) {
-                respond(`I don't know what it is`)
-                return
-            }
-
-            const cost = GatherItemGoal.itemCost(this.context, this.context.mc.data.itemsByName[itemName].id, 1, true, 0)
-            timeout(cost, 5000)
-                .then((result) => {
-                    respond(result.toString())
-                })
-                .catch((reason) => {
-                    console.error(`[Bot "${username}"]`, reason)
-                    if (reason === 'Time Limit Exceeded') {
-                        respond(`I don't know`)
-                    }
-                })
-
-            return
-        }
-
-        if (message === 'replant') {
-            if (this.harvestedSaplings.length === 0) {
-                respond('No saplings saved')
-
-                return
-            }
-
-            const goal = new PlantSaplingGoal(null, this.harvestedSaplings, true)
-            this.goals.normal.push(goal)
-            try {
-                goal.then(result => {
-                    if (result === 0) {
-                        respond(`I couldn't replant any saplings`)
-                    } else {
-                        respond(`I have replanted ${result} saplings`)
-                    }
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message === 'plant') {
-            const goal = new PlantSaplingGoal(null, null, true)
-            this.goals.normal.push(goal)
-            try {
-                goal.then(result => {
-                    if (result === 0) {
-                        respond(`I couldn't plant any saplings`)
-                    } else {
-                        respond(`I have planted ${result} saplings`)
-                    }
-                })
-            } catch (error) { }
-
-            return
-        }
-
-        if (message.startsWith('give ')) {
-            let giveItemName = message.replace('give', '').trimStart()
-
-            if (giveItemName === 'all') {
-                respond('Okay')
-                const goal = new GiveAllGoal(null, username)
-                this.goals.normal.push(goal)
-                try {
-                    goal.then(() => {
-                        respond(`There it is`)
-                    })
-                } catch (error) { }
-                return
-            }
-
-            let count = 1
-            if (giveItemName.includes(' ')) {
-                count = Number.parseInt(giveItemName.split(' ')[0])
-                if (Number.isNaN(count)) {
-                    count = 1
-                } else {
-                    giveItemName = giveItemName.substring(giveItemName.split(' ')[0].length).trimStart()
-                }
-            }
-
-            const giveItem = this.context.mc.data.itemsByName[giveItemName.replace(/ /g, '_')]
-            if (!giveItem) {
-                respond(`I don't know what item ${giveItemName} is`)
-                return
-            }
-
-            if (this.goals.normal.length === 0 &&
-                !this.context.searchItem(giveItem.id)) {
-                respond(`I doesn't have ${giveItem.displayName}`)
-                return
-            }
-
-            const goal = new GiveGoal(null, username, giveItem, count)
-            this.goals.normal.push(goal)
-            try {
-                goal.then((gave) => {
-                    if (gave < count) {
-                        respond(`I only got ${gave} ${giveItem.displayName}`)
-                    } else {
-                        respond(`There is your ${giveItem.displayName}`)
-                    }
-                })
-            } catch (error) { }
-            return
-        }
-
-        for (let i = 0; i < this.context.chatAwaits.length; i++) {
-            const chatAwait = this.context.chatAwaits[i]
-            if (chatAwait.callback(username, message)) {
-                this.context.chatAwaits.splice(i, 1)
-                return
-            }
-        }
-    }
-
-    /**
-     * @private
-     */
-    getCriticalGoal() {
-        let creeper = this.context.explodingCreeper()
-
-        if (creeper) {
-            if (this.context.searchItem('shield')) {
-                return new BlockExplosionGoal(null)
-            } else {
-                return new FleeGoal(null, creeper.position.clone(), 8)
-            }
-        }
-
-        creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
-
-        if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
-            return new FleeGoal(null, creeper.position.clone(), 8)
-        }
-
-        if (this.aimingEntities.length > 0) {
-            const entity = this.aimingEntities[0]
-            console.log(`[Bot "${this.bot.username}"] ${entity?.displayName ?? entity?.name ?? 'Someone'} aiming at me`)
-        }
-
-        // if (BlockMeleeGoal.getHazard(context) &&
-        //     context.searchItem('shield')) {
-        //     console.warn('AAAAAAAA')
-        //     return new BlockMeleeGoal(null)
-        // }
-
-        return null
-    }
-
-    /**
-     * @private
-     */
-    getSurvivalGoal() {
-        const hostile = this.bot.nearestEntity(entity => {
-            if (filterHostiles(entity)) { return true }
-            return false
-        })
-
-        if (hostile) {
-            const distance = this.bot.entity.position.distanceTo(hostile.position)
-
-            if (distance < 10) {
-                if (this.context.quietMode) {
-                    return new FleeGoal(null, hostile.position, 5)
-                }
-
-                const attackGoal = new AttackGoal(null, hostile)
-                if (this.defendMyselfGoal &&
-                    this.defendMyselfGoal.entity &&
-                    this.defendMyselfGoal.entity.isValid) {
-                    if (this.defendMyselfGoal.entity === hostile) {
-                        return this.defendMyselfGoal
-                    }
-                    console.warn(`[Bot "${this.bot.username}"] Changing target`)
-                    this.defendMyselfGoal.entity = hostile
-                    return this.defendMyselfGoal
-                }
-                this.defendMyselfGoal = attackGoal
-                attackGoal.finally(() => { if (this.defendMyselfGoal === attackGoal) this.defendMyselfGoal = null })
-                return attackGoal
-            }
-
-            if (distance < 20 && !this.context.quietMode) {
-                const rangeWeapon = this.context.searchRangeWeapon()
-
-                if (rangeWeapon && rangeWeapon.ammo > 0) {
-                    if (hostile.name !== 'enderman') {
-                        const grade = this.bot.hawkEye.getMasterGrade(hostile, this.bot.entity.velocity, rangeWeapon.weapon)
-                        if (grade && !grade.blockInTrayect) {
-                            return new AttackGoal(null, hostile)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (this.bot.food < 18 && !this.context.quietMode) {
-            // if (this.bot.food < 10 &&
-            //     !EatGoal.hasFood(this.context) &&
-            //     this.tryAutoGatherFoodInterval.is()) {
-            //     return new GatherFood(null, false)
-            // }
-
-            if (EatGoal.hasFood(this.context)) {
-                return new EatGoal(null)
-            }
-        }
-
-        return null
-    }
-
-    /**
-     * @private
-     */
-    handleSurviving() {
-        if (this.goals.survival.length > 0) { return }
-
-        const survivalGoal = this.getSurvivalGoal()
-        
-        if (!survivalGoal) { return }
-
-        survivalGoal.quiet = true
-        if (survivalGoal instanceof AttackGoal) {
-            survivalGoal.then(() => {
-                if (survivalGoal.entity && survivalGoal.entity.position) {
-                    const pickupItems = new PickupItemGoal(null, { inAir: true, point: survivalGoal.entity.position.clone() }, this.harvestedSaplings)
-                    pickupItems.quiet = true
-                    this.goals.normal.push(pickupItems)
-                }
-            })
-        }
-        this.goals.survival.push(survivalGoal)
-    }
-
-    //#region World Data
-
-    /**
-     * @private
-     */
-    getWorldData() {
-        return {
-            'harvested': {
-                saplings: this.harvestedSaplings,
-                crops: this.harvestedCrops,
-            },
-            'positions': {
-                idlePosition: this.idlePosition,
-                deathPosition: this.deathPosition,
-                bed: this.context.myBed,
-            },
-            'my_chests': this.context.myChests,
-        }
-    }
-
-    /**
-     * @private
-     * @param {{ [key: string]: any } | null} data
-     */
-    setWorldData(data) {
-        if (!data) {
-            return
-        }
-
-        if (data['harvested']) {
-            for (const element of data['harvested']['saplings']) {
-                const item = fJSON.toString(element, 'item')
-                const position = fJSON.toVec3(element, 'position')
-
-                if (!item || !position) { continue }
-
-                this.harvestedSaplings.push({ item, position, })
-            }
-
-            for (const element of data['harvested']['crops']) {
-                const item = fJSON.toString(element, 'item')
-                const position = fJSON.toVec3(element, 'position')
-
-                if (!item || !position) { continue }
-
-                this.harvestedCrops.push({ item, position, })
-            }
-        }
-
-        if (data['positions']) {
-            const positions = data['positions']
-
-            this.idlePosition = fJSON.toVec3(positions, 'idlePosition')
-            this.deathPosition = fJSON.toVec3(positions, 'deathPosition')
-            this.context.myBed = fJSON.toVec3(positions, 'bed')
-        }
-
-        if (data['my_chests']) {
-            const myChests = data['my_chests']
-            this.context.myChests = myChests
-        }
-    }
-
-    //#endregion
 
     /**
      * @private
@@ -1890,5 +623,946 @@ module.exports = class BruhBot {
         const pitch = randomInt(-40, 30)
         const yaw = randomInt(-180, 180)
         this.bot.look(yaw * deg2rad, pitch * deg2rad)
+    }
+
+    /**
+     * 
+     * @param {string} sender
+     * @param {string} message
+     * @param {(reply: string) => void} respond
+     */
+    handleChat(sender, message, respond) {
+        message = message.trim()
+
+        if (this.chatAwaits.length > 0) {
+            const chatAwait = this.chatAwaits[0]
+            if (chatAwait(sender, message)) {
+                this.chatAwaits.shift()
+                return
+            }
+        }
+    
+        if (message === 'fish') {
+            const task = this.tasks.push(this, fish, {
+                onStatusMessage: respond,
+            }, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => respond(`Done`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already fishing`)
+            }
+        }
+
+        if (message === 'wyh') {
+            const items = this.bot.inventory.items()
+
+            /**
+             * @type {Array<{ count: number; item: Item; }>}
+             */
+            const normal = []
+            for (const item of items) {
+                let found = false
+                for (const item2 of normal) {
+                    if (item2.item.type === item.type) {
+                        item2.count += item.count
+                        found = true
+                        break
+                    }
+                }
+                if (!found) {
+                    normal.push({
+                        count: item.count,
+                        item: item,
+                    })
+                }
+            }
+
+            let builder = ''
+            for (let i = 0; i < normal.length; i++) {
+                const item = normal[i]
+                if (i > 0) { builder += ' ; ' }
+                if (item.count === 1) {
+                    builder += `${item.item.displayName}`
+                } else if (item.count >= item.item.stackSize) {
+                    builder += `${Math.round((item.count / item.item.stackSize) * 10) / 10} stack ${item.item.displayName}`
+                } else {
+                    builder += `${item.count} ${item.item.displayName}`
+                }
+            }
+
+            respond(builder)
+
+            return
+        }
+
+        if (message === 'stop quiet' ||
+            message === 'cancel quiet' ||
+            message === 'no quiet') {
+            if (!this.userQuiet) {
+                respond(`I'm not trying to be quiet`)
+                return
+            }
+
+            respond(`Okay`)
+            this.userQuiet = false
+            return
+        }
+
+        if (message === 'quiet') {
+            if (this.userQuiet) {
+                respond(`I'm already trying to be quiet`)
+                return
+            }
+
+            respond(`Okay`)
+
+            this.userQuiet = true
+
+            return
+        }
+
+        if (message === 'follow') {
+            const task = this.tasks.push(this, followPlayer, {
+                player: sender,
+                range: 5,
+                onNoPlayer: function*(bot, args) {
+                    try {
+                        const response = yield* bot.ask(`I lost you. Where are you?`, respond, sender, 30000)
+                        const location = parseLocationH(response)
+                        if (location) {
+                            respond(`${location.x} ${location.y} ${location.z} I got it`)
+                        }
+                        return location
+                    } catch (error) {
+                        return null
+                    }
+                },
+                onStatusMessage: respond,
+            })
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => { })
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already following you`)
+            }
+        }
+
+        if (message === 'wyd') {
+            if (this.tasks.running.length === 0) {
+                respond(`Nothing`)
+            } else {
+                let builder = ''
+                for (let i = 0; i < this.tasks.running.length; i++) {
+                    const task = this.tasks.running[i]
+                    if (builder) { builder += ' ; ' }
+                    builder += `${task.getHumanReadableId()} with priority ${task.getPriority()}`
+                }
+                for (let i = 0; i < this.tasks.queue.length; i++) {
+                    const task = this.tasks.queue[i]
+                    if (builder) { builder += ' ; ' }
+                    builder += `(in queue) ${task.getHumanReadableId()} with priority ${task.getPriority()}`
+                }
+                respond(builder)
+            }
+            return
+        }
+
+        if (message === 'come') {
+            const task = this.tasks.push(this, {
+                /** @type {import('./task').SimpleTaskDef<void, { player: string; }>} */ 
+                task: function* (bot, args) {
+                    let location = bot.env.getPlayerPosition(args.player)
+                    if (!location) {
+                        try {
+                            const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
+                            location = parseLocationH(response)
+                        } catch (error) {
+                            
+                        }
+                        if (location) {
+                            respond(`${location.x} ${location.y} ${location.z} I got it`)
+                        } else {
+                            throw `I can't find you`
+                        }
+                    }
+                    yield* goto.task(bot, {
+                        destination: location.clone(),
+                        range: 2,
+                    })
+                },
+                id: function (args) {
+                    return `goto-${args.player}`
+                },
+                humanReadableId: function(args) {
+                    return `Goto ${args.player}`
+                },
+            }, {
+                player: sender,
+            }, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => respond(`I'm here`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already coming to you`)
+            }
+        }
+
+        if (message === 'tp') {
+            const target = this.env.getPlayerPosition(sender)
+
+            if (!target) {
+                throw `Can't find ${sender}`
+            }
+
+            const task = this.tasks.push(this, enderpearlTo, {
+                destination: target.offset(0, 0.1, 0),
+                onStatusMessage: respond,
+            }, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => {
+                        if (result === 'here') {
+                            respond(`I'm already here`)
+                            return
+                        }
+                        const error = task.args.destination.distanceTo(this.bot.entity.position)
+                        if (error <= 2) {
+                            respond(`Done: ${result}`)
+                        } else {
+                            respond(`I missed by ${Math.round(error)} blocks`)
+                        }
+                    })
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already teleporting to you`)
+            }
+        }
+
+        if (message === 'give all') {
+            const task = this.tasks.push(this, giveAll, {
+                player: sender,
+                onStatusMessage: respond,
+            }, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => respond(`There it is`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already on my way`)
+            }
+        }
+
+        if (message === 'stop') {
+            respond(`Okay`)
+            this.tasks.stop()
+        }
+
+        if (message === 'leave') {
+            this.bot.quit(`${sender} asked me to leave`)
+        }
+    }
+
+    /**
+     * @param {string} message
+     * @param {(message: string) => any} send
+     * @param {string} [player]
+     * @param {number} [timeout]
+     * @returns {Generator<void, string, void>}
+     */
+    *ask(message, send, player, timeout) {
+        /** @type {string | null} */
+        let response = null
+        this.chatAwaits.push((/** @type {string} */ username, /** @type {string} */ message) => {
+            if (player && username !== player) { return false }
+            response = message
+            return true
+        })
+        send(message)
+        const timeoutAt = timeout ? (performance.now() + timeout) : null
+        while (true) {
+            if (response) {
+                return response
+            }
+            if (timeoutAt && timeoutAt < performance.now()) {
+                throw 'Timed out'
+            }
+            yield* sleepG(200)
+        }
+    }
+
+    nontrashItems() {
+        return [
+            this.mc.data.itemsByName['wooden_hoe']?.id,
+            this.mc.data.itemsByName['fishing_rod']?.id,
+            this.mc.data.itemsByName['stone_hoe']?.id,
+            this.mc.data.itemsByName['stone_axe']?.id,
+            this.mc.data.itemsByName['stone_sword']?.id,
+            this.mc.data.itemsByName['stone_pickaxe']?.id,
+            this.mc.data.itemsByName['stone_shovel']?.id,
+            this.mc.data.itemsByName['iron_hoe']?.id,
+            this.mc.data.itemsByName['iron_axe']?.id,
+            this.mc.data.itemsByName['iron_sword']?.id,
+            this.mc.data.itemsByName['iron_pickaxe']?.id,
+            this.mc.data.itemsByName['iron_shovel']?.id,
+            this.mc.data.itemsByName['bow']?.id,
+            this.mc.data.itemsByName['crossbow']?.id,
+            this.mc.data.itemsByName['arrow']?.id,
+            this.mc.data.itemsByName['shield']?.id,
+            this.mc.data.itemsByName['bread']?.id,
+            this.mc.data.itemsByName['potato']?.id,
+            this.mc.data.itemsByName['baked_potato']?.id,
+            this.mc.data.itemsByName['carrot']?.id,
+            this.mc.data.itemsByName['beetroot']?.id,
+            this.mc.data.itemsByName['raw_cod']?.id,
+            this.mc.data.itemsByName['cooked_cod']?.id,
+            this.mc.data.itemsByName['raw_salmon']?.id,
+            this.mc.data.itemsByName['cooked_salmon']?.id,
+        ]
+    }
+
+    /**
+     * @param {'right' | 'left'} hand
+     */
+    activateHand(hand) {
+        if (hand === 'right') {
+            this._isRightHandActive = true
+            this.bot.activateItem(false)
+            return
+        }
+
+        if (hand === 'left') {
+            this._isLeftHandActive = true
+            this.bot.activateItem(true)
+            return
+        }
+
+        throw new Error(`Invalid hand "${hand}"`)
+    }
+
+    deactivateHand() {
+        this._isLeftHandActive = false
+        this._isRightHandActive = false
+        this.bot.deactivateItem()
+    }
+
+    /**
+     * @param {MineFlayerPathfinder.Movements} movements
+     * @param {MC} mc
+     */
+    static setPermissiveMovements(movements, mc) {
+        movements.canDig = true
+        movements.digCost = 40
+        movements.placeCost = 30
+        movements.entityCost = 10
+        movements.allowParkour = true
+        movements.allowSprinting = true
+        movements.allowEntityDetection = true
+
+        for (const entityId in mc.data.entities) {
+            if (mc.data.entities[entityId].type === 'hostile') {
+                movements.entitiesToAvoid.add(mc.data.entities[entityId].name)
+            }
+        }
+
+        /** @type {Array<string>} */
+        const blocksCantBreak = [
+            'furnace',
+            'blast_furnace',
+            'smoker',
+            'campfire',
+            'soul_campfire',
+            'brewing_stand',
+            'beacon',
+            'conduit',
+            'bee_nest',
+            'beehive',
+            'suspicious_sand',
+            'suspicious_gravel',
+            'decorated_pot',
+            'bookshelf',
+            'barrel',
+            'ender_chest',
+            'respawn_anchor',
+            'infested_stone',
+            'infested_cobblestone',
+            'infested_stone_bricks',
+            'infested_mossy_stone_bricks',
+            'infested_cracked_stone_bricks',
+            'infested_chiseled_stone_bricks',
+            'infested_deepslate',
+            'end_portal_frame',
+            'spawner',
+            'composter',
+        ]
+
+        for (const blockCantBreak of blocksCantBreak) {
+            if (mc.data.blocksByName[blockCantBreak]) {
+                movements.blocksCantBreak.add(mc.data.blocksByName[blockCantBreak].id)
+            } else {
+                console.warn(`Unknown block \"${blockCantBreak}\"`)
+            }
+        }
+    
+        /** @type {Array<string>} */
+        const blocksToAvoid = [
+            'campfire',
+            'composter',
+            'sculk_sensor',
+        ]
+
+        for (const blockToAvoid of blocksToAvoid) {
+            if (mc.data.blocksByName[blockToAvoid]) {
+                movements.blocksToAvoid.add(mc.data.blocksByName[blockToAvoid].id)
+            } else {
+                console.warn(`Unknown block \"${blockToAvoid}\"`)
+            }
+        }
+
+        movements.climbables.add(mc.data.blocksByName['vine'].id)
+        // movements.replaceables.add(mc.data.blocksByName['short_grass'].id)
+        movements.replaceables.add(mc.data.blocksByName['tall_grass'].id)
+        movements.canOpenDoors = false
+    }
+
+    /**
+     * @param {MineFlayerPathfinder.Movements} movements
+     * @param {MC} mc
+     */
+    static setRestrictedMovements(movements, mc) {
+        BruhBot.setPermissiveMovements(movements, mc)
+        movements.canDig = false
+        movements.allow1by1towers = false
+        movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
+        movements.placeCost = 500
+    }
+
+    /**
+     * @param {MineFlayerPathfinder.Movements} movements
+     * @param {MC} mc
+     */
+    static setGentleMovements(movements, mc) {
+        BruhBot.setPermissiveMovements(movements, mc)
+        movements.canDig = false
+        movements.allow1by1towers = false
+        movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
+        movements.placeCost = 500
+        movements.allowParkour = false
+        
+        /** @type {Array<string>} */
+        const blocksToAvoid = [
+            'water',
+        ]
+
+        for (const blockToAvoid of blocksToAvoid) {
+            if (mc.data.blocksByName[blockToAvoid]) {
+                movements.blocksToAvoid.add(mc.data.blocksByName[blockToAvoid].id)
+            } else {
+                console.warn(`Unknown block \"${blockToAvoid}\"`)
+            }
+        }
+    }
+
+    /**
+     * @param {string | number} cookingResult
+     * @returns {Array<import('./mc-data').CookingRecipe>}
+     */
+    getCookingRecipesFromResult(cookingResult) {
+        if (typeof cookingResult === 'number') {
+            cookingResult = this.mc.data.items[cookingResult]?.name
+        }
+        /** @type {Array<import('./mc-data').SmeltingRecipe | import('./mc-data').SmokingRecipe | import('./mc-data').BlastingRecipe | import('./mc-data').CampfireRecipe>} */
+        const recipes = [ ]
+        if (!cookingResult) {
+            return [ ]
+        }
+        
+        for (const recipe of Object.values(this.mc.data2.recipes.smelting)) {
+            if (recipe.result === cookingResult) {
+                recipes.push(recipe)
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.smoking)) {
+            if (recipe.result === cookingResult) {
+                recipes.push(recipe)
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.blasting)) {
+            if (recipe.result === cookingResult) {
+                recipes.push(recipe)
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.campfire)) {
+            if (recipe.result === cookingResult) {
+                recipes.push(recipe)
+            }
+        }
+
+        recipes.sort((a, b) => a.time - b.time)
+
+        return recipes
+    }
+
+    /**
+     * @param {string | number} raw
+     * @returns {Array<import('./mc-data').CookingRecipe>}
+     */
+    getCookingRecipesFromRaw(raw) {
+        if (typeof raw === 'number') {
+            raw = this.mc.data.items[raw]?.name
+        }
+        /** @type {Array<import('./mc-data').SmeltingRecipe | import('./mc-data').SmokingRecipe | import('./mc-data').BlastingRecipe | import('./mc-data').CampfireRecipe>} */
+        const recipes = [ ]
+        if (!raw) {
+            return [ ]
+        }
+        
+        for (const recipe of Object.values(this.mc.data2.recipes.smelting)) {
+            for (const ingredient of recipe.ingredient) {
+                if (ingredient === raw) {
+                    recipes.push(recipe)
+                }
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.smoking)) {
+            for (const ingredient of recipe.ingredient) {
+                if (ingredient === raw) {
+                    recipes.push(recipe)
+                }
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.blasting)) {
+            for (const ingredient of recipe.ingredient) {
+                if (ingredient === raw) {
+                    recipes.push(recipe)
+                }
+            }
+        }
+
+        for (const recipe of Object.values(this.mc.data2.recipes.campfire)) {
+            for (const ingredient of recipe.ingredient) {
+                if (ingredient === raw) {
+                    recipes.push(recipe)
+                }
+            }
+        }
+
+        recipes.sort((a, b) => a.time - b.time)
+
+        return recipes
+    }
+
+    /**
+     * @param {(string | number)[]} items
+     */
+    searchItem(...items) {
+        const specialSlotIds = [
+            this.bot.getEquipmentDestSlot('head'),
+            this.bot.getEquipmentDestSlot('torso'),
+            this.bot.getEquipmentDestSlot('legs'),
+            this.bot.getEquipmentDestSlot('feet'),
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        for (const _searchFor of items) {
+            if (!_searchFor) { continue }
+
+            const searchFor = (
+                (typeof _searchFor === 'string')
+                ? this.mc.data.itemsByName[_searchFor]?.id
+                : _searchFor
+            )
+            
+            if (!_searchFor) { continue }
+
+            const found = this.bot.inventory.findInventoryItem(searchFor, null, false)
+            if (found) { return found }
+
+            for (const specialSlotId of specialSlotIds) {
+                const found = this.bot.inventory.slots[specialSlotId]
+                if (!found) { continue }
+                if (found.type === searchFor) {
+                    return found
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * @param {(string | number)} item
+     */
+    itemCount(item) {
+        const specialSlotIds = [
+            this.bot.getEquipmentDestSlot('head'),
+            this.bot.getEquipmentDestSlot('torso'),
+            this.bot.getEquipmentDestSlot('legs'),
+            this.bot.getEquipmentDestSlot('feet'),
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        const searchFor = (
+            (typeof item === 'string')
+            ? this.mc.data.itemsByName[item]?.id
+            : item
+        )
+        
+        if (!item) { return 0 }
+
+        let count = this.bot.inventory.count(searchFor, null)
+
+        for (const specialSlotId of specialSlotIds) {
+            const found = this.bot.inventory.slots[specialSlotId]
+            if (!found) { continue }
+            if (found.type === searchFor) {
+                count++
+            }
+        }
+
+        return count
+    }
+
+    /**
+     * @param {(string | number)[]} items
+     */
+    hasAll(...items) {
+        const specialSlotIds = [
+            this.bot.getEquipmentDestSlot('head'),
+            this.bot.getEquipmentDestSlot('torso'),
+            this.bot.getEquipmentDestSlot('legs'),
+            this.bot.getEquipmentDestSlot('feet'),
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        for (const _searchFor of items) {
+            if (!_searchFor) { continue }
+
+            const searchFor = (
+                (typeof _searchFor === 'string')
+                ? this.mc.data.itemsByName[_searchFor]?.id
+                : _searchFor
+            )
+            
+            if (!_searchFor) { continue }
+
+            let found = this.bot.inventory.findInventoryItem(searchFor, null, false) ? true : false
+            if (found) { continue }
+
+            for (const specialSlotId of specialSlotIds) {
+                const _found = this.bot.inventory.slots[specialSlotId]
+                if (!_found) { continue }
+                if (_found.type === searchFor) {
+                    found = _found ? true : false
+                }
+            }
+            if (found) { continue }
+
+            return false 
+        }
+
+        return true
+    }
+
+    /**
+     * @returns {{
+     *   item: import('prismarine-item').Item;
+     *   weapon: hawkeye.Weapons;
+     *   ammo: number;
+     * } | null}
+     */
+    searchRangeWeapon() {
+        const keys = Object.values(hawkeye.Weapons)
+        
+        for (const weapon of keys) {
+            const searchFor = this.mc.data.itemsByName[weapon]?.id
+            
+            if (!searchFor) { continue }
+
+            const found = this.bot.inventory.findInventoryItem(searchFor, null, false)
+            if (!found) { continue }
+
+            let ammo
+
+            switch (weapon) {
+                case hawkeye.Weapons.bow:
+                case hawkeye.Weapons.crossbow:
+                    ammo = this.bot.inventory.count(this.mc.data.itemsByName['arrow'].id, null)
+                    break
+            
+                // case hawkeye.Weapons.egg:
+                case hawkeye.Weapons.snowball:
+                // case hawkeye.Weapons.trident:
+                    ammo = this.bot.inventory.count(found.type, null)
+                    break
+                
+                default: continue
+            }
+
+            if (ammo === 0) {
+                continue
+            }
+
+            return {
+                item: found,
+                weapon: weapon,
+                ammo: ammo,
+            }
+        }
+
+        return null
+    }
+
+    *clearMainHand() {
+        const emptySlot = this.bot.inventory.firstEmptyInventorySlot(true)
+        if (!emptySlot) {
+            return false
+        }
+        yield* wrap(this.bot.unequip('hand'))
+        return true
+    }
+    
+    /**
+     * @param {number} drop
+     * @param {number} maxDistance
+     */
+    findBlockWithDrop(drop, maxDistance) {
+        return this.bot.findBlock({
+            matching: (block) => {
+                if (!block.drops) { return false }
+                for (const _drop of block.drops) {
+                    if (typeof _drop === 'number') {
+                        if (_drop === drop) {
+                            return true
+                        }
+                        continue
+                    }
+                    if (typeof _drop.drop === 'number') {
+                        if (_drop.drop === drop) {
+                            return true
+                        }
+                        continue
+                    }
+
+                    if (_drop.drop.id === drop) {
+                        return true
+                    }
+                }
+
+                return false
+            },
+            maxDistance: maxDistance,
+        })
+    }
+    
+    /**
+     * @param {number} drop
+     */
+    findEntityWithDrop(drop) {
+        const dropItem = this.mc.data.items[drop]
+        if (!dropItem) return null
+        return this.bot.nearestEntity((entity) => {
+            const entityDrops = this.mc.data.entityLoot[entity.name ?? '']
+            if (!entityDrops) { return false }
+
+            let drops = entityDrops.drops
+            drops = drops.filter((_drop) => (dropItem.name === _drop.item))
+            if (drops.length === 0) { return false }
+
+            return true
+        })
+    }
+
+    /**
+     * Source: https://github.com/PrismarineJS/mineflayer-pvp/blob/master/src/PVP.ts
+     */
+    holdsShield() {
+        if (this.bot.supportFeature('doesntHaveOffHandSlot')) {
+            return false
+        }
+
+        const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]
+        if (!slot) {
+            return false
+        }
+
+        return slot.name == 'shield'
+    }
+
+    /**
+     * @param {string | number} item
+     */
+    holds(item) {
+        const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
+
+        if (!slot) {
+            return false
+        }
+
+        if (typeof item === 'string') {
+            return slot.name === item
+        } else {
+            return slot.type === item
+        }
+    }
+
+    /**
+     * @returns {boolean}
+     */
+    shouldEquipShield() {
+        const shield = this.searchItem('shield')
+        if (!shield) {
+            return false
+        }
+
+        const needShield = this.env.possibleDirectHostileAttack()
+        if (!needShield) {
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * @param {number | string} item
+     * @returns {number}
+     */
+    getChargeTime(item) {
+        if (typeof item === 'number') {
+            item = this.mc.data.items[item]?.name
+        }
+        if (!item) return 0
+
+        switch (item) {
+            case 'bow':
+                return 1200
+            case 'crossbow':
+                return 1300 // 1250
+            default:
+                return 0
+        }
+    }
+
+    /**
+     * @param {Item} item
+     * @returns {boolean}
+     */
+    static isCrossbowCharged(item) {
+        // @ts-ignore
+        return (
+            item.nbt &&
+            (item.nbt.type === 'compound') &&
+            item.nbt.value['ChargedProjectiles'] &&
+            (item.nbt.value['ChargedProjectiles'].type === 'list') &&
+            (item.nbt.value['ChargedProjectiles'].value.value.length > 0)
+        )
+    }
+
+    /**
+     * @returns {(meleeWeapons.MeleeWeapon & { item: Item }) | null}
+     */
+    bestMeleeWeapon() {
+        const weapons = meleeWeapons.weapons
+        for (const weapon of weapons) {
+            const item = this.searchItem(weapon.name)
+            if (item) {
+                return {
+                    ...weapon,
+                    item: item,
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * @param {Block} crop
+     * @returns {number | null}
+     */
+    getCropSeed(crop) {
+        if (!crop.drops) { return null }
+
+        for (const _drop of crop.drops) {
+            if (typeof _drop === 'number') {
+                if (this.mc.simpleSeeds.includes(_drop)) {
+                    return _drop
+                }
+                continue
+            }
+
+            if (typeof _drop.drop === 'number') {
+                if (this.mc.simpleSeeds.includes(_drop.drop)) {
+                    return _drop.drop
+                }
+                continue
+            }
+
+            if (this.mc.simpleSeeds.includes(_drop.drop.id)) {
+                return _drop.drop.id
+            }
+        }
+        
+        return null
+    }
+
+    /**
+     * @param {number | null} item
+     */
+    isInventoryFull(item = null) {
+        const slotIds = [
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        for (let i = this.bot.inventory.inventoryStart; i <= this.bot.inventory.inventoryEnd; i++) {
+            slotIds.push(i)
+        }
+
+        for (const slotId of slotIds) {
+            const slot = this.bot.inventory.slots[slotId]
+            if (!slot) { return false }
+            if (slot.count >= slot.stackSize) { continue }
+            if (item && item === slot.type) { return false }
+        }
+
+        return true
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window<any>} chest
+     * @param {number | null} item
+     * @returns {number | null}
+     */
+    static firstFreeSlot(chest, item = null) {
+        let empty = chest.firstEmptyContainerSlot()
+        if (empty !== null && empty !== undefined) {
+            return empty
+        }
+
+        if (item) {
+            const items = chest.containerItems()
+            for (const _item of items) {
+                if (_item.count >= _item.stackSize) { continue }
+                if (_item.type !== item) { continue }
+                return _item.slot
+            }
+        }
+        
+        return null
     }
 }

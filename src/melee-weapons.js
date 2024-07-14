@@ -291,6 +291,8 @@ sort(weapons)
 sort(swords)
 
 module.exports = {
+    /** @readonly */
     swords: Object.freeze(swords),
+    /** @readonly */
     weapons: Object.freeze(weapons),
 }

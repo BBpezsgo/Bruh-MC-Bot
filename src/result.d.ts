@@ -1,8 +1,9 @@
-export type GoalError = string | { inner: GoalError }
+export type Result<T> = SuccessfulResult<T> | FailedResult
 
-export type Result<TResult> = SuccessfulResult<TResult> | ErroredResult
+export type SuccessfulResult<T> = {
+    result: T
+}
 
-export type SuccessfulResult<TResult> = { result: TResult }
-
-export type ErroredResult = { error: GoalError }
-
+export type FailedResult = {
+    error: string
+}

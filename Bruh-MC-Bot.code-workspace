@@ -16,5 +16,9 @@
 			"path": "../Minecraft-Resource-Pack-Converter"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"material-icon-theme.files.associations": {
+			"template.js": "template"
+		}
+	}
 }

@@ -1,4 +1,7 @@
 /node_modules
-/worlds
 /config.json
-src/Bruh-MC-Bot.code-workspace
+/temp
+/package-lock.json
+/src/tasks-old
+
+**/*.code-workspace

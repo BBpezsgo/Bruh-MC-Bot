@@ -3,7 +3,6 @@
         "module": "ESNext",
         "moduleResolution": "Node",
         "target": "ES2020",
-        "allowImportingTsExtensions": false,
         "checkJs": true,
         "skipDefaultLibCheck": true,
         "skipLibCheck": true,
@@ -23,6 +22,7 @@
     },
     "exclude": [
         "node_modules",
-        "**/node_modules/*"
+        "**/node_modules/*",
+        "./src/tasks-old/*"
     ]
 }

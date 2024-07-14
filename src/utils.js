@@ -2,35 +2,22 @@ const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 
 /**
- * @param {import('./result').GoalError | Error} error
- * @param {import('./context')} [context = null] 
- * @returns {import('./result').ErroredResult}
- */
-function error(error, context = null) {
-    if (typeof error === 'string') {
-        if (context) {
-            console.error(`[Bot "${context.bot.username}"] ${error}`)
-        } else {
-            console.error(error)
-        }
-        return { error: error.trim() }
-    } else if (error instanceof Error) {
-        if (context) {
-            console.error(`[Bot "${context.bot.username}"]`, error)
-        } else {
-            console.error(error)
-        }
-        return { error: error.message }
-    } else {
-        return { error: { inner: error } }
-    }
-}
-
-/**
  * @param {number} ms
  */
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * @param {number} ms
+ * @returns {Generator<void, void, void>}
+ */
+function* sleepG(ms) {
+    const end = performance.now() + ms
+
+    while (performance.now() < end) {
+        yield
+    }
 }
 
 /**
@@ -45,19 +32,11 @@ function itemsDelta(before, after) {
     const map = new Map()
 
     for (const item of before) {
-        if (!map.has(item.name)) {
-            map.set(item.name, -item.count)
-        } else {
-            map.set(item.name, map.get(item.name) - item.count)
-        }
+        map.set(item.name, (map.get(item.name) ?? 0) - item.count)
     }
 
     for (const item of after) {
-        if (!map.has(item.name)) {
-            map.set(item.name, item.count)
-        } else {
-            map.set(item.name, map.get(item.name) + item.count)
-        }
+        map.set(item.name, (map.get(item.name) ?? 0) + item.count)
     }
 
     /**
@@ -85,24 +64,6 @@ function timeout(task, ms) {
         }, ms)
     })
     return Promise.race([task, timeoutPromise]);
-}
-
-/**
- * @param {Array<{ cost: number }>} costs
- */
-function sortCosts(costs) {
-    costs.sort((a, b) => {
-        if (a.cost === Infinity &&
-            b.cost === Infinity) {
-            return 0
-        }
-
-        if (a.cost === Infinity) {
-            return 1
-        } else {
-            return -1
-        }
-    })
 }
 
 /**
@@ -165,12 +126,12 @@ function rotationToVector(pitch, yaw) {
  * @returns {Array<Vec3>}
  */
 function backNForthSort(blocks) {
-    /** @type {{ [index: number]: Vec3[] }} */
-    let rows = {  }
+    /** @type {{ [index: number]: Array<Vec3> }} */
+    let rows = { }
 
     for (const block of blocks) {
         if (!rows[block.x]) {
-            rows[block.x] = [ ]
+            rows[block.x] ??= [ ]
         }
         rows[block.x].push(block)
     }
@@ -250,7 +211,7 @@ function filterHostiles(entity, point = null) {
             'witch': 16,
             'vindicator': null,
             'zombie_villager': 35,
-        }[entity.name]
+        }[entity.name ?? '']
         if (hostileAttackDistance) {
             const distnace = point.distanceTo(entity.position)
             if (distnace > hostileAttackDistance) {
@@ -278,13 +239,128 @@ function trajectoryTime(trajectory, speed) {
     return time
 }
 
+/**
+ * @template T
+ * @param {Promise<T> | (() => Promise<T>)} promise
+ * @returns {Generator<void, T, void>}
+ */
+function* wrap(promise) {
+    if (typeof promise === 'function') { promise = promise() }
+
+    let isDone = false
+    /** @type {any | undefined} */
+    let error = undefined
+    /** @type {T | undefined} */
+    let resolvedValue = undefined
+    promise.then(v => resolvedValue = v)
+    .catch(v => error = v)
+    .finally(() => isDone = true)
+
+    while (!isDone) {
+        yield
+    }
+
+    if (error) {
+        throw error
+    } else {
+        // @ts-ignore
+        return resolvedValue
+    }
+}
+
+/**
+ * @template T
+ * @param {T} result
+ * @returns {Generator<void, T, void>}
+ */
+function* finished(result) {
+    return result
+}
+
+class Timeout {
+    /**
+     * @private @readonly
+     * @type {number}
+     */
+    end
+
+    /**
+     * @param {number} ms
+     */
+    constructor(ms) {
+        this.end = performance.now() + ms
+    }
+
+    done() { return performance.now() >= this.end }
+}
+
+class Interval {
+    /**
+     * @type {number}
+     */
+    time
+
+    /**
+     * @private
+     * @type {number}
+     */
+    startTime
+
+    /**
+     * @param {number} ms
+     */
+    constructor(ms) {
+        this.time = ms
+        this.startTime = 0
+    }
+
+    /**
+     * @returns {boolean}
+     */
+    is(justRead = false) {
+        const now = performance.now()
+        if (now - this.startTime >= this.time) {
+            if (!justRead) {
+                this.startTime = now
+            }
+            return true
+        }
+        return false
+    }
+
+    restart() {
+        this.startTime = performance.now()
+    }
+}
+
+/**
+ * @param {string} text
+ * @returns {null | Vec3}
+ */
+function parseLocationH(text) {
+    text = text.trim().toLowerCase()
+    const match = /x(-?[0-9]+), y(-?[0-9]+), z(-?[0-9]+), ([a-zA-Z]*)/.exec(text)
+    if (!match) {
+        return null
+    }
+    if (match.length !== 5) {
+        return null
+    }
+    const x = Number.parseInt(match[1])
+    const y = Number.parseInt(match[2])
+    const z = Number.parseInt(match[3])
+    if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
+        return null
+    }
+    return new Vec3(x, y, z)
+}
+
 module.exports = {
-    error,
     itemsDelta,
     sleep,
+    sleepG,
     timeout,
     costDepth,
-    sortCosts,
     randomInt,
     deg2rad,
     rad2deg,
@@ -295,4 +371,9 @@ module.exports = {
     backNForthSort,
     filterHostiles,
     trajectoryTime,
+    wrap,
+    finished,
+    Timeout,
+    Interval,
+    parseLocationH,
 }
