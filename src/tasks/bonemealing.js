@@ -1,8 +1,6 @@
-const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
-const { Block } = require('prismarine-block')
 
 /**
  * @type {import('../task').TaskDef<number, { farmPosition?: Vec3 }>}
@@ -21,7 +19,7 @@ module.exports = {
 
             const farmPosition = this.farmPosition ?? bot.bot.entity.position.clone()
 
-            let crops = bot.env.getCrops(farmPosition, false)
+            let crops = bot.env.getCrops(bot, farmPosition, false)
 
             if (crops.length === 0) { break }
 

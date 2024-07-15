@@ -6,7 +6,7 @@ const MC = require('../mc')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'ok', {
+ * @type {import('../task').TaskDef<number, {
  *   gatherTool: boolean;
  * } & ({
  *   water: Vec3;
@@ -30,6 +30,7 @@ module.exports = {
             bot.mc.data.itemsByName['diamond_hoe'].id,
             bot.mc.data.itemsByName['netherite_hoe'].id,
         ]
+        let n = 0
 
         const equipHoe = function*() {
             for (const hoe of hoes) {
@@ -98,8 +99,9 @@ module.exports = {
             yield* equipHoe()
             yield
             yield* wrap(bot.bot.activateBlock(dirt))
+            n++
 
-            return 'ok'
+            return n
         }
 
         while (true) {
@@ -159,6 +161,7 @@ module.exports = {
 
                 yield* sleepG(100)
                 yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt)))
+                n++
                 yield* sleepG(100)
                 shouldContinue = true
             }
@@ -168,7 +171,7 @@ module.exports = {
             }
         }
 
-        return 'ok'
+        return n
     },
     id: function(args) {
         return `hoe`

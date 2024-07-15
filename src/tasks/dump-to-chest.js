@@ -81,49 +81,43 @@ module.exports = {
             }
 
             const chest = yield* wrap(bot.bot.openChest(chestBlock))
-
-            {
-                let isNewChest = true
-                for (const myChest of bot.memory.myChests) {
-                    if (myChest.equals(chestBlock.position)) {
-                        isNewChest = false
-                        break
+            try {
+                {
+                    let isNewChest = true
+                    for (const myChest of bot.memory.myChests) {
+                        if (myChest.equals(chestBlock.position)) {
+                            isNewChest = false
+                            break
+                        }
+                    }
+                    
+                    if (isNewChest) {
+                        bot.memory.myChests.push(chestBlock.position.clone())
                     }
                 }
-                
-                if (isNewChest) {
-                    bot.memory.myChests.push(chestBlock.position.clone())
-                }
-            }
+        
+                for (const itemToDeposit of args.items) {
+                    const have = bot.itemCount(itemToDeposit.item)
+                    if (have === 0) {
+                        return true
+                    }
+                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.data.items[itemToDeposit.item].stackSize, have)
+                    if (count === 0) {
+                        return true
+                    }
     
-            for (const itemToDeposit of args.items) {
-                const have = bot.itemCount(itemToDeposit.item)
-                if (have === 0) {
-                    return true
-                }
-                const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.data.items[itemToDeposit.item].stackSize, have)
-                if (count === 0) {
-                    return true
-                }
-
-                if (BruhBot.firstFreeSlot(chest, itemToDeposit.item) === null) {
-                    fullChests.push(chestBlock.position.clone())
-                    yield* sleepG(200)
-                    chest.close()
-                    break
-                } else {
-                    try {
-                        yield* bot.env.chestDeposit(chest, chestBlock.position.clone(), itemToDeposit.item, count)
-                    } catch (_error) {
-                        chest.close()
-                        throw _error
+                    if (BruhBot.firstFreeSlot(chest, itemToDeposit.item) === null) {
+                        fullChests.push(chestBlock.position.clone())
+                        break
+                    } else {
+                        yield* bot.env.chestDeposit(bot, chest, chestBlock.position.clone(), itemToDeposit.item, count)
                     }
                 }
+            } finally {
+                yield* sleepG(100)
+                chest.close()
+                yield* sleepG(100)
             }
-
-            yield* sleepG(200)
-            chest.close()
-            yield* sleepG(200)
         }
     },
     id: function(args) {

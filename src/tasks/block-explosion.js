@@ -2,7 +2,7 @@ const { goals } = require('mineflayer-pathfinder')
 const { sleepG, wrap } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'none', null>}
+ * @type {import('../task').TaskDef<'ok' | 'none', { }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -11,7 +11,7 @@ module.exports = {
             throw `I have no shield`
         }
 
-        let hazard = bot.env.getExplodingCreeper()
+        let hazard = bot.env.getExplodingCreeper(bot)
 
         if (!hazard) {
             return 'none'
@@ -34,7 +34,7 @@ module.exports = {
             yield* wrap(bot.bot.lookAt(hazard.position.offset(0, 1, 0), true))
             yield* sleepG(100)
 
-            hazard = bot.env.getExplodingCreeper()
+            hazard = bot.env.getExplodingCreeper(bot)
         }
 
         bot.deactivateHand()

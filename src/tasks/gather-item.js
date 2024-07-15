@@ -172,7 +172,7 @@ function* plan(bot, item, count, permissions, context) {
     if (permissions.canUseChests) {
         yield
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
-        const inChests = bot.env.searchForItem(item)
+        const inChests = bot.env.searchForItem(bot, item)
         const inChestsWithMyItems = inChests.filter(v => v.myCount > 0)
         inChestsWithMyItems.sort((a, b) => {
             const aDist = bot.bot.entity.position.distanceSquared(a.position)
@@ -362,7 +362,7 @@ function* evaluatePlan(bot, plan) {
                             chest: chest,
                         }
                     }
-                    const took = yield* bot.env.chestDeposit(openedChest.chest, openedChest.chestPosition, step.item, -step.count)
+                    const took = yield* bot.env.chestDeposit(bot, openedChest.chest, openedChest.chestPosition, step.item, -step.count)
                     if (took < step.count) {
                         throw `Item disappeared from chest`
                     }

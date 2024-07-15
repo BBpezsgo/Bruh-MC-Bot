@@ -1,7 +1,6 @@
 const StreamZip = require('node-stream-zip')
 const Path = require('path')
 const fs = require('fs')
-const config = require('./config')
 
 /**
  * @exports
@@ -181,11 +180,11 @@ module.exports = class MinecraftData {
             smoking: { },
         }
 
-        this.fuels = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'fuels.json'), 'utf8'))
-        this.compost = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compost.json'), 'utf8'))
-        this.general = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'general.json'), 'utf8'))
-        this.mlg = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'mlg.json'), 'utf8'))
-        this.compacting = JSON.parse(fs.readFileSync(Path.join(config.dataPath, 'compacting.json'), 'utf8'))
+        this.fuels = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'fuels.json'), 'utf8'))
+        this.compost = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'compost.json'), 'utf8'))
+        this.general = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'general.json'), 'utf8'))
+        this.mlg = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'mlg.json'), 'utf8'))
+        this.compacting = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'compacting.json'), 'utf8'))
 
         this.sortedFuels = [ ]
         this.tags = { }

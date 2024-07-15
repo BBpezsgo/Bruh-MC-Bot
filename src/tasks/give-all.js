@@ -2,7 +2,7 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'ok', { player: string; }>}
+ * @type {import('../task').TaskDef<void, { player: string; }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -62,8 +62,6 @@ module.exports = {
         if (!tossedSomething) {
             throw `Don't have anything`
         }
-
-        return 'ok'
     },
     id: function(args) {
         return `give-all-${args.player}`

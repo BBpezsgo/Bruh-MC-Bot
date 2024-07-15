@@ -36,7 +36,7 @@ function* plant(bot, placeOn, seedItem) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok', {
+ * @type {import('../task').TaskDef<number, {
  *   seedItems?: ReadonlyArray<number>;
  *   harvestedCrops?: ReadonlyArray<{ position: Vec3; block: number; }>;
  *   fallbackToNear?: boolean;
@@ -94,7 +94,7 @@ module.exports = {
 
                 if (!placeOn && args.fallbackToNear) {
                     console.warn(`[Bot "${bot.bot.username}"] Falling back to nearest free farmland ...`)
-                    placeOn = bot.env.getFreeFarmland(harvestedCrop.position)
+                    placeOn = bot.env.getFreeFarmland(bot, harvestedCrop.position)
                 }
 
                 if (!placeOn) {
@@ -123,7 +123,7 @@ module.exports = {
                     break
                 }
 
-                const placeOn = bot.env.getFreeFarmland(bot.bot.entity.position.clone())
+                const placeOn = bot.env.getFreeFarmland(bot, bot.bot.entity.position.clone())
                 if (!placeOn) {
                     break
                 }

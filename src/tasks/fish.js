@@ -3,11 +3,11 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'ok', { }>}
+ * @type {import('../task').TaskDef<boolean, { }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        let didSomething = false
+        let n = 0
         let splashHeard = 0
         /**
          * @type {import('prismarine-entity').Entity | null}
@@ -19,7 +19,7 @@ module.exports = {
     
             const fishingRod = bot.searchItem('fishing_rod')
             if (!fishingRod) {
-                if (didSomething) { return 'ok' }
+                if (n) { return n }
                 throw `I have no fishing rod`
             }
     
@@ -35,7 +35,7 @@ module.exports = {
             })
     
             if (!water) {
-                if (didSomething) { return 'ok' }
+                if (n) { return n }
                 throw `There is no water`
             }
     
@@ -49,7 +49,7 @@ module.exports = {
             yield* sleepG(500)
             bot.bot.activateItem(false)
             splashHeard = 0
-            didSomething = true
+            n++
     
             yield* sleepG(100)
     

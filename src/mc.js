@@ -3,7 +3,6 @@ const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')
 const getMcData = require('minecraft-data')
 const MinecraftData = require('./mc-data')
-const config = require('./config')
 
 /**
  * @typedef { 'sword' | 'shovel' | 'pickaxe' | 'axe' | 'hoe' } Tool
@@ -124,10 +123,11 @@ module.exports = class MC {
 
     /**
      * @param {string} version
+     * @param {string} jarPath
      */
-    constructor(version) {
+    constructor(version, jarPath) {
         this.data = getMcData(version)
-        this.data2 = new MinecraftData(config['minecraft']['path'])
+        this.data2 = new MinecraftData(jarPath)
     
         for (const key in this.data2.compost) {
             if (!this.data.itemsByName[key]) {
@@ -369,17 +369,21 @@ module.exports = class MC {
 
     /**
      * @param {ReadonlyArray<Item>} foods
-     * @param {'foodPoints' | 'saturation'} priority
+     * @param {'foodPoints' | 'saturation' | undefined} [sort]
      * @returns {Array<Item>}
      */
-    filterFoods(foods, priority = 'foodPoints') {
+    filterFoods(foods, sort) {
         const bad = MC.badFoods
         const allFoods = this.data.foodsByName
 
-        return foods
+        const _foods = foods
             .filter((item) => item.name in allFoods)
             .filter((item) => !bad.includes(item.name))
-            .sort((a, b) => allFoods[b.name][priority] - allFoods[a.name][priority])
+        if (sort) {
+            return _foods.sort((a, b) => allFoods[b.name][sort] - allFoods[a.name][sort])
+        } else {
+            return _foods
+        }
     }
 
     /**
@@ -394,8 +398,11 @@ module.exports = class MC {
         })
     }
 
-    nontrashItems() {
-        return [
+    /**
+     * @param {boolean} includeFoods
+     */
+    nontrashItems(includeFoods) {
+        const result = [
             this.data.itemsByName['wooden_hoe']?.id,
             this.data.itemsByName['stone_hoe']?.id,
             this.data.itemsByName['iron_hoe']?.id,
@@ -439,35 +446,39 @@ module.exports = class MC {
             this.data.itemsByName['ender_pearl']?.id,
             this.data.itemsByName['bucket']?.id,
             this.data.itemsByName['water_bucket']?.id,
-
-            this.data.itemsByName['apple']?.id,
-            this.data.itemsByName['melon_slice']?.id,
-            this.data.itemsByName['beef']?.id,
-            this.data.itemsByName['cooked_beef']?.id,
-            this.data.itemsByName['porkchop']?.id,
-            this.data.itemsByName['cooked_porkchop']?.id,
-            this.data.itemsByName['mutton']?.id,
-            this.data.itemsByName['cooked_mutton']?.id,
-            this.data.itemsByName['chicken']?.id,
-            this.data.itemsByName['cooked_chicken']?.id,
-            this.data.itemsByName['rabbit']?.id,
-            this.data.itemsByName['cooked_rabbit']?.id,
-            this.data.itemsByName['cooke']?.id,
-            this.data.itemsByName['pumpkin_pie']?.id,
-            this.data.itemsByName['mushroom_stew']?.id,
-            this.data.itemsByName['beetroot_soup']?.id,
-            this.data.itemsByName['rabbit_stew']?.id,
-            this.data.itemsByName['dried_kelp']?.id,
-            this.data.itemsByName['bread']?.id,
-            this.data.itemsByName['potato']?.id,
-            this.data.itemsByName['baked_potato']?.id,
-            this.data.itemsByName['carrot']?.id,
-            this.data.itemsByName['beetroot']?.id,
-            this.data.itemsByName['raw_cod']?.id,
-            this.data.itemsByName['cooked_cod']?.id,
-            this.data.itemsByName['raw_salmon']?.id,
-            this.data.itemsByName['cooked_salmon']?.id,
         ]
+        if (includeFoods) {
+            result.push(...[
+                this.data.itemsByName['apple']?.id,
+                this.data.itemsByName['melon_slice']?.id,
+                this.data.itemsByName['beef']?.id,
+                this.data.itemsByName['cooked_beef']?.id,
+                this.data.itemsByName['porkchop']?.id,
+                this.data.itemsByName['cooked_porkchop']?.id,
+                this.data.itemsByName['mutton']?.id,
+                this.data.itemsByName['cooked_mutton']?.id,
+                this.data.itemsByName['chicken']?.id,
+                this.data.itemsByName['cooked_chicken']?.id,
+                this.data.itemsByName['rabbit']?.id,
+                this.data.itemsByName['cooked_rabbit']?.id,
+                this.data.itemsByName['cooke']?.id,
+                this.data.itemsByName['pumpkin_pie']?.id,
+                this.data.itemsByName['mushroom_stew']?.id,
+                this.data.itemsByName['beetroot_soup']?.id,
+                this.data.itemsByName['rabbit_stew']?.id,
+                this.data.itemsByName['dried_kelp']?.id,
+                this.data.itemsByName['bread']?.id,
+                this.data.itemsByName['potato']?.id,
+                this.data.itemsByName['baked_potato']?.id,
+                this.data.itemsByName['carrot']?.id,
+                this.data.itemsByName['beetroot']?.id,
+                this.data.itemsByName['raw_cod']?.id,
+                this.data.itemsByName['cooked_cod']?.id,
+                this.data.itemsByName['raw_salmon']?.id,
+                this.data.itemsByName['cooked_salmon']?.id,
+            ])
+        }
+        return result
     }
 
     /**

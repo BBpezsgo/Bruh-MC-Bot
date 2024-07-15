@@ -46,6 +46,32 @@ const priorities = Object.freeze({
     unnecessary: -200,
 })
 
+/**
+ * @typedef {{
+ *   worldPath: string;
+ *   environment?: Environment;
+ *   server: {
+ *     host: string;
+ *     port: number;
+ *   }
+ *   jarPath: string;
+ * }} GeneralConfig
+ */
+
+/**
+ * @typedef {GeneralConfig & {
+ *   bot: {
+ *     username: string;
+ *     behaviour?: {
+ *       pickupItemDistance?: number;
+ *       autoSmeltItems?: boolean;
+ *       autoHarvest?: boolean;
+ *       idleLooking?: boolean;
+ *     }
+ *   }
+ * }} BotConfig
+ */
+
 // @ts-ignore
 module.exports = class BruhBot {
     /**
@@ -189,32 +215,24 @@ module.exports = class BruhBot {
     memory
 
     /**
-     * @param {Readonly<{
-     *   [key: string]: any;
-     *   dataPath: string;
-     *   pickupItemDistance?: number;
-     *   autoSmeltItems?: boolean;
-     *   autoHarvest?: boolean;
-     *   idleLooking?: boolean;
-     * }>} config
-     * @param {string} worldName
-     * @param {string} username
+     * @param {Readonly<BotConfig>} config
      */
-    constructor(config, worldName, username) {
-        console.log(`[Bot "${username}"] Launching ...`)
-
-        worldName = worldName + '_' + username
+    constructor(config) {
+        console.log(`[Bot "${config.bot.username}"] Launching ...`)
 
         this.bot = MineFlayer.createBot({
-            host: config['bot']['host'],
-            port: config['bot']['port'],
-            username: username,
+            host: config.server.host,
+            port: config.server.port,
+            username: config.bot.username,
             logErrors: false,
         })
 
-        this.env = new Environment(this)
-        this.memory = new Memory(this)
-        
+        const path = require('path')
+        this.env = config.environment ?? new Environment(path.join(config.worldPath, 'environment.json'))
+        this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
+
+        this.env.addBot(this)
+
         this.chatAwaits = [ ]
         this.quietMode = true
         this._isLeftHandActive = false
@@ -260,19 +278,19 @@ module.exports = class BruhBot {
         this.tasks = new TaskManager()
 
         this.bot.once('spawn', () => {
-            console.log(`[Bot "${username}"] Spawned`)
+            console.log(`[Bot "${this.bot.username}"] Spawned`)
 
-            console.log(`[Bot "${username}"] Loading plugins ...`)
+            console.log(`[Bot "${this.bot.username}"] Loading plugins ...`)
             this.bot.loadPlugin(MineFlayerPathfinder.pathfinder)
             this.bot.loadPlugin(MineFlayerCollectBlock)
             this.bot.loadPlugin(MineFlayerArmorManager)
             this.bot.loadPlugin(MineFlayerHawkEye)
             this.bot.loadPlugin(MineFlayerElytra)
 
-            console.log(`[Bot "${username}"] Loading ...`)
+            console.log(`[Bot "${this.bot.username}"] Loading ...`)
 
             // @ts-ignore
-            this.mc = new MC(this.bot.version)
+            this.mc = new MC(this.bot.version, config.jarPath)
 
             // @ts-ignore
             this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
@@ -285,7 +303,7 @@ module.exports = class BruhBot {
             BruhBot.setRestrictedMovements(this.restrictedMovements, this.mc)
             BruhBot.setGentleMovements(this.gentleMovements, this.mc)
     
-            console.log(`[Bot "${username}"] Ready`)
+            console.log(`[Bot "${this.bot.username}"] Ready`)
         })
 
         this.bot.on('move', async (position) => {
@@ -315,13 +333,12 @@ module.exports = class BruhBot {
 
             if (this.saveInterval.is()) {
                 this.memory.save()
-                this.env.save()
             }
 
             const runningTask = this.tasks.tick()
 
             {
-                let creeper = this.env.getExplodingCreeper()
+                let creeper = this.env.getExplodingCreeper(this)
 
                 if (creeper) {
                     if (this.searchItem('shield')) {
@@ -384,7 +401,7 @@ module.exports = class BruhBot {
 
             if (this.bot.food < 18 &&
                 !this.quietMode &&
-                (this.mc.filterFoods(this.bot.inventory.items()).length > 0)) {
+                (this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints').length > 0)) {
                 this.tasks.push(this, eat, null, priorities.surviving)
                 return
             }
@@ -431,13 +448,13 @@ module.exports = class BruhBot {
                 }, null, priorities.cleanup)
             }
             
-            if ('result' in this.env.getClosestItem(null, { inAir: false, maxDistance: 5, minLifetime: 5000 }) ||
-                'result' in this.env.getClosestXp({ maxDistance: 5 })) {
+            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 }) ||
+                'result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
                 this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, 1)
             }
             
             if (this.tryAutoHarvestInterval.is()) {
-                if (this.env.getCrops(this.bot.entity.position.clone(), true).length > 0) {
+                if (this.env.getCrops(this, this.bot.entity.position.clone(), true).length > 0) {
                     const harvestTask = this.tasks.push(this, harvest, { }, priorities.unnecessary)
                     if (harvestTask) {
                         harvestTask.wait()
@@ -466,12 +483,31 @@ module.exports = class BruhBot {
 
             if (this.dumpTrashInterval.is()) {
                 const trashItems = this.bot.inventory.items().filter(v => {
-                    if (this.mc.nontrashItems().includes(v.type)) {
+                    if (this.mc.nontrashItems(true).includes(v.type)) {
                         return false
                     }
                     return true
-                }).map(v => ({ item: v.type, count: Infinity }))
-                this.tasks.push(this, dumpToChest, { items: trashItems }, priorities.unnecessary)
+                })
+
+                /**
+                 * @type {Array<dumpToChest.CountedItem>}
+                 */
+                const countedCrashItems = [ ]
+                let foodPointsInInventory = 0
+                for (const trashItem of trashItems) {
+                    const food = this.mc.data.foods[trashItem.type]
+                    if (!food ||
+                        foodPointsInInventory > 40 ||
+                        MC.badFoods.includes(trashItem.name)) {
+                        countedCrashItems.push({
+                            item: trashItem.type,
+                            count: trashItem.count,
+                        })
+                        continue
+                    }
+                    foodPointsInInventory += food.foodPoints * trashItem.count
+                }
+                this.tasks.push(this, dumpToChest, { items: countedCrashItems }, priorities.unnecessary)
             }
 
             if (this.tryAutoCookInterval.is()) {
@@ -502,6 +538,7 @@ module.exports = class BruhBot {
                 let shield = null
                 let hoe = null
                 let water_bucket = null
+                let foodPointsInInventory = 0
                 for (const item of this.bot.inventory.items()) {
                     switch (item.name) {
                         case 'wooden_hoe':
@@ -545,6 +582,12 @@ module.exports = class BruhBot {
 
                         default:
                             break
+                    }
+                    if (!MC.badFoods.includes(item.name)) {
+                        const food = this.mc.data.foods[item.type]
+                        if (food) {
+                            foodPointsInInventory += food.foodPoints * item.count
+                        }
                     }
                 }
                 /*
@@ -610,6 +653,10 @@ module.exports = class BruhBot {
                         canUseInventory: true,
                     }, priorities.unnecessary)
                 }
+
+                if (foodPointsInInventory < 40) {
+                    console.warn(`[Bot "${this.bot.username}"] Low on food`)
+                }
             }
 
             if (this.tasks.isIdle || (
@@ -631,12 +678,12 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('death', () => {
-            console.log(`[Bot "${username}"] Died`)
+            console.log(`[Bot "${this.bot.username}"] Died`)
         })
 
         this.bot.on('kicked', (/** @type {any} */ reason) => {
             if (typeof reason === 'string') {
-                console.warn(`[Bot "${username}"] Kicked:`, reason)
+                console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason)
                 return
             }
 
@@ -644,10 +691,10 @@ module.exports = class BruhBot {
                 'type' in reason &&
                 'value' in reason &&
                 reason.type === 'compound') {
-                console.warn(`[Bot "${username}"] Kicked:`, reason.value)
+                console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason.value)
             }
             
-            console.warn(`[Bot "${username}"] Kicked:`, reason)
+            console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason)
         })
 
         this.bot.on('error', (error) => {
@@ -656,38 +703,39 @@ module.exports = class BruhBot {
                 // @ts-ignore
                 for (const suberror of error.errors) {
                     if ('syscall' in suberror && suberror.syscall === 'connect') {
-                        console.error(`[Bot "${username}"] Failed to connect to ${suberror.address}: ${(() => {
+                        console.error(`[Bot "${this.bot.username}"] Failed to connect to ${suberror.address}: ${(() => {
                             switch (suberror.code) {
                                 case 'ECONNREFUSED': return 'Connection refused'
                                 default: return suberror.code
                             }
                         })()}`)
                     } else {
-                        console.error(`[Bot "${username}"]`, suberror)
+                        console.error(`[Bot "${this.bot.username}"]`, suberror)
                     }
                 }
             } else {
-                console.error(`[Bot "${username}"]`, error)
+                console.error(`[Bot "${this.bot.username}"]`, error)
             }
         })
 
-        this.bot.on('login', () => { console.log(`[Bot "${username}"] Logged in`) })
+        this.bot.on('login', () => { console.log(`[Bot "${this.bot.username}"] Logged in`) })
 
         this.bot.on('end', (reason) => {
+            this.env.removeBot(this)
             this.bot.webInventory?.stop?.()
             this.bot.viewer?.close()
 
             switch (reason) {
                 case 'socketClosed':
-                    console.warn(`[Bot "${username}"] Ended: Socket closed`)
+                    console.warn(`[Bot "${this.bot.username}"] Ended: Socket closed`)
                     break
                     
                 case 'disconnect.quitting':
-                    console.log(`[Bot "${username}"] Quit`)
+                    console.log(`[Bot "${this.bot.username}"] Quit`)
                     break
             
                 default:
-                    console.log(`[Bot "${username}"] Ended:`, reason)
+                    console.log(`[Bot "${this.bot.username}"] Ended:`, reason)
                     break
             }
 
@@ -784,7 +832,7 @@ module.exports = class BruhBot {
 
         if (message === 'scan') {
             const task = this.tasks.push(this, {
-                task: (bot, args) => this.env.scanChests(),
+                task: (bot, args) => this.env.scanChests(this),
                 id: function(args) {
                     return `scan-chests`
                 },
@@ -1566,7 +1614,7 @@ module.exports = class BruhBot {
             return false
         }
 
-        const needShield = this.env.possibleDirectHostileAttack()
+        const needShield = this.env.possibleDirectHostileAttack(this)
         if (!needShield) {
             return false
         }

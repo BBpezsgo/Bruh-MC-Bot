@@ -52,7 +52,7 @@ const getItem = function(bot, includeNono) {
 }
 
 /**
- * @type {import('../task').TaskDef<void, null>}
+ * @type {import('../task').TaskDef<number, { }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -60,6 +60,8 @@ module.exports = {
             throw `Can't compost in quiet mode`
         }
     
+        let composted = 0
+
         while (true) {
             const item = getItem(bot, false)
             if (!item) {
@@ -93,6 +95,7 @@ module.exports = {
             }
     
             yield* wrap(bot.bot.activateBlock(composter))
+            composted++
     
             yield* waitCompost(bot, composter)
         }
@@ -102,7 +105,7 @@ module.exports = {
             maxDistance: 4,
         })
     
-        return { result: true }
+        return composted
     },
     id: function(args) {
         return 'compost'

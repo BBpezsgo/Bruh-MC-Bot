@@ -4,7 +4,7 @@ const attack = require('./attack')
 const dig = require('./dig')
 
 /**
- * @type {import('../task').TaskDef<void, null>}
+ * @type {import('../task').TaskDef<void, { }>}
  */
 module.exports = {
     task: function*(bot, args) {

@@ -6,13 +6,15 @@ const pickupItem = require('./pickup-item')
 const plantSeed = require('./plant-seed')
 
 /**
- * @type {import('../task').TaskDef<'ok', { farmPosition?: Vec3; }>}
+ * @type {import('../task').TaskDef<number, { farmPosition?: Vec3; }>}
  */
 module.exports = {
     task: function*(bot, args) {
         if (bot.quietMode) {
             throw `Can't harvest in quiet mode`
         }
+
+        let n = 0
 
         /**
          * @type {Array<{ position: Vec3; block: number; }>}
@@ -22,7 +24,7 @@ module.exports = {
         while (true) {
             const farmPosition = this.farmPosition ?? bot.bot.entity.position.clone()
 
-            let cropPositions = bot.env.getCrops(farmPosition, true)
+            let cropPositions = bot.env.getCrops(bot, farmPosition, true)
 
             if (cropPositions.length === 0) { break }
 
@@ -38,6 +40,7 @@ module.exports = {
                 if (cropBlock) {
                     const cropBlockId = cropBlock.type
                     yield* wrap(bot.bot.dig(cropBlock))
+                    n++
 
                     let isSaved = false
 
@@ -69,7 +72,7 @@ module.exports = {
                                 throw `Can't replant this: doesn't have "${bot.mc.data.items[cropSeed].name}"`
                             }
     
-                            const placeOn = bot.env.getFreeFarmland(cropBlock.position)
+                            const placeOn = bot.env.getFreeFarmland(bot, cropBlock.position)
                             if (!placeOn) {
                                 throw `Place on is null`
                             }
@@ -108,7 +111,7 @@ module.exports = {
             harvestedCrops: harvestedCrops,
         })
 
-        return 'ok'
+        return n
     },
     id: function(args) {
         return `harvest-${args.farmPosition}`

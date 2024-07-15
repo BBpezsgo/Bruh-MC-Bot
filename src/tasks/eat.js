@@ -1,7 +1,7 @@
 const { sleepG, wrap } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'full', null>}
+ * @type {import('../task').TaskDef<'ok' | 'full', { }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -13,7 +13,7 @@ module.exports = {
             return 'full'
         }
     
-        const foods = bot.mc.filterFoods(bot.bot.inventory.items())
+        const foods = bot.mc.filterFoods(bot.bot.inventory.items(), 'foodPoints')
     
         if (foods.length === 0) {
             throw `I have no food`

@@ -71,7 +71,7 @@ function findNewBed(bot, maxDistance) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok', null> & { can: can }}
+ * @type {import('../task').TaskDef<void, { }> & { can: can }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -97,8 +97,6 @@ module.exports = {
         while (bot.bot.isSleeping) {
             yield* sleepG(500)
         }
-
-        return 'ok'
     },
     id: function(args) {
         return 'sleep'

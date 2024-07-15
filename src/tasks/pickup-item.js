@@ -7,7 +7,7 @@ const goto = require("./goto")
  */
 module.exports = {
     task: function*(bot, args) {
-        let nearest = bot.env.getClosestItem(null, args)
+        let nearest = bot.env.getClosestItem(bot, null, args)
     
         // if ('error' in nearest) {
         //     const nearestArrow = bot.env.getClosestArrow(bot)
@@ -17,7 +17,7 @@ module.exports = {
         // }
     
         if ('error' in nearest) {
-            const nearestXp = bot.env.getClosestXp(args)
+            const nearestXp = bot.env.getClosestXp(bot, args)
             if ('result' in nearestXp) {
                 nearest = nearestXp
             }

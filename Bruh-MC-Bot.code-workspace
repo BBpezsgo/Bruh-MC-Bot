@@ -18,7 +18,11 @@
 	],
 	"settings": {
 		"material-icon-theme.files.associations": {
-			"template.js": "template"
+			"template.js": "template",
+			"config.js": "settings"
+		},
+		"material-icon-theme.folders.associations": {
+			"worlds": "environment"
 		}
 	}
 }

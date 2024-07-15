@@ -4,7 +4,7 @@ const MC = require('../mc')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'ok', { item: number; clearGrass: boolean; }>}
+ * @type {import('../task').TaskDef<void, { item: number; clearGrass: boolean; }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -71,8 +71,6 @@ module.exports = {
         yield* wrap(bot.bot.equip(args.item, 'hand'))
         const placeOn = bot.bot.blockAt(target)
         yield* wrap(bot.bot.placeBlock(placeOn, faceVector))
-
-        return 'ok'
     },
     id: function(args) {
         return `place-block-${args.item}-${args.clearGrass}`

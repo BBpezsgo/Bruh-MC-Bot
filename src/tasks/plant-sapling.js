@@ -73,7 +73,7 @@ module.exports = {
                     continue
                 }
                 
-                const placeOn = bot.env.getPlantableBlock(replantPosition.position)
+                const placeOn = bot.env.getPlantableBlock(bot, replantPosition.position)
                 if (!placeOn) {
                     console.warn(`[Bot "${bot.bot.username}"] Place on is null`)
                     i++
@@ -108,7 +108,7 @@ module.exports = {
                     break
                 }
 
-                const placeOn = bot.env.getPlantableBlock(bot.bot.entity.position.clone())
+                const placeOn = bot.env.getPlantableBlock(bot, bot.bot.entity.position.clone())
                 if (!placeOn) {
                     console.warn(`[Bot "${bot.bot.username}"] Place on is null`)
                     break

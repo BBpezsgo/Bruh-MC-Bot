@@ -12,6 +12,12 @@ module.exports = class Memory {
     bot
 
     /**
+     * @private @readonly
+     * @type {string}
+     */
+    filePath
+
+    /**
      * @type {Vec3 | null}
      */
     myBed
@@ -36,21 +42,22 @@ module.exports = class Memory {
 
     /**
      * @param {import('./bruh-bot')} bot
+     * @param {string} filePath
      */
-    constructor(bot) {
+    constructor(bot, filePath) {
         this.bot = bot
+        this.filePath = filePath
 
         this.myBed = null
         this.myChests = [ ]
         this.mlgJunkBlocks = [ ]
         this.myArrows = [ ]
         
-        const memoryPath = path.join(__dirname, '..', 'temp', 'memory.json')
-        if (!fs.existsSync(memoryPath)) {
-            console.log(`[Memory]: File not found at "${memoryPath}"`)
+        if (!fs.existsSync(this.filePath)) {
+            console.log(`[Memory]: File not found at "${this.filePath}"`)
             return
         }
-        const data = JSON.parse(fs.readFileSync(memoryPath, 'utf8'), reviver)
+        const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
         
         this.myBed = data.myBed ?? this.myBed
         this.myChests = data.myChests ?? this.myChests
@@ -60,11 +67,10 @@ module.exports = class Memory {
     }
 
     save() {
-        const memoryPath = path.join(__dirname, '..', 'temp', 'memory.json')
-        if (!fs.existsSync(path.dirname(memoryPath))) {
-            fs.mkdirSync(path.dirname(memoryPath), { recursive: true })
+        if (!fs.existsSync(path.dirname(this.filePath))) {
+            fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
         }
-        fs.writeFileSync(memoryPath, JSON.stringify({
+        fs.writeFileSync(this.filePath, JSON.stringify({
             myBed: this.myBed,
             myChests: this.myChests,
             mlgJunkBlocks: this.mlgJunkBlocks,
