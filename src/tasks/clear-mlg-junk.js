@@ -69,7 +69,8 @@ module.exports = {
                     }
 
                     yield* dig.task(bot, {
-                        block: junkBlock
+                        block: junkBlock,
+                        alsoTheNeighbours: false,
                     })
                     break
                 }

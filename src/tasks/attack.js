@@ -6,6 +6,8 @@ const MeleeWeapons = require('../melee-weapons')
 const { goals } = require('mineflayer-pathfinder')
 const goto = require('./goto')
 
+const distanceToUseRangeWeapons = 12
+
 /**
  * @type {import('../task').TaskDef<void, { target: Entity; useMelee: boolean; useMeleeWeapon: boolean; useBow: boolean; }>}
  */
@@ -128,7 +130,18 @@ module.exports = {
     
             const distance = bot.bot.entity.position.distanceTo(args.target.position)
     
-            if (distance <= 6 && args.useMelee) {
+            if (distance <= distanceToUseRangeWeapons && args.useMelee) {
+                if (distance > 6) {
+                    console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
+                    yield* goto.task(bot, {
+                        destination: args.target.position.clone(),
+                        range: 5,
+                        timeout: 500,
+                    })
+                    reequipMeleeWeapon = true
+                    continue
+                }
+
                 stopMoving()
     
                 if (reequipMeleeWeapon) {
@@ -183,7 +196,7 @@ module.exports = {
                 }
             }
     
-            if (distance > 6 && args.target.name !== 'enderman' && args.useBow) {
+            if (distance > distanceToUseRangeWeapons && args.target.name !== 'enderman' && args.useBow) {
                 stopMoving()
                 deactivateShield(shield)
     

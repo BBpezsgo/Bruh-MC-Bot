@@ -52,10 +52,10 @@ module.exports = class Memory {
         }
         const data = JSON.parse(fs.readFileSync(memoryPath, 'utf8'), reviver)
         
-        this.myBed = data.myBed
-        this.myChests = data.myChests
-        this.mlgJunkBlocks = data.mlgJunkBlocks
-        this.myArrows = data.myArrows
+        this.myBed = data.myBed ?? this.myBed
+        this.myChests = data.myChests ?? this.myChests
+        this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
+        this.myArrows = data.myArrows ?? this.myArrows
         console.log(`[Memory]: Loaded`)
     }
 

@@ -16,6 +16,7 @@ const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const hawkeye = require('minecrafthawkeye')
 const attack = require('./tasks/attack')
+const gatherItem = require('./tasks/gather-item')
 const Capabilies = require('./capabilies')
 const eat = require('./tasks/eat')
 const fish = require('./tasks/fish')
@@ -34,6 +35,7 @@ const enderpearlTo = require('./tasks/enderpearl-to')
 const smelt = require('./tasks/smelt')
 const blockExplosion = require('./tasks/block-explosion')
 const plantSeed = require('./tasks/plant-seed')
+const dumpToChest = require('./tasks/dump-to-chest')
 
 const priorities = Object.freeze({
     critical: 300,
@@ -97,7 +99,17 @@ module.exports = class BruhBot {
      * @private @readonly
      * @type {Interval}
      */
+    ensureEquipmentInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
     tryAutoCookInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    dumpTrashInterval
     /**
      * @private
      * @readonly
@@ -214,7 +226,9 @@ module.exports = class BruhBot {
         this.mc = null
         this.aimingEntities = [ ]
 
+        this.ensureEquipmentInterval = new Interval(60000)
         this.tryAutoCookInterval = new Interval(10000)
+        this.dumpTrashInterval = new Interval(30000)
         this.saveInterval = new Interval(30000)
         this.trySleepInterval = new Interval(5000)
         this.tryAutoHarvestInterval = new Interval(5000)
@@ -442,10 +456,22 @@ module.exports = class BruhBot {
                         if (!blockAt) { continue }
                         if (blockAt.name === 'air') { yeah.push(crop) }
                     }
-                    this.tasks.push(this, plantSeed, {
-                        harvestedCrops: yeah,
-                    }, priorities.unnecessary)
+                    if (yeah.length > 0) {
+                        this.tasks.push(this, plantSeed, {
+                            harvestedCrops: yeah,
+                        }, priorities.unnecessary)
+                    }
                 }
+            }
+
+            if (this.dumpTrashInterval.is()) {
+                const trashItems = this.bot.inventory.items().filter(v => {
+                    if (this.mc.nontrashItems().includes(v.type)) {
+                        return false
+                    }
+                    return true
+                }).map(v => ({ item: v.type, count: Infinity }))
+                this.tasks.push(this, dumpToChest, { items: trashItems }, priorities.unnecessary)
             }
 
             if (this.tryAutoCookInterval.is()) {
@@ -466,6 +492,123 @@ module.exports = class BruhBot {
                             }
                         }
                     }
+                }
+            }
+
+            if (this.ensureEquipmentInterval.is()) {
+                let pickaxe = null
+                let sword = null
+                let fishing_rod = null
+                let shield = null
+                let hoe = null
+                let water_bucket = null
+                for (const item of this.bot.inventory.items()) {
+                    switch (item.name) {
+                        case 'wooden_hoe':
+                        case 'stone_hoe':
+                        case 'iron_hoe':
+                        case 'golden_hoe':
+                        case 'diamond_hoe':
+                        case 'netherite_hoe':
+                            hoe = item
+                            break
+
+                        case 'wooden_pickaxe':
+                        case 'stone_pickaxe':
+                        case 'iron_pickaxe':
+                        case 'golden_pickaxe':
+                        case 'diamond_pickaxe':
+                        case 'netherite_pickaxe':
+                            pickaxe = item
+                            break
+
+                        case 'wooden_sword':
+                        case 'stone_sword':
+                        case 'iron_sword':
+                        case 'golden_sword':
+                        case 'diamond_sword':
+                        case 'netherite_sword':
+                            sword = item
+                            break
+
+                        case 'shield':
+                            shield = item
+                            break
+
+                        case 'fishing_rod':
+                            fishing_rod = item
+                            break
+
+                        case 'water_bucket':
+                            water_bucket = item
+                            break
+
+                        default:
+                            break
+                    }
+                }
+                /*
+                if (!pickaxe) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'stone_pickaxe,
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        dontUseInventory: false,
+                    }, priorities.unnecessary)
+                }
+                */
+                if (!sword) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'stone_sword',
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        canUseChests: true,
+                        canUseInventory: true,
+                    }, priorities.unnecessary)
+                } else if (!fishing_rod) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'fishing_rod',
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        canUseChests: true,
+                        canUseInventory: true,
+                    }, priorities.unnecessary)
+                } else if (!shield) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'shield',
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        canUseChests: true,
+                        canUseInventory: true,
+                    }, priorities.unnecessary)
+                } else if (!hoe) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'wooden_hoe',
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        canUseChests: true,
+                        canUseInventory: true,
+                    }, priorities.unnecessary)
+                } else if (!water_bucket) {
+                    this.tasks.push(this, gatherItem, {
+                        item: 'water_bucket',
+                        count: 1,
+                        canCraft: true,
+                        canDig: false,
+                        canKill: false,
+                        canUseChests: true,
+                        canUseInventory: true,
+                    }, priorities.unnecessary)
                 }
             }
 
@@ -638,7 +781,27 @@ module.exports = class BruhBot {
                 return
             }
         }
-    
+
+        if (message === 'scan') {
+            const task = this.tasks.push(this, {
+                task: (bot, args) => this.env.scanChests(),
+                id: function(args) {
+                    return `scan-chests`
+                },
+                humanReadableId: function(args) {
+                    return `Scanning chests`
+                },
+            }, null, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => respond(`Done`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already scanning chests`)
+            }
+        }
+
         if (message === 'fish') {
             const task = this.tasks.push(this, fish, {
                 onStatusMessage: respond,
@@ -896,36 +1059,6 @@ module.exports = class BruhBot {
         }
     }
 
-    nontrashItems() {
-        return [
-            this.mc.data.itemsByName['wooden_hoe']?.id,
-            this.mc.data.itemsByName['fishing_rod']?.id,
-            this.mc.data.itemsByName['stone_hoe']?.id,
-            this.mc.data.itemsByName['stone_axe']?.id,
-            this.mc.data.itemsByName['stone_sword']?.id,
-            this.mc.data.itemsByName['stone_pickaxe']?.id,
-            this.mc.data.itemsByName['stone_shovel']?.id,
-            this.mc.data.itemsByName['iron_hoe']?.id,
-            this.mc.data.itemsByName['iron_axe']?.id,
-            this.mc.data.itemsByName['iron_sword']?.id,
-            this.mc.data.itemsByName['iron_pickaxe']?.id,
-            this.mc.data.itemsByName['iron_shovel']?.id,
-            this.mc.data.itemsByName['bow']?.id,
-            this.mc.data.itemsByName['crossbow']?.id,
-            this.mc.data.itemsByName['arrow']?.id,
-            this.mc.data.itemsByName['shield']?.id,
-            this.mc.data.itemsByName['bread']?.id,
-            this.mc.data.itemsByName['potato']?.id,
-            this.mc.data.itemsByName['baked_potato']?.id,
-            this.mc.data.itemsByName['carrot']?.id,
-            this.mc.data.itemsByName['beetroot']?.id,
-            this.mc.data.itemsByName['raw_cod']?.id,
-            this.mc.data.itemsByName['cooked_cod']?.id,
-            this.mc.data.itemsByName['raw_salmon']?.id,
-            this.mc.data.itemsByName['cooked_salmon']?.id,
-        ]
-    }
-
     /**
      * @param {'right' | 'left'} hand
      */
@@ -1169,6 +1302,7 @@ module.exports = class BruhBot {
 
     /**
      * @param {ReadonlyArray<string | number>} items
+     * @returns {Item | null}
      */
     searchItem(...items) {
         const specialSlotIds = [

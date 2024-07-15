@@ -5,7 +5,7 @@ const goto = require('./goto')
 const { Block } = require('prismarine-block')
 
 /**
- * @type {import('../task').TaskDef<'ok', { farmPosition?: Vec3 }>}
+ * @type {import('../task').TaskDef<number, { farmPosition?: Vec3 }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -52,7 +52,7 @@ module.exports = {
             }
         }
 
-        return 'ok'
+        return n
     },
     id: function(args) {
         return 'bonemealing'

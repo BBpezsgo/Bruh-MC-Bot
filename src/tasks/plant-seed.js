@@ -137,7 +137,7 @@ module.exports = {
             }
         }
 
-        return 'ok'
+        return palntedCount
     },
     id: function(args) {
         return `plant-seed`

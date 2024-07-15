@@ -2,12 +2,21 @@ const { Vec3 } = require("vec3")
 const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require("./serializing")
-const { wrap } = require("./utils/tasks")
+const { wrap, sleepG } = require("./utils/tasks")
 const { filterHostiles } = require("./utils/other")
 const { Block } = require("prismarine-block")
 const { Item } = require("prismarine-item")
 const MC = require("./mc")
 const goto = require("./tasks/goto")
+const { Chest } = require("mineflayer")
+
+/**
+ * @typedef {{
+ *   position: Vec3;
+ *   content: Record<string, number>;
+ *   myItems: Record<string, number>;
+ * }} SavedChest
+ */
 
 // @ts-ignore
 module.exports = class Environment {
@@ -25,7 +34,7 @@ module.exports = class Environment {
 
     /**
      * @private @readonly
-     * @type {Array<{ position: Vec3; content: Record<string, number>; }>}
+     * @type {Array<SavedChest>}
      */
     chests
 
@@ -53,11 +62,11 @@ module.exports = class Environment {
     constructor(bot) {
         this.bot = bot
 
-        this.crops = [ ]
-        this.chests = [ ]
-        this.playerPositions = { }
-        this.entityHurtTimes = { }
-        this.entitySpawnTimes = { }
+        this.crops = []
+        this.chests = []
+        this.playerPositions = {}
+        this.entityHurtTimes = {}
+        this.entitySpawnTimes = {}
 
         const environmentPath = path.join(__dirname, '..', 'temp', 'environment.json')
         if (!fs.existsSync(environmentPath)) {
@@ -65,11 +74,11 @@ module.exports = class Environment {
             return
         }
         const data = JSON.parse(fs.readFileSync(environmentPath, 'utf8'), reviver)
-        this.playerPositions = data.playerPositions
-        this.crops = data.crops
-        this.chests = data.chests
+        this.playerPositions = data.playerPositions ?? this.playerPositions
+        this.crops = data.crops ?? this.crops
+        this.chests = data.chests ?? this.chests
         console.log(`[Environment]: Loaded`)
-    
+
         this.bot.bot.on('playerUpdated', async (player) => {
             if (!player.entity?.position) { return }
             this.setPlayerPosition(player.username, player.entity.position)
@@ -122,21 +131,35 @@ module.exports = class Environment {
         this.bot.bot.on('entitySpawn', (entity) => {
             this.entitySpawnTimes[entity.id] = performance.now()
         })
-
-        this.bot.bot.on('windowOpen', (window) => {
-            console.log(JSON.stringify(window))
-        })
     }
 
     /**
      * @returns {import('./task').Task<void>}
      */
     *scanChests() {
+        console.log(`[Bot "${this.bot.bot.username}"]: Scanning chests ...`)
         const chestPositions = this.bot.bot.findBlocks({
             point: this.bot.bot.entity.position.clone(),
-            maxDistance: 10,
-            matching: this.bot.mc.data.blocksByName['chest'].id,
+            maxDistance: 30,
+            matching: (block) => {
+                if (this.bot.mc.data.blocksByName['chest'].id === block.type) {
+                    return true
+                }
+                return false
+            },
+            useExtraInfo: (block) => {
+                const properties = block.getProperties()
+                if (!properties['type']) {
+                    return true
+                }
+                if (properties['type'] === 'left') {
+                    return false
+                }
+                return true
+            },
+            count: 69,
         })
+        console.log(`[Bot "${this.bot.bot.username}"]: Found ${chestPositions.length} chests`)
         for (const chestPosition of chestPositions) {
             try {
                 yield* goto.task(this.bot, {
@@ -153,12 +176,123 @@ module.exports = class Environment {
                     continue
                 }
                 const chest = yield* wrap(this.bot.bot.openChest(chestBlock))
-                yield
+                /**
+                 * @type {SavedChest | null}
+                 */
+                let found = null
+                for (const _chest of this.chests) {
+                    if (chestBlock.position.equals(_chest.position)) {
+                        found = _chest
+                    }
+                }
+                if (!found) {
+                    found = {
+                        position: chestBlock.position.clone(),
+                        content: { },
+                        myItems: { },
+                    }
+                    this.chests.push(found)
+                } else {
+                    found.content = { }
+                }
+
+                for (const item of chest.containerItems()) {
+                    found.content[item.name] ??= 0
+                    found.content[item.name] += item.count
+                }
+
+                yield* sleepG(100)
                 chest.close()
             } catch (error) {
                 console.warn(`[Bot "${this.bot.bot.username}"]: Error while scanning chests`, error)
             }
         }
+        console.log(`[Bot "${this.bot.bot.username}"]: Chests scanned`)
+    }
+
+    /**
+     * @param {Chest} chest
+     * @param {Vec3} chestPosition
+     * @param {number} item
+     * @param {number} count
+     */
+    *chestDeposit(chest, chestPosition, item, count) {
+        /**
+         * @type {SavedChest | null}
+         */
+        let saved = null
+
+        for (const _chest of this.chests) {
+            if (_chest.position.equals(chestPosition)) {
+                saved = _chest
+                break
+            }
+        }
+
+        if (!saved) {
+            saved = {
+                position: chestPosition.clone(),
+                content: { },
+                myItems: { },
+            }
+            this.chests.push(saved)
+        }
+
+        let actualCount
+
+        if (count > 0) {
+            actualCount = Math.min(count, this.bot.itemCount(item))
+            yield* wrap(chest.deposit(item, null, actualCount))
+        } else {
+            actualCount = Math.min(-count, chest.containerCount(item, null))
+            yield* wrap(chest.withdraw(item, null, actualCount))
+        }
+
+        saved.content = { }
+
+        for (const item of chest.containerItems()) {
+            saved.content[item.name] ??= 0
+            saved.content[item.name] += item.count
+        }
+
+        saved.myItems[this.bot.mc.data.items[item].name] ??= 0
+        if (count > 0) {
+            saved.myItems[this.bot.mc.data.items[item].name] += actualCount
+        } else {
+            saved.myItems[this.bot.mc.data.items[item].name] -= actualCount
+        }
+        
+        return actualCount
+    }
+
+    /**
+     * @param {Item | number | string} item
+     * @returns {Array<{ position: Vec3; count: number; myCount: number; }>}
+     */
+    searchForItem(item) {
+        if (typeof item === 'number') {
+            item = this.bot.mc.data.items[item].name
+        } else if (typeof item === 'string') { } else {
+            item = item.name
+        }
+        /**
+         * @type {Array<{ position: Vec3; count: number; myCount: number; }>}
+         */
+        const result = [ ]
+        for (const chest of this.chests) {
+            for (const itemName in chest.content) {
+                const count = chest.content[itemName]
+                const myCount = chest.myItems[itemName]
+                if (itemName === item) {
+                    result.push({
+                        position: chest.position.clone(),
+                        count: count,
+                        myCount: myCount ?? 0,
+                    })
+                }
+            }
+        }
+        return result
     }
 
     save() {
@@ -215,7 +349,7 @@ module.exports = class Environment {
             },
         })
     }
-        
+
     /**
      * @param {Vec3} farmPosition
      * @param {boolean} grown
@@ -287,8 +421,8 @@ module.exports = class Environment {
     * }} args
     * @returns {import('./result').Result<import("prismarine-entity").Entity>}
     */
-    getClosestItem(filter, args = { }) {
-        if (!args) { args = { } }
+    getClosestItem(filter, args = {}) {
+        if (!args) { args = {} }
         if (!args.inAir) { args.inAir = false }
         if (!args.maxDistance) { args.maxDistance = 10 }
         if (!args.point) { args.point = this.bot.bot.entity.position.clone() }
@@ -313,7 +447,7 @@ module.exports = class Environment {
 
         const distance = nearestEntity.position.distanceTo(args.point)
         if (distance > args.maxDistance) { return { error: `No items nearby` } }
-        
+
         return { result: nearestEntity }
     }
 
@@ -324,16 +458,16 @@ module.exports = class Environment {
     * }} args
     * @returns {import('./result').Result<import('prismarine-entity').Entity>}
     */
-    getClosestArrow(args = { }) {
+    getClosestArrow(args = {}) {
         const nearestEntity = this.bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
             entity.displayName === 'Arrow' &&
             (entity.velocity.distanceTo(new Vec3(0, 0, 0)) < 1)
-            ))
+        ))
         if (!nearestEntity) { return { error: `No arrows found` } }
 
         const distance = nearestEntity.position.distanceTo(args.point ?? this.bot.bot.entity.position)
         if (distance > (args.maxDistance || 10)) { return { error: `No arrows nearby` } }
-            
+
         return { result: nearestEntity }
     }
 
@@ -344,7 +478,7 @@ module.exports = class Environment {
     * }} args
     * @returns {import('./result').Result<import('prismarine-entity').Entity>}
     */
-    getClosestXp(args = { }) {
+    getClosestXp(args = {}) {
         const nearestEntity = this.bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
             entity.name === 'experience_orb')
         )
@@ -352,7 +486,7 @@ module.exports = class Environment {
 
         const distance = nearestEntity.position.distanceTo(args.point ?? this.bot.bot.entity.position)
         if (distance > (args.maxDistance || 10)) { return { error: `No xps nearby` } }
-            
+
         return { result: nearestEntity }
     }
 

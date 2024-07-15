@@ -114,11 +114,21 @@ class ManagedTask {
         console.log(`[Tasks]: Task "${this.getId()}" started`)
     }
 
-    finish() {
+    /**
+     * @param {TResult} result
+     */
+    finish(result) {
         // @ts-ignore
         this.status = 'done'
     
-        console.log(`[Tasks]: Task "${this.getId()}" finished`)
+        console.log(`[Tasks]: Task "${this.getId()}" finished with result`, result)
+    }
+
+    fail() {
+        // @ts-ignore
+        this.status = 'done'
+    
+        console.log(`[Tasks]: Task "${this.getId()}" failed`)
     }
 
     cancel() {
@@ -311,7 +321,7 @@ module.exports = class TaskManager {
                     const v = this._running[i].task.next()
                     if (v.done) {
                         const finished = this._running.splice(i, 1)[0]
-                        finished.finish()
+                        finished.finish(v.value)
                         if (finished.resolve) finished.resolve(v.value)
                         return null
                     } else {
@@ -319,7 +329,7 @@ module.exports = class TaskManager {
                     }
                 } catch (error) {
                     const finished = this._running.splice(i, 1)[0]
-                    finished.finish()
+                    finished.fail()
                     if (finished.reject) finished.reject(error)
                     console.error(`Task "${finished.getId()}" failed:`, error)
                     return null

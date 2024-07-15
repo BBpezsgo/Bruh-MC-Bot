@@ -109,6 +109,10 @@ module.exports = class MC {
         'pumpkin_stem',
     ]
 
+    /**
+     * @readonly
+     * @type {ReadonlyArray<number>}
+     */
     get simpleSeeds() {
         return [
             this.data.itemsByName['wheat_seeds'].id,
@@ -388,6 +392,82 @@ module.exports = class MC {
             if (MC.rawFoods.includes(item.name) && !includeRaws) { return false }
             return true
         })
+    }
+
+    nontrashItems() {
+        return [
+            this.data.itemsByName['wooden_hoe']?.id,
+            this.data.itemsByName['stone_hoe']?.id,
+            this.data.itemsByName['iron_hoe']?.id,
+            this.data.itemsByName['golden_hoe']?.id,
+            this.data.itemsByName['diamond_hoe']?.id,
+            this.data.itemsByName['netherite_hoe']?.id,
+
+            this.data.itemsByName['wooden_axe']?.id,
+            this.data.itemsByName['stone_axe']?.id,
+            this.data.itemsByName['iron_axe']?.id,
+            this.data.itemsByName['golden_axe']?.id,
+            this.data.itemsByName['diamond_axe']?.id,
+            this.data.itemsByName['netherite_axe']?.id,
+
+            this.data.itemsByName['wooden_pickaxe']?.id,
+            this.data.itemsByName['stone_pickaxe']?.id,
+            this.data.itemsByName['iron_pickaxe']?.id,
+            this.data.itemsByName['golden_pickaxe']?.id,
+            this.data.itemsByName['diamond_pickaxe']?.id,
+            this.data.itemsByName['netherite_pickaxe']?.id,
+
+            this.data.itemsByName['wooden_shovel']?.id,
+            this.data.itemsByName['stone_shovel']?.id,
+            this.data.itemsByName['iron_shovel']?.id,
+            this.data.itemsByName['golden_shovel']?.id,
+            this.data.itemsByName['diamond_shovel']?.id,
+            this.data.itemsByName['netherite_shovel']?.id,
+
+            this.data.itemsByName['wooden_sword']?.id,
+            this.data.itemsByName['stone_sword']?.id,
+            this.data.itemsByName['iron_sword']?.id,
+            this.data.itemsByName['golden_sword']?.id,
+            this.data.itemsByName['diamond_sword']?.id,
+            this.data.itemsByName['netherite_sword']?.id,
+
+            this.data.itemsByName['shield']?.id,
+            this.data.itemsByName['bow']?.id,
+            this.data.itemsByName['crossbow']?.id,
+            this.data.itemsByName['fishing_rod']?.id,
+            this.data.itemsByName['arrow']?.id,
+            this.data.itemsByName['ender_pearl']?.id,
+            this.data.itemsByName['bucket']?.id,
+            this.data.itemsByName['water_bucket']?.id,
+
+            this.data.itemsByName['apple']?.id,
+            this.data.itemsByName['melon_slice']?.id,
+            this.data.itemsByName['beef']?.id,
+            this.data.itemsByName['cooked_beef']?.id,
+            this.data.itemsByName['porkchop']?.id,
+            this.data.itemsByName['cooked_porkchop']?.id,
+            this.data.itemsByName['mutton']?.id,
+            this.data.itemsByName['cooked_mutton']?.id,
+            this.data.itemsByName['chicken']?.id,
+            this.data.itemsByName['cooked_chicken']?.id,
+            this.data.itemsByName['rabbit']?.id,
+            this.data.itemsByName['cooked_rabbit']?.id,
+            this.data.itemsByName['cooke']?.id,
+            this.data.itemsByName['pumpkin_pie']?.id,
+            this.data.itemsByName['mushroom_stew']?.id,
+            this.data.itemsByName['beetroot_soup']?.id,
+            this.data.itemsByName['rabbit_stew']?.id,
+            this.data.itemsByName['dried_kelp']?.id,
+            this.data.itemsByName['bread']?.id,
+            this.data.itemsByName['potato']?.id,
+            this.data.itemsByName['baked_potato']?.id,
+            this.data.itemsByName['carrot']?.id,
+            this.data.itemsByName['beetroot']?.id,
+            this.data.itemsByName['raw_cod']?.id,
+            this.data.itemsByName['cooked_cod']?.id,
+            this.data.itemsByName['raw_salmon']?.id,
+            this.data.itemsByName['cooked_salmon']?.id,
+        ]
     }
 
     /**
