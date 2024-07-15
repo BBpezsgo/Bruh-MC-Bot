@@ -2,9 +2,12 @@ const { Vec3 } = require("vec3")
 const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require("./serializing")
-const { filterHostiles } = require("./utils")
+const { wrap } = require("./utils/tasks")
+const { filterHostiles } = require("./utils/other")
 const { Block } = require("prismarine-block")
 const { Item } = require("prismarine-item")
+const MC = require("./mc")
+const goto = require("./tasks/goto")
 
 // @ts-ignore
 module.exports = class Environment {
@@ -21,6 +24,12 @@ module.exports = class Environment {
     playerPositions
 
     /**
+     * @private @readonly
+     * @type {Array<{ position: Vec3; content: Record<string, number>; }>}
+     */
+    chests
+
+    /**
      * @readonly
      * @type {{ [entityId: number]: number }}
      */
@@ -28,9 +37,9 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {Array<{ position: Vec3; item: string; }>}
+     * @type {Array<{ position: Vec3; block: number; }>}
      */
-    harvestedCrops
+    crops
 
     /**
      * @readonly
@@ -44,8 +53,9 @@ module.exports = class Environment {
     constructor(bot) {
         this.bot = bot
 
+        this.crops = [ ]
+        this.chests = [ ]
         this.playerPositions = { }
-        this.harvestedCrops = [ ]
         this.entityHurtTimes = { }
         this.entitySpawnTimes = { }
 
@@ -56,8 +66,99 @@ module.exports = class Environment {
         }
         const data = JSON.parse(fs.readFileSync(environmentPath, 'utf8'), reviver)
         this.playerPositions = data.playerPositions
-        this.harvestedCrops = data.harvestedCrops
+        this.crops = data.crops
+        this.chests = data.chests
         console.log(`[Environment]: Loaded`)
+    
+        this.bot.bot.on('playerUpdated', async (player) => {
+            if (!player.entity?.position) { return }
+            this.setPlayerPosition(player.username, player.entity.position)
+        })
+
+        this.bot.bot.on('blockUpdate', (oldBlock, newBlock) => {
+            const isPlace = (!oldBlock || oldBlock.name === 'air')
+            const isBreak = (!newBlock || newBlock.name === 'air')
+            if (isPlace && isBreak) { return }
+            if (isPlace && MC.cropBlocks.includes(newBlock?.name)) {
+                let isSaved = false
+                for (const crop of this.crops) {
+                    if (crop.position.equals(newBlock.position)) {
+                        crop.block = newBlock.type
+                        isSaved = true
+                        break
+                    }
+                }
+                if (!isSaved) {
+                    this.crops.push({
+                        position: newBlock.position.clone(),
+                        block: newBlock.type,
+                    })
+                }
+            }
+            if (isBreak && MC.cropBlocks.includes(oldBlock?.name)) {
+                let isSaved = false
+                for (const crop of this.crops) {
+                    if (crop.position.equals(oldBlock.position)) {
+                        crop.block = oldBlock.type
+                        isSaved = true
+                        break
+                    }
+                }
+                if (!isSaved) {
+                    this.crops.push({
+                        position: oldBlock.position.clone(),
+                        block: oldBlock.type,
+                    })
+                }
+            }
+        })
+
+        this.bot.bot.on('entityDead', (entity) => {
+            if (this.entitySpawnTimes[entity.id]) {
+                delete this.entitySpawnTimes[entity.id]
+            }
+        })
+
+        this.bot.bot.on('entitySpawn', (entity) => {
+            this.entitySpawnTimes[entity.id] = performance.now()
+        })
+
+        this.bot.bot.on('windowOpen', (window) => {
+            console.log(JSON.stringify(window))
+        })
+    }
+
+    /**
+     * @returns {import('./task').Task<void>}
+     */
+    *scanChests() {
+        const chestPositions = this.bot.bot.findBlocks({
+            point: this.bot.bot.entity.position.clone(),
+            maxDistance: 10,
+            matching: this.bot.mc.data.blocksByName['chest'].id,
+        })
+        for (const chestPosition of chestPositions) {
+            try {
+                yield* goto.task(this.bot, {
+                    destination: chestPosition.clone(),
+                    range: 2,
+                })
+                const chestBlock = this.bot.bot.blockAt(chestPosition)
+                if (!chestBlock) {
+                    console.warn(`[Bot "${this.bot.bot.username}"]: Chest disappeared while scanning`)
+                    continue
+                }
+                if (chestBlock.name !== 'chest') {
+                    console.warn(`[Bot "${this.bot.bot.username}"]: Chest replaced while scanning`)
+                    continue
+                }
+                const chest = yield* wrap(this.bot.bot.openChest(chestBlock))
+                yield
+                chest.close()
+            } catch (error) {
+                console.warn(`[Bot "${this.bot.bot.username}"]: Error while scanning chests`, error)
+            }
+        }
     }
 
     save() {
@@ -67,7 +168,8 @@ module.exports = class Environment {
         }
         fs.writeFileSync(environmentPath, JSON.stringify({
             playerPositions: this.playerPositions,
-            harvestedCrops: this.harvestedCrops,
+            crops: this.crops,
+            chests: this.chests,
         }, replacer, ' '))
     }
 

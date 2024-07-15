@@ -1,5 +1,6 @@
 const { Item } = require('prismarine-item')
-const { wrap, sleepG, Timeout } = require('../utils')
+const { wrap, sleepG } = require('../utils/tasks')
+const { Timeout } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')

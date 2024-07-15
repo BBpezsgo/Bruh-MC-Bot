@@ -1,4 +1,4 @@
-const { wrap, sleepG } = require('../utils')
+const { wrap, sleepG } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 
 /**

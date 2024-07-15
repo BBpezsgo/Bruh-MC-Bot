@@ -1,5 +1,5 @@
 const { Item } = require('prismarine-item')
-const { sleepG, wrap } = require('../utils')
+const { wrap } = require('../utils/tasks')
 const { Block } = require('prismarine-block')
 const { Vec3 } = require('vec3')
 const MC = require('../mc')

@@ -96,6 +96,19 @@ module.exports = class MC {
         'netherite',
     ]
 
+    /**
+     * @readonly
+     * @type {ReadonlyArray<string>}
+     */
+    static cropBlocks = [
+        'potatoes',
+        'beetroots',
+        'wheat',
+        'carrots',
+        'melon_stem',
+        'pumpkin_stem',
+    ]
+
     get simpleSeeds() {
         return [
             this.data.itemsByName['wheat_seeds'].id,
@@ -121,7 +134,7 @@ module.exports = class MC {
 
     /**
      * @param {string} name
-     * @returns {getMcData.Block[]}
+     * @returns {Array<getMcData.Block>}
      */
     getCorrectBlocks(name) {
         if (name === 'dirt') {
@@ -351,7 +364,7 @@ module.exports = class MC {
     }
 
     /**
-     * @param {Array<Item>} foods
+     * @param {ReadonlyArray<Item>} foods
      * @param {'foodPoints' | 'saturation'} priority
      * @returns {Array<Item>}
      */

@@ -1,4 +1,4 @@
-const { sleepG, wrap } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
 
 /**
  * @type {import('../task').TaskDef<'ok' | 'full', null>}

@@ -238,7 +238,7 @@ module.exports = class TaskManager {
     }
 
     /**
-     * @param {Array<ManagedTask>} tasks
+     * @param {ReadonlyArray<ManagedTask>} tasks
      * @returns {number}
      */
     static findImportantTask(tasks) {

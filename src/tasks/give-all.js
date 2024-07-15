@@ -1,4 +1,4 @@
-const { sleepG, wrap } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
@@ -40,7 +40,7 @@ module.exports = {
             }
         }
 
-        /** @type {Array<import('mineflayer').EquipmentDestination>} */
+        /** @type {ReadonlyArray<import('mineflayer').EquipmentDestination>} */
         const specialSlots = [
             'head',
             'torso',

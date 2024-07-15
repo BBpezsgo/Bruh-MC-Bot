@@ -11,7 +11,9 @@ const MC = require('./mc')
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const meleeWeapons = require('./melee-weapons')
-const { filterHostiles, wrap, sleepG, Interval, randomInt, deg2rad, parseLocationH } = require('./utils')
+const { Interval, filterHostiles, parseLocationH } = require('./utils/other')
+const taskUtils = require('./utils/tasks')
+const mathUtils = require('./utils/math')
 const hawkeye = require('minecrafthawkeye')
 const attack = require('./tasks/attack')
 const Capabilies = require('./capabilies')
@@ -31,6 +33,7 @@ const sleep = require('./tasks/sleep')
 const enderpearlTo = require('./tasks/enderpearl-to')
 const smelt = require('./tasks/smelt')
 const blockExplosion = require('./tasks/block-explosion')
+const plantSeed = require('./tasks/plant-seed')
 
 const priorities = Object.freeze({
     critical: 300,
@@ -232,16 +235,6 @@ module.exports = class BruhBot {
             this.aimingEntities.push(entity)
         })
 
-        this.bot.on('entityDead', (entity) => {
-            if (this.env.entitySpawnTimes[entity.id]) {
-                delete this.env.entitySpawnTimes[entity.id]
-            }
-        })
-
-        this.bot.on('entitySpawn', (entity) => {
-            this.env.entitySpawnTimes[entity.id] = performance.now()
-        })
-
         this.bot.on('soundEffectHeard', (soundName) => {
             if (this.onHeard) { this.onHeard(soundName) }
         })
@@ -279,14 +272,6 @@ module.exports = class BruhBot {
             BruhBot.setGentleMovements(this.gentleMovements, this.mc)
     
             console.log(`[Bot "${username}"] Ready`)
-        })
-
-        this.bot.on('playerUpdated', async (player) => {
-            if (!player.entity?.position) {
-                return
-            }
-
-            this.env.setPlayerPosition(player.username, player.entity.position)
         })
 
         this.bot.on('move', async (position) => {
@@ -416,7 +401,7 @@ module.exports = class BruhBot {
                             destination: entity.position.clone(),
                             range: 1,
                         })
-                        yield* sleepG(1000)
+                        yield* taskUtils.sleepG(1000)
                         if (entity.isValid) {
                             console.warn(`[Bot "${bot.bot.username}"] Can't pick up this arrow`)
                         } else {
@@ -449,6 +434,17 @@ module.exports = class BruhBot {
                                 
                             })
                     }
+                } else {
+                    /** @type {Array<{ position: Vec3; block: number; }>} */
+                    const yeah = [ ]
+                    for (const crop of this.env.crops) {
+                        const blockAt = this.bot.blockAt(crop.position)
+                        if (!blockAt) { continue }
+                        if (blockAt.name === 'air') { yeah.push(crop) }
+                    }
+                    this.tasks.push(this, plantSeed, {
+                        harvestedCrops: yeah,
+                    }, priorities.unnecessary)
                 }
             }
 
@@ -510,6 +506,7 @@ module.exports = class BruhBot {
             
             console.warn(`[Bot "${username}"] Kicked:`, reason)
         })
+
         this.bot.on('error', (error) => {
             // @ts-ignore
             if (error instanceof AggregateError) {
@@ -620,9 +617,9 @@ module.exports = class BruhBot {
      * @private
      */
     lookRandomly() {
-        const pitch = randomInt(-40, 30)
-        const yaw = randomInt(-180, 180)
-        this.bot.look(yaw * deg2rad, pitch * deg2rad)
+        const pitch = mathUtils.randomInt(-40, 30)
+        const yaw = mathUtils.randomInt(-180, 180)
+        this.bot.look(yaw * mathUtils.deg2rad, pitch * mathUtils.deg2rad)
     }
 
     /**
@@ -776,7 +773,7 @@ module.exports = class BruhBot {
             const task = this.tasks.push(this, {
                 /** @type {import('./task').SimpleTaskDef<void, { player: string; }>} */ 
                 task: function* (bot, args) {
-                    let location = bot.env.getPlayerPosition(args.player)
+                    let location = bot.env.getPlayerPosition(args.player, 10000)
                     if (!location) {
                         try {
                             const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
@@ -895,7 +892,7 @@ module.exports = class BruhBot {
             if (timeoutAt && timeoutAt < performance.now()) {
                 throw 'Timed out'
             }
-            yield* sleepG(200)
+            yield* taskUtils.sleepG(200)
         }
     }
 
@@ -1026,6 +1023,11 @@ module.exports = class BruhBot {
                 console.warn(`Unknown block \"${blockToAvoid}\"`)
             }
         }
+
+        movements.exclusionAreasStep.push((block) => {
+            if (block.name === 'composter') return 50
+            return 0
+        })
 
         movements.climbables.add(mc.data.blocksByName['vine'].id)
         // movements.replaceables.add(mc.data.blocksByName['short_grass'].id)
@@ -1166,7 +1168,7 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {(string | number)[]} items
+     * @param {ReadonlyArray<string | number>} items
      */
     searchItem(...items) {
         const specialSlotIds = [
@@ -1238,7 +1240,7 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {(string | number)[]} items
+     * @param {ReadonlyArray<string | number>} items
      */
     hasAll(...items) {
         const specialSlotIds = [
@@ -1333,7 +1335,7 @@ module.exports = class BruhBot {
         if (!emptySlot) {
             return false
         }
-        yield* wrap(this.bot.unequip('hand'))
+        yield* taskUtils.wrap(this.bot.unequip('hand'))
         return true
     }
     
@@ -1491,10 +1493,18 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {Block} crop
+     * @param {Block | import('minecraft-data').Block | number | string} crop
      * @returns {number | null}
      */
     getCropSeed(crop) {
+        if (typeof crop === 'number') {
+            crop = this.mc.data.blocks[crop]
+        }
+
+        if (typeof crop === 'string') {
+            crop = this.mc.data.blocksByName[crop]
+        }
+
         if (!crop.drops) { return null }
 
         for (const _drop of crop.drops) {

@@ -1,5 +1,6 @@
 const { Vec3 } = require('vec3')
-const { wrap, backNForthSort } = require('../utils')
+const { wrap } = require('../utils/tasks')
+const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
 const { Block } = require('prismarine-block')
 

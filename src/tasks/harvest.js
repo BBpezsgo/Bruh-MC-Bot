@@ -1,7 +1,7 @@
 const { Vec3 } = require('vec3')
-const { sleepG, wrap, backNForthSort } = require('../utils')
+const { wrap } = require('../utils/tasks')
+const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
-const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const plantSeed = require('./plant-seed')
 
@@ -15,45 +15,52 @@ module.exports = {
         }
 
         /**
-         * @type {Array<{ position: Vec3; item: string; }>}
+         * @type {Array<{ position: Vec3; block: number; }>}
          */
         const harvestedCrops = [ ]
 
         while (true) {
             const farmPosition = this.farmPosition ?? bot.bot.entity.position.clone()
 
-            let crops = bot.env.getCrops(farmPosition, true)
+            let cropPositions = bot.env.getCrops(farmPosition, true)
 
-            if (crops.length === 0) { break }
+            if (cropPositions.length === 0) { break }
 
-            crops = backNForthSort(crops)
+            cropPositions = backNForthSort(cropPositions)
 
-            for (const crop of crops) {
+            for (const cropPosition of cropPositions) {
                 yield* goto.task(bot, {
                     // block: crop.clone(),
-                    destination: crop.clone(),
+                    destination: cropPosition.clone(),
                     range: 3,
                 })
-                const cropBlock = bot.bot.blockAt(crop)
+                const cropBlock = bot.bot.blockAt(cropPosition)
                 if (cropBlock) {
+                    const cropBlockId = cropBlock.type
                     yield* wrap(bot.bot.dig(cropBlock))
+
+                    let isSaved = false
+
+                    for (const crop of bot.env.crops) {
+                        if (crop.position.equals(cropPosition)) {
+                            crop.block = cropBlockId
+                            isSaved = true
+                            break
+                        }
+                    }
+
+                    if (isSaved) {
+                        console.log(`[Bot "${bot.bot.username}"] Crop already saved`)
+                    } else {
+                        console.log(`[Bot "${bot.bot.username}"] Crop saved`)
+                        bot.env.crops.push({
+                            position: cropPosition.clone(),
+                            block: cropBlockId,
+                        })
+                    }
 
                     const cropSeed = bot.getCropSeed(cropBlock)
                     if (cropSeed) {
-                        let isSaved = false
-
-                        for (const harvestedCrop of bot.env.harvestedCrops) {
-                            if (harvestedCrop.position.equals(crop)) {
-                                isSaved = true
-                                break
-                            }
-                        }
-
-                        if (isSaved) {
-                            console.log(`[Bot "${bot.bot.username}"] Crop position already saved`)
-                            continue
-                        }
-
                         try {
                             console.log(`[Bot "${bot.bot.username}"] Try replant "${bot.mc.data.items[cropSeed].name}" at ${cropBlock.position}`)
     
@@ -74,8 +81,10 @@ module.exports = {
                             console.log(`[Bot "${bot.bot.username}"] Seed ${bot.mc.data.items[cropSeed].name} successfully replanted`)
                         } catch (error) {
                             console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
-                            harvestedCrops.push({ position: crop.clone(), item: bot.mc.data.items[cropSeed].name })
-                            bot.env.harvestedCrops.push({ position: crop.clone(), item: bot.mc.data.items[cropSeed].name })
+                            harvestedCrops.push({ 
+                                position: cropPosition.clone(),
+                                block: cropBlockId,
+                            })
                             console.warn(error)
                         }
                     } else {

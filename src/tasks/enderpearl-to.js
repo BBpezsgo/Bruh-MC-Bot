@@ -1,5 +1,6 @@
 const { Vec3 } = require('vec3')
-const { sleepG, wrap, trajectoryTime } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
+const { trajectoryTime } = require('../utils/other')
 const { Weapons } = require('minecrafthawkeye')
 
 /**

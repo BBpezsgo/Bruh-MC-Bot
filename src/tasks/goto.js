@@ -1,28 +1,48 @@
 const { goals, Movements } = require('mineflayer-pathfinder')
-const { wrap, finished } = require('../utils')
+const { wrap } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 
 /**
- * @type {import('../task').TaskDef<void, {
+ * @exports @typedef {{
  *   timeout?: number;
  *   searchRadius?: number;
  *   movements?: Movements;
- * } & ({
+ * }} GeneralArgs
+ */
+
+/**
+ * @exports @typedef {GeneralArgs & {
  *   destination: Vec3;
  *   range: number;
- * } | {
+ * }} GotoArgs
+ */
+
+/**
+ * @exports @typedef {GeneralArgs & {
  *   block: Vec3;
  *   reach?: number;
- * } | {
+ * }} LookAtArgs
+ */
+
+/**
+ * @exports @typedef {GeneralArgs & {
  *   place: Vec3;
  *   LOS?: boolean;
  *   facing?: 'north' | 'east' | 'south' | 'west' | 'up' | 'down';
  *   faces?: [Vec3, Vec3, Vec3, Vec3, Vec3, Vec3];
  *   half?: 'top' | 'bottom';
- * } | {
+ * }} PlaceArgs
+ */
+
+/**
+ * @exports @typedef {GeneralArgs & {
  *   flee: Vec3;
  *   distance: number;
- * }), Error>}
+ * }} FleeArgs
+ */
+
+/**
+ * @type {import('../task').TaskDef<void, GotoArgs | LookAtArgs | PlaceArgs | FleeArgs, Error>}
  */
 module.exports = {
     /**

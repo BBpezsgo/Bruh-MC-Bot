@@ -1,5 +1,5 @@
 const { Block } = require('prismarine-block')
-const { sleepG, wrap } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**

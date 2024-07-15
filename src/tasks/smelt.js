@@ -1,12 +1,13 @@
 const { Item } = require('prismarine-item')
-const { sleepG, wrap, Timeout } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
+const { Timeout } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const { Block } = require('prismarine-block')
 
 /**
  * @param {import('../bruh-bot')} bot
- * @param {Array<(import('../mc-data').SmeltingRecipe | import('../mc-data').SmokingRecipe | import('../mc-data').BlastingRecipe | import('../mc-data').CampfireRecipe)> | null} recipes
+ * @param {ReadonlyArray<(import('../mc-data').SmeltingRecipe | import('../mc-data').SmokingRecipe | import('../mc-data').BlastingRecipe | import('../mc-data').CampfireRecipe)> | null} recipes
  * @param {boolean} noFuel
  */
 function findBestFurnace(bot, recipes, noFuel) {
@@ -89,7 +90,6 @@ function findBestFurnace(bot, recipes, noFuel) {
  * @returns {import('../task').Task<Item>}
  */
 function* doCampfire(bot, campfire, recipe) {
-    let item
     const result = bot.mc.data.itemsByName[recipe.result]
 
     if (!campfire.getProperties()['lit']) {
@@ -104,6 +104,7 @@ function* doCampfire(bot, campfire, recipe) {
 
     console.log(`[Bot: "${bot.bot.username}"]: Doing campfire ...`)
 
+    let item
     for (const ingredient of recipe.ingredient) {
         const _i = bot.mc.data.itemsByName[ingredient]
         if (!_i) {
@@ -182,7 +183,7 @@ function* doCampfire(bot, campfire, recipe) {
 
 /**
  * @type {import('../task').TaskDef<Item, {
- *   recipes: Array<import('../mc-data').CookingRecipe>;
+ *   recipes: ReadonlyArray<import('../mc-data').CookingRecipe>;
  *   noFuel: boolean;
  *   onNeedYesNo?: (question: string, timeout: number) => import('../task').Task<boolean | null>;
  * }> & {

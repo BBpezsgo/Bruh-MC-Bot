@@ -1,5 +1,5 @@
 const { goals } = require('mineflayer-pathfinder')
-const { sleepG, wrap } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
 
 /**
  * @type {import('../task').TaskDef<'ok' | 'none', null>}

@@ -1,7 +1,8 @@
 const { Vec3 } = require('vec3')
-const { sleepG, wrap } = require('../utils')
+const { wrap } = require('../utils/tasks')
 const { Block } = require('prismarine-block')
 const goto = require('./goto')
+const hoeing = require('./hoeing')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -22,7 +23,7 @@ function* plant(bot, placeOn, seedItem) {
     console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
         destination: placeOn.position.clone(),
-        range: 2,
+        range: 3,
     })
     
     console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equiping item`)
@@ -35,7 +36,11 @@ function* plant(bot, placeOn, seedItem) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok', { seedItems?: Array<number>; harvestedCrops?: Array<{ position: Vec3, item: string }> }> & {
+ * @type {import('../task').TaskDef<'ok', {
+ *   seedItems?: ReadonlyArray<number>;
+ *   harvestedCrops?: ReadonlyArray<{ position: Vec3; block: number; }>;
+ *   fallbackToNear?: boolean;
+ * }> & {
  *   plant: plant;
  * }}
  */
@@ -44,22 +49,56 @@ module.exports = {
         let palntedCount = 0
 
         if (args.harvestedCrops) {
-            let i = 0
-            while (i < args.harvestedCrops.length) {
-                const harvestedCrop = args.harvestedCrops[i]
-                console.log(`[Bot "${bot.bot.username}"] Try plant "${harvestedCrop.item}" at ${harvestedCrop.position}`)
+            for (const harvestedCrop of args.harvestedCrops) {
+                const seedId = bot.getCropSeed(harvestedCrop.block)
+                console.log(`[Bot "${bot.bot.username}"] Try plant "${harvestedCrop.block}" at ${harvestedCrop.position}`)
 
-                const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[harvestedCrop.item].id, null, false)
+                const seed = bot.bot.inventory.findInventoryItem(seedId, null, false)
                 if (!seed) {
-                    console.warn(`[Bot "${bot.bot.username}"] Can't replant this: doesn't have "${harvestedCrop.item}"`)
-                    i++
+                    console.warn(`[Bot "${bot.bot.username}"] Can't replant this: doesn't have "${seedId}"`)
                     continue
                 }
 
-                const placeOn = bot.env.getFreeFarmland(harvestedCrop.position)
+                const at = bot.bot.blockAt(harvestedCrop.position)
+                /** @type {Block | null} */
+                let placeOn = null
+                if (!at || at.name === 'air') {
+                    let below = bot.bot.blockAt(harvestedCrop.position.offset(0, -1, 0))
+                    if (below.name === 'farmland') {
+                        console.log(`[Bot "${bot.bot.username}"] Try plant on ${below.name}`)
+                        yield* plant(bot, below, seed)
+                        continue
+                    } else if (below.name === 'dirt' ||
+                               below.name === 'grass_block') {
+                        try {
+                            yield* hoeing.task(bot, {
+                                block: below.position.clone(),
+                                gatherTool: false,
+                            })
+                        } catch (error) {
+                            console.error(error)
+                            continue
+                        }
+                    } else {
+                        console.warn(`[Bot "${bot.bot.username}"] Can't replant this on ${below.name ?? 'null'}`)
+                        continue
+                    }
+                    yield
+                    below = bot.bot.blockAt(harvestedCrop.position.offset(0, -1, 0))
+                    if (below.name !== 'farmland') {
+                        console.warn(`[Bot "${bot.bot.username}"] Failed to hoe`)
+                        continue
+                    }
+                    placeOn = below
+                }
+
+                if (!placeOn && args.fallbackToNear) {
+                    console.warn(`[Bot "${bot.bot.username}"] Falling back to nearest free farmland ...`)
+                    placeOn = bot.env.getFreeFarmland(harvestedCrop.position)
+                }
+
                 if (!placeOn) {
                     console.warn(`[Bot "${bot.bot.username}"] Place on is null`)
-                    i++
                     continue
                 }
 
@@ -67,8 +106,7 @@ module.exports = {
 
                 yield* plant(bot, placeOn, seed)
 
-                console.log(`[Bot "${bot.bot.username}"] Seed ${harvestedCrop.item} successfully planted`)
-                args.harvestedCrops.splice(i, 1)
+                console.log(`[Bot "${bot.bot.username}"] Seed ${seed.name} successfully planted`)
                 palntedCount++
             }
         } else {

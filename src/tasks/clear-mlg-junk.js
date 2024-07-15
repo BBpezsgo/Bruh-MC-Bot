@@ -1,4 +1,4 @@
-const { wrap } = require('../utils')
+const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const attack = require('./attack')
 const dig = require('./dig')

@@ -1,5 +1,5 @@
 const { Entity } = require('prismarine-entity')
-const { wrap, sleepG, trajectoryTime } = require('../utils')
+const { wrap, sleepG } = require('../utils/tasks')
 const { Weapons } = require('minecrafthawkeye')
 const { Item } = require('prismarine-item')
 const MeleeWeapons = require('../melee-weapons')

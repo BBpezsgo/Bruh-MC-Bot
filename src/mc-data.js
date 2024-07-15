@@ -11,7 +11,7 @@ const config = require('./config')
  *   item: string
  *   count?: number
  * } | string
- * ingredients: Array<{ item: string } | { tag: string }>
+ * ingredients: ReadonlyArray<{ item: string } | { tag: string }>
  * }} ShapelessRecipe
  */
 
@@ -24,7 +24,7 @@ const config = require('./config')
  *     item: string
  *   }
  * }
- * pattern: Array<string>
+ * pattern: ReadonlyArray<string>
  * result: {
  *   item: string
  *   count?: number
@@ -36,7 +36,7 @@ const config = require('./config')
  * @typedef {{
  * time: number
  * experience: number
- * ingredient: Array<string>
+ * ingredient: ReadonlyArray<string>
  * result: string
  * }} CookingRecipeBase
  */
@@ -50,9 +50,9 @@ const config = require('./config')
 
 /**
  * @typedef {{
- *   boats: Array<string>
- *   mlgBlocks: Array<string>
- *   vehicles: Array<string>
+ *   boats: ReadonlyArray<string>
+ *   mlgBlocks: ReadonlyArray<string>
+ *   vehicles: ReadonlyArray<string>
  * }} MlgData
  */
 

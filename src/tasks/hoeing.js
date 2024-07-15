@@ -1,11 +1,20 @@
 const { Vec3 } = require('vec3')
-const { sleepG, wrap, backNForthSort } = require('../utils')
+const { sleepG, wrap } = require('../utils/tasks')
+const { backNForthSort } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const MC = require('../mc')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'ok', { water: Vec3, gatherTool: boolean; } | { nearPlayer: string, gatherTool: boolean; }>}
+ * @type {import('../task').TaskDef<'ok', {
+ *   gatherTool: boolean;
+ * } & ({
+ *   water: Vec3;
+ * } | {
+ *   nearPlayer: string;
+ * } | {
+ *   block: Vec3;
+ * })>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -29,9 +38,9 @@ module.exports = {
                     if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoe) {
                         yield* wrap(bot.bot.equip(hoe, 'hand'))
                     }
-                    return { result: true }
+                    return
                 } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoe) {
-                    return { result: true }
+                    return
                 }
             }
 
@@ -53,7 +62,7 @@ module.exports = {
 
         if ('water' in args) {
             water = args.water
-        } else {
+        } else if ('nearPlayer' in args) {
             const target = bot.env.getPlayerPosition(args.nearPlayer)
             if (!target) {
                 throw `I can't find you`
@@ -67,13 +76,34 @@ module.exports = {
             if (!water) {
                 throw `There is no water`
             }
+        } else if ('block' in args) {
+            const dirt = bot.bot.blockAt(args.block)
+
+            const above = bot.bot.blockAt(args.block.offset(0, 1, 0))
+            if (above &&
+                !MC.replaceableBlocks[above.name ?? '']) {
+                throw `Can't break ${above.name ?? 'null'}`
+            }
+
+            yield* goto.task(bot, {
+                destination: args.block.clone(),
+                range: 3,
+            })
+
+            if (above &&
+                MC.replaceableBlocks[above.name] === 'break') {
+                yield* wrap(bot.bot.dig(above, true))
+            }
+
+            yield* equipHoe()
+            yield
+            yield* wrap(bot.bot.activateBlock(dirt))
+
+            return 'ok'
         }
 
         while (true) {
-            const equipHoeResult = yield* equipHoe()
-            if ('error' in equipHoeResult) {
-                return equipHoeResult
-            }
+            yield* equipHoe()
 
             const filterBlock = (/** @type {Block} */ block) => {
                 const above = bot.bot.blockAt(block.position.offset(0, 1, 0))
@@ -125,10 +155,7 @@ module.exports = {
                     yield* wrap(bot.bot.dig(above, true))
                 }
 
-                const equipHoeResult = yield* equipHoe()
-                if ('error' in equipHoeResult) {
-                    break
-                }
+                yield* equipHoe()
 
                 yield* sleepG(100)
                 yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt)))
@@ -149,8 +176,10 @@ module.exports = {
     humanReadableId: function(args) {
         if ('nearPlayer' in args) {
             return `Hoeing near ${args.nearPlayer}`
-        } else {
+        } else if ('water' in args) {
             return `Hoeing near ${args.water}`
+        } else {
+            return `Hoeing ${args.block}`
         }
     },
 }
