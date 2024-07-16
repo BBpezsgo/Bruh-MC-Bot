@@ -35,6 +35,7 @@ module.exports = {
                         yield* goto.task(bot, {
                             destination: junkBlock.position.clone(),
                             range: 1,
+                            avoidOccupiedDestinations: true,
                         })
     
                         console.log(`[Bot "${bot.bot.username}"]: Equip bucket ...`)

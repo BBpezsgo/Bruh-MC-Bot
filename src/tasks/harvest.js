@@ -22,7 +22,9 @@ module.exports = {
         const harvestedCrops = [ ]
 
         while (true) {
-            const farmPosition = this.farmPosition ?? bot.bot.entity.position.clone()
+            yield
+
+            const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
 
             let cropPositions = bot.env.getCrops(bot, farmPosition, true)
 
@@ -31,10 +33,17 @@ module.exports = {
             cropPositions = backNForthSort(cropPositions)
 
             for (const cropPosition of cropPositions) {
+                if (!bot.env.allocateBlock(bot.bot.username, cropPosition, 'dig')) {
+                    console.log(`[Bot "${bot.bot.username}"]: Crop will be digged by someone else, skipping ...`)
+                    yield
+                    continue
+                }
+
                 yield* goto.task(bot, {
                     // block: crop.clone(),
                     destination: cropPosition.clone(),
                     range: 3,
+                    avoidOccupiedDestinations: true,
                 })
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (cropBlock) {

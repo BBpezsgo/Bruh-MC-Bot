@@ -137,6 +137,7 @@ module.exports = {
                         destination: args.target.position.clone(),
                         range: 5,
                         timeout: 500,
+                        avoidOccupiedDestinations: false,
                     })
                     reequipMeleeWeapon = true
                     continue
@@ -214,6 +215,7 @@ module.exports = {
                             destination: args.target.position.clone(),
                             range: distance - 2,
                             timeout: 1000,
+                            avoidOccupiedDestinations: false,
                         })
                         reequipMeleeWeapon = true
                         continue

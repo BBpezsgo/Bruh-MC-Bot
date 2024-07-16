@@ -1,6 +1,7 @@
 const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
+const { Vec3 } = require('vec3')
 
 /**
  * @type {import('../task').TaskDef<number, { farmPosition?: Vec3 }>}
@@ -17,7 +18,7 @@ module.exports = {
         while (bonemeal) {
             yield
 
-            const farmPosition = this.farmPosition ?? bot.bot.entity.position.clone()
+            const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
 
             let crops = bot.env.getCrops(bot, farmPosition, false)
 
@@ -35,6 +36,7 @@ module.exports = {
                 yield* goto.task(bot, {
                     destination: crop.clone(),
                     range: 3,
+                    avoidOccupiedDestinations: true,
                 })
                 
                 bonemeal = bot.searchItem('bonemeal')

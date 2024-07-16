@@ -210,6 +210,7 @@ module.exports = {
         yield* goto.task(bot, {
             destination: furnaceBlock.position.clone(),
             range: 2,
+            avoidOccupiedDestinations: true,
         })
 
         if (!furnaceBlock) {

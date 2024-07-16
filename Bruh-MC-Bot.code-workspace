@@ -5,15 +5,6 @@
 		},
 		{
 			"path": "../mineflayer-pathfinder"
-		},
-		{
-			"path": "../mineflayer-web-inventory"
-		},
-		{
-			"path": "../prismarine-viewer"
-		},
-		{
-			"path": "../Minecraft-Resource-Pack-Converter"
 		}
 	],
 	"settings": {
@@ -23,6 +14,11 @@
 		},
 		"material-icon-theme.folders.associations": {
 			"worlds": "environment"
+		},
+		"bun.runtime": "~/.bun/bun",
+		"bun.debugTerminal": {
+			"enabled": true,
+			"stopOnEntry": false,
 		}
 	}
 }

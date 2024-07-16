@@ -80,19 +80,28 @@ module.exports = {
         } else if ('block' in args) {
             const dirt = bot.bot.blockAt(args.block)
 
-            const above = bot.bot.blockAt(args.block.offset(0, 1, 0))
-            if (above &&
-                !MC.replaceableBlocks[above.name ?? '']) {
+            let above = bot.bot.blockAt(args.block.offset(0, 1, 0))
+
+            while (above && MC.replaceableBlocks[above.name] === 'break') {
+                if (!bot.env.allocateBlock(bot.bot.username, above.position, 'dig')) {
+                    console.log(`[Bot "${bot.bot.username}"]: Block will be digged by someone else, waiting ...`)
+                    yield* bot.env.waitUntilBlockIs(above.position, 'dig')
+                    above = bot.bot.blockAt(args.block.offset(0, 1, 0))
+                    continue
+                }
+            }
+
+            if (above && !MC.replaceableBlocks[above.name]) {
                 throw `Can't break ${above.name ?? 'null'}`
             }
 
             yield* goto.task(bot, {
                 destination: args.block.clone(),
                 range: 3,
+                avoidOccupiedDestinations: true,
             })
 
-            if (above &&
-                MC.replaceableBlocks[above.name] === 'break') {
+            if (above && MC.replaceableBlocks[above.name] === 'break') {
                 yield* wrap(bot.bot.dig(above, true))
             }
 
@@ -151,6 +160,7 @@ module.exports = {
                 yield* goto.task(bot, {
                     destination: dirt.clone(),
                     range: 3,
+                    avoidOccupiedDestinations: true,
                 })
 
                 if (MC.replaceableBlocks[above.name] === 'break') {

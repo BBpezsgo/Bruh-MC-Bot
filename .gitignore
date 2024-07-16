@@ -2,6 +2,6 @@
 /config.js
 /worlds
 /package-lock.json
-/src/tasks-old
+/bun.lockb
 
 **/*.code-workspace

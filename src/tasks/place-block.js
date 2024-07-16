@@ -48,8 +48,15 @@ module.exports = {
             throw `Couldn't find a place to place the block`
         }
     
-        const above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
-        if (MC.replaceableBlocks[above.name] === 'break') {
+        let above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
+        while (above && MC.replaceableBlocks[above.name] === 'break') {
+            if (!bot.env.allocateBlock(bot.bot.username, above.position, 'dig')) {
+                console.log(`[Bot "${bot.bot.username}"]: Block will be digged by someone else, waiting ...`)
+                yield* bot.env.waitUntilBlockIs(above.position, 'dig')
+                above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
+                continue
+            }
+
             if (!args.clearGrass) {
                 throw `Can't replant this: block above it is "${above.name}" and I'm not allowed to clear grass`
             }
@@ -58,6 +65,7 @@ module.exports = {
                 // block: above.position.clone(),
                 destination: above.position.clone(),
                 range: 3,
+                avoidOccupiedDestinations: true,
             })
     
             yield* wrap(bot.bot.dig(above))
@@ -66,6 +74,7 @@ module.exports = {
         yield* goto.task(bot, {
             destination: target.clone(),
             range: 2,
+            avoidOccupiedDestinations: true,
         })
 
         yield* wrap(bot.bot.equip(args.item, 'hand'))

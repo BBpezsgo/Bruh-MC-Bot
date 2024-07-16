@@ -25,65 +25,70 @@ module.exports = {
         while (current) {
             yield
 
-            console.log(`[Bot "${bot.bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
-        
-            /** @type {{ has: boolean; item: getMcData.Item; } | null} */
-            let tool = null
-        
-            if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                console.log(`[Bot "${bot.bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
-        
-                tool = bot.mc.getCorrectTool(current, bot.bot)
-        
-                if (!tool) {
-                    throw `I don't know any tool that can dig ${current.displayName}`
+            if (bot.env.allocateBlock(bot.bot.username, current.position, 'dig')) {
+                console.log(`[Bot "${bot.bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
+            
+                /** @type {{ has: boolean; item: getMcData.Item; } | null} */
+                let tool = null
+            
+                if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
+                    console.log(`[Bot "${bot.bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
+            
+                    tool = bot.mc.getCorrectTool(current, bot.bot)
+            
+                    if (!tool) {
+                        throw `I don't know any tool that can dig ${current.displayName}`
+                    }
+            
+                    if (!tool.has &&
+                        !current.canHarvest(null)) {
+                        // if (this.gatherTool) {
+                        //     console.log(`[Bot "${bot.bot.username}"] Gathering ${tool.item.displayName} ...`)
+                        //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
+                        //     if ('error' in toolGathered) return error(toolGathered.error)
+                        // } else {
+                        //     bot.bot.chat(`I don't have a ${tool.item.displayName} to dig ${this.block.displayName} Should I try to get this tool?`)
+                        //     const res = await bot.awaitYesNoResponse(10000)
+                        //     if (!res) {
+                        //         return error(`Response timed out`)
+                        //     }
+                        //     if (!res.message) {
+                        //         return error(`Don't gather ${tool.item.displayName}`)
+                        //     }
+                        // 
+                        //     bot.bot.chat(`Okay, gathering ${tool.item.displayName}`)
+                        //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
+                        //     if ('error' in toolGathered) return error(toolGathered.error)
+                        // }
+                        throw 'No tool'
+                    }
                 }
-        
-                if (!tool.has &&
-                    !current.canHarvest(null)) {
-                    // if (this.gatherTool) {
-                    //     console.log(`[Bot "${bot.bot.username}"] Gathering ${tool.item.displayName} ...`)
-                    //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
-                    //     if ('error' in toolGathered) return error(toolGathered.error)
-                    // } else {
-                    //     bot.bot.chat(`I don't have a ${tool.item.displayName} to dig ${this.block.displayName} Should I try to get this tool?`)
-                    //     const res = await bot.awaitYesNoResponse(10000)
-                    //     if (!res) {
-                    //         return error(`Response timed out`)
-                    //     }
-                    //     if (!res.message) {
-                    //         return error(`Don't gather ${tool.item.displayName}`)
-                    //     }
-                    // 
-                    //     bot.bot.chat(`Okay, gathering ${tool.item.displayName}`)
-                    //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
-                    //     if ('error' in toolGathered) return error(toolGathered.error)
-                    // }
-                    throw 'No tool'
+            
+                console.log(`[Bot "${bot.bot.username}"] Tool:`, tool)
+    
+                console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
+                yield* goto.task(bot, {
+                    // block: current.position.clone(),
+                    destination: current.position.clone(),
+                    range: 3,
+                    avoidOccupiedDestinations: true,
+                })
+            
+                if (tool.has) {
+                    console.log(`[Bot "${bot.bot.username}"] Equiping "${tool.item.displayName}" ...`)
+                    yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
                 }
+            
+                if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
+                    throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
+                }
+    
+                console.log(`[Bot "${bot.bot.username}"] Digging ...`)
+                yield* wrap(bot.bot.dig(current))
+                digged.push(current.position.clone())
+            } else {
+                console.log(`[Bot "${bot.bot.username}"] Block will be digged by someone else, skipping`)
             }
-        
-            console.log(`[Bot "${bot.bot.username}"] Tool:`, tool)
-
-            console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
-            yield* goto.task(bot, {
-                // block: current.position.clone(),
-                destination: current.position.clone(),
-                range: 3,
-            })
-        
-            if (tool.has) {
-                console.log(`[Bot "${bot.bot.username}"] Equiping "${tool.item.displayName}" ...`)
-                yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
-            }
-        
-            if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
-            }
-
-            console.log(`[Bot "${bot.bot.username}"] Digging ...`)
-            yield* wrap(bot.bot.dig(current))
-            digged.push(current.position.clone())
 
             if (args.alsoTheNeighbours) {
                 current = bot.bot.findBlock({
@@ -114,6 +119,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         destination: nearestEntity.position.clone(),
                         range: .5,
+                        avoidOccupiedDestinations: true,
                     })
                     
                     console.log(`[Bot "${bot.bot.username}"] Waiting 500 ms ...`)

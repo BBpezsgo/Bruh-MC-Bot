@@ -339,6 +339,7 @@ function* evaluatePlan(bot, plan) {
                     yield* goto.task(bot, {
                         destination: step.destination,
                         range: step.distance,
+                        avoidOccupiedDestinations: true,
                     })
                     continue
                 }
@@ -346,6 +347,7 @@ function* evaluatePlan(bot, plan) {
                     yield* goto.task(bot, {
                         destination: step.chest.clone(),
                         range: 2,
+                        avoidOccupiedDestinations: true,
                     })
                     const chestBlock = bot.bot.blockAt(step.chest)
                     if (!chestBlock || chestBlock.name !== 'chest') {
@@ -397,6 +399,7 @@ function* evaluatePlan(bot, plan) {
                         yield* goto.task(bot, {
                             destination: tableBlock.position.clone(),
                             range: 2,
+                            avoidOccupiedDestinations: true,
                         })
                         yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
                     } else {

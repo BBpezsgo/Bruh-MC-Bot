@@ -14,6 +14,7 @@ const { Vec3 } = require('vec3')
  * @exports @typedef {GeneralArgs & {
  *   destination: Vec3;
  *   range: number;
+ *   avoidOccupiedDestinations: boolean;
  * }} GotoArgs
  */
 
@@ -66,6 +67,26 @@ module.exports = {
         }
         bot.bot.pathfinder.tickTimeout = 10
         if ('destination' in args) {
+            if (args.avoidOccupiedDestinations &&
+                bot.env.isDestinationOccupied(bot.bot.username, args.destination)) {
+                let found = false
+                for (let d = 1; d < 3; d++) {
+                    if (found) { break }
+                    for (let x = -1; x < 1; x++) {
+                        if (found) { break }
+                        for (let z = -1; z < 1; z++) {
+                            if (found) { break }
+                            const currentDestination = args.destination.offset(x * d, 0, z * d)
+                            if (bot.env.isDestinationOccupied(bot.bot.username, currentDestination)) {
+                                continue
+                            }
+                            args.destination = currentDestination
+                            found = true
+                            break
+                        }
+                    }
+                }
+            }
             return wrap(bot.bot.pathfinder.goto(new goals.GoalNear(args.destination.x, args.destination.y, args.destination.z, args.range ?? 2)))
         } else if ('block' in args) {
             return wrap(bot.bot.pathfinder.goto(new goals.GoalLookAtBlock(args.block.clone(), bot.bot.world, {

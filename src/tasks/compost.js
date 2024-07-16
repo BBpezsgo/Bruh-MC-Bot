@@ -80,6 +80,7 @@ module.exports = {
             yield* goto.task(bot, {
                 destination: composter.position.clone(),
                 range: 2,
+                avoidOccupiedDestinations: true,
             })
     
             composter = bot.bot.blockAt(composter.position)

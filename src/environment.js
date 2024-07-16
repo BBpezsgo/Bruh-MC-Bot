@@ -9,6 +9,7 @@ const { Item } = require("prismarine-item")
 const MC = require("./mc")
 const goto = require("./tasks/goto")
 const { Chest } = require("mineflayer")
+const { goals } = require("mineflayer-pathfinder")
 
 /**
  * @typedef {{
@@ -16,6 +17,24 @@ const { Chest } = require("mineflayer")
  *   content: Record<string, number>;
  *   myItems: Record<string, number>;
  * }} SavedChest
+ */
+
+/**
+ * @typedef {{
+ *   bot: string;
+ *   allocatedAt: number;
+ * } & ({
+ *   type: 'dig';
+ * } | {
+ *   type: 'place';
+ *   item: number;
+ * } | {
+ *   type: 'hoe';
+ * })} AllocatedBlock
+ */
+
+/**
+ * @typedef {`${number}-${number}-${number}`} PositionHash
  */
 
 // @ts-ignore
@@ -34,7 +53,7 @@ module.exports = class Environment {
 
     /**
      * @private @readonly
-     * @type {{ [username: string]: { time: number; position: Vec3; } }}
+     * @type {Record<string, { time: number; position: Vec3; }>}
      */
     playerPositions
 
@@ -46,7 +65,7 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {{ [entityId: number]: number }}
+     * @type {Record<number, number>}
      */
     entitySpawnTimes
 
@@ -58,15 +77,21 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {{ [entityId: number]: number }}
+     * @type {Record<number, number>}
      */
     entityHurtTimes
 
     /**
-     * @private
-     * @type {boolean}
+     * @readonly
+     * @type {Record<PositionHash, AllocatedBlock>}
      */
-    shouldSave
+    allocatedBlocks
+
+    /**
+     * @private
+     * @type {NodeJS.Timeout}
+     */
+    saveInterval
 
     /**
      * @param {string} filePath
@@ -80,7 +105,7 @@ module.exports = class Environment {
         this.playerPositions = {}
         this.entityHurtTimes = {}
         this.entitySpawnTimes = {}
-        this.shouldSave = true
+        this.allocatedBlocks = { }
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment]: File not found at "${this.filePath}"`)
@@ -91,13 +116,6 @@ module.exports = class Environment {
         this.crops = data.crops ?? this.crops
         this.chests = data.chests ?? this.chests
         console.log(`[Environment]: Loaded`)
-
-        setInterval(() => {
-            if (this.shouldSave) {
-                this.save()
-            }
-            this.shouldSave = this.bots.length > 0
-        }, 10000)
     }
 
     /**
@@ -118,36 +136,50 @@ module.exports = class Environment {
         const isPlace = (!oldBlock || oldBlock.name === 'air')
         const isBreak = (!newBlock || newBlock.name === 'air')
         if (isPlace && isBreak) { return }
-        if (isPlace && MC.cropBlocks.includes(newBlock?.name)) {
-            let isSaved = false
-            for (const crop of this.crops) {
-                if (crop.position.equals(newBlock.position)) {
-                    crop.block = newBlock.type
-                    isSaved = true
-                    break
+
+        /**
+         * @type {PositionHash}
+         */
+        const hash = `${newBlock.position.x}-${newBlock.position.y}-${newBlock.position.z}`
+        if (this.allocatedBlocks[hash]) {
+            delete this.allocatedBlocks[hash]
+        }
+
+        if (isPlace) {
+            if (MC.cropBlocks.includes(newBlock?.name)) {
+                let isSaved = false
+                for (const crop of this.crops) {
+                    if (crop.position.equals(newBlock.position)) {
+                        crop.block = newBlock.type
+                        isSaved = true
+                        break
+                    }
                 }
-            }
-            if (!isSaved) {
-                this.crops.push({
-                    position: newBlock.position.clone(),
-                    block: newBlock.type,
-                })
+                if (!isSaved) {
+                    this.crops.push({
+                        position: newBlock.position.clone(),
+                        block: newBlock.type,
+                    })
+                }
             }
         }
-        if (isBreak && MC.cropBlocks.includes(oldBlock?.name)) {
-            let isSaved = false
-            for (const crop of this.crops) {
-                if (crop.position.equals(oldBlock.position)) {
-                    crop.block = oldBlock.type
-                    isSaved = true
-                    break
+
+        if (isBreak) {
+            if (MC.cropBlocks.includes(oldBlock?.name)) {
+                let isSaved = false
+                for (const crop of this.crops) {
+                    if (crop.position.equals(oldBlock.position)) {
+                        crop.block = oldBlock.type
+                        isSaved = true
+                        break
+                    }
                 }
-            }
-            if (!isSaved) {
-                this.crops.push({
-                    position: oldBlock.position.clone(),
-                    block: oldBlock.type,
-                })
+                if (!isSaved) {
+                    this.crops.push({
+                        position: oldBlock.position.clone(),
+                        block: oldBlock.type,
+                    })
+                }
             }
         }
     }
@@ -174,6 +206,16 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      */
     addBot(bot) {
+        if (!this.saveInterval) {
+            this.saveInterval = setInterval(() => {
+                this.save()
+                if (this.bots.length === 0) {
+                    clearInterval(this.saveInterval)
+                    this.saveInterval = null
+                }
+            }, 10000)
+        }
+
         bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player))
         bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock))
         bot.bot.on('entityDead', (entity) => this.__entityDead(entity))
@@ -190,6 +232,14 @@ module.exports = class Environment {
             this.bots.splice(i, 1)
         } else {
             console.warn(`[Environment]: Failed to remove ${bot.bot.username}`)
+        }
+
+        if (this.bots.length === 0) {
+            if (this.saveInterval) {
+                clearInterval(this.saveInterval)
+                this.saveInterval = null
+            }
+            this.save()
         }
     }
 
@@ -226,6 +276,7 @@ module.exports = class Environment {
                 yield* goto.task(bot, {
                     destination: chestPosition.clone(),
                     range: 2,
+                    avoidOccupiedDestinations: true,
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -642,5 +693,130 @@ module.exports = class Environment {
             pos.position.y = position.y
             pos.position.z = position.z
         }
+    }
+
+    /**
+     * @overload
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'dig'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */ /**
+     * @overload
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'place'} type
+     * @param {{ item: number; }} args
+     * @returns {boolean}
+     */ /**
+     * @overload
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'hoe'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */ /**
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'dig' | 'place' | 'hoe'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */
+    allocateBlock(bot, position, type, args) {
+        /**
+         * @type {PositionHash}
+         */
+        const hash = `${position.x}-${position.y}-${position.z}`
+        if (this.allocatedBlocks[hash] &&
+            this.allocatedBlocks[hash].bot !== bot) {
+            return false
+        }
+        this.allocatedBlocks[hash] = {
+            bot: bot,
+            allocatedAt: performance.now(),
+            type: type,
+            ...args,
+        }
+        return true
+    }
+
+    /**
+     * @param {Vec3} blockPosition
+     * @returns {AllocatedBlock | null}
+     */
+    getAllocatedBlock(blockPosition) {
+        /**
+         * @type {PositionHash}
+         */
+        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}`
+        return this.allocatedBlocks[hash] ?? null
+    }
+
+    /**
+     * @param {Vec3} blockPosition
+     * @param {AllocatedBlock['type']} waitFor
+     * @returns {import("./task").Task<boolean>}
+     */
+    *waitUntilBlockIs(blockPosition, waitFor) {
+          /**
+         * @type {PositionHash}
+         */
+        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}`
+        if (!this.allocatedBlocks[hash]) {
+            return false
+        }
+        if (this.allocatedBlocks[hash].type !== waitFor) {
+            return false
+        }
+        const allocatedBlock = this.allocatedBlocks[hash]
+        while (this.allocatedBlocks[hash]) {
+            yield* sleepG(100)
+        }
+        let blockAt = null
+        for (const bot of this.bots) {
+            blockAt = bot.bot.blockAt(blockPosition)
+            if (blockAt) { break }
+        }
+        if (!blockAt) {
+            return true
+        }
+        switch (waitFor) {
+            case 'dig':
+                if (blockAt.name === 'air') {
+                    return true
+                } else {
+                    return false
+                }
+            case 'hoe':
+                if (blockAt.name === 'farmland') {
+                    return true
+                } else {
+                    return false
+                }
+            case 'place':
+                return true
+            default:
+                return true
+        }
+    }
+
+    /**
+     * @param {string} bot
+     * @param {Vec3} point
+     */
+    isDestinationOccupied(bot, point) {
+        for (const other of this.bots) {
+            if (other.bot.username === bot) { continue }
+            const goal = other.bot.pathfinder.goal
+            if (!goal) { continue }
+            if (!goal.isValid()) { continue }
+            if (goal instanceof goals.GoalNear) {
+                if (point.distanceTo(new Vec3(goal.x, goal.y, goal.z)) < 1) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

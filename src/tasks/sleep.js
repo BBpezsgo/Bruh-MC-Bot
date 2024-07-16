@@ -39,6 +39,10 @@ function findMyBed(bot) {
         return null
     }
 
+    if (bot.bot.parseBedMetadata(block)?.occupied) {
+        return null
+    }
+
     return block
 }
 
@@ -88,6 +92,7 @@ module.exports = {
         yield* goto.task(bot, {
             destination: bed.position.clone(),
             range: 3,
+            avoidOccupiedDestinations: true,
         })
 
         yield* wrap(bot.bot.sleep(bed))

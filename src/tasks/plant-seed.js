@@ -20,10 +20,16 @@ function* plant(bot, placeOn, seedItem) {
         throw `Can't plant seed: block above it is "${above.name}"`
     }
 
+    if (!bot.env.allocateBlock(bot.bot.username, above.position.clone(), 'place', { item: seedItem.type })) {
+        console.log(`[Bot "${bot.bot.username}"] Seed will be planted by someone else, skipping ...`)
+        return
+    }
+
     console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
         destination: placeOn.position.clone(),
         range: 3,
+        avoidOccupiedDestinations: true,
     })
     
     console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equiping item`)
@@ -51,6 +57,7 @@ module.exports = {
         if (args.harvestedCrops) {
             for (const harvestedCrop of args.harvestedCrops) {
                 const seedId = bot.getCropSeed(harvestedCrop.block)
+                if (!seedId) { continue }
                 console.log(`[Bot "${bot.bot.username}"] Try plant "${harvestedCrop.block}" at ${harvestedCrop.position}`)
 
                 const seed = bot.bot.inventory.findInventoryItem(seedId, null, false)

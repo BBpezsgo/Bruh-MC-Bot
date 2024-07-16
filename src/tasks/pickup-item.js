@@ -38,6 +38,7 @@ module.exports = {
         yield* goto.task(bot, {
             destination: nearest.result.position.clone(),
             range: 0,
+            avoidOccupiedDestinations: true,
         })
     
         yield* sleepG(200)

@@ -87,8 +87,7 @@ module.exports = class BruhBot {
     mc
 
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {TaskManager}
      */
     tasks
@@ -137,29 +136,35 @@ module.exports = class BruhBot {
      */
     dumpTrashInterval
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {Interval}
      */
     saveInterval
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {Interval}
      */
     trySleepInterval
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {Interval}
      */
     checkQuietInterval
     /**
-     * @private
-     * @readonly
+     * @private @readonly
      * @type {Interval}
      */
     randomLookInterval
+    /**
+     * @private @readonly
+     * @type {Record<string, { startedLookingAt: number; endedLookingAt: number; }>}
+     */
+    lookAtPlayers
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    moveAwayInterval
     /**
      * @private @readonly
      * @type {Interval}
@@ -252,6 +257,8 @@ module.exports = class BruhBot {
         this.tryAutoHarvestInterval = new Interval(5000)
         this.checkQuietInterval = new Interval(500)
         this.randomLookInterval = new Interval(10000)
+        this.moveAwayInterval = new Interval(3000)
+        this.lookAtPlayers = { }
 
         // @ts-ignore
         this.permissiveMovements = null
@@ -431,6 +438,7 @@ module.exports = class BruhBot {
                         yield* goto.task(bot, {
                             destination: entity.position.clone(),
                             range: 1,
+                            avoidOccupiedDestinations: true,
                         })
                         yield* taskUtils.sleepG(1000)
                         if (entity.isValid) {
@@ -665,6 +673,22 @@ module.exports = class BruhBot {
                     !this.bot.pathfinder.goal
                 )
             ) {
+                if (this.moveAwayInterval.is()) {
+                    const roundedSelfPosition = this.bot.entity.position.clone().round()
+                    for (const playerName in this.bot.players) {
+                        if (playerName === this.bot.username) { continue }
+                        const playerEntity = this.bot.players[playerName].entity
+                        if (!playerEntity) { continue }
+                        if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
+                            this.tasks.push(this, goto, {
+                                flee: roundedSelfPosition,
+                                distance: 2,
+                            }, priorities.unnecessary)
+                            return
+                        }
+                    }
+                }
+
                 if (this.lookAtNearestPlayer()) {
                     this.randomLookInterval.restart()
                     return
@@ -692,6 +716,7 @@ module.exports = class BruhBot {
                 'value' in reason &&
                 reason.type === 'compound') {
                 console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason.value)
+                return
             }
             
             console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason)
@@ -766,16 +791,55 @@ module.exports = class BruhBot {
      * @private
      */
     lookAtNearestPlayer() {
-        const nearest = this.bot.nearestEntity(entity => (
-            entity.type === 'player' &&
-            entity.username !== this.bot.username
-        ))
-        if (!nearest) { return false }
+        /**
+         * @type {import('mineflayer').Player | null}
+         */
+        let selected = null
 
-        const distance = nearest.position.distanceTo(this.bot.entity.position)
-        if (distance > 5) { return false }
+        for (const playerUsername in this.bot.players) {
+            if (playerUsername === this.bot.username) { continue }
+            const player = this.bot.players[playerUsername]
 
-        const playerEye = nearest.position.offset(0, 1.6, 0)
+            if (!player.entity ||
+                this.bot.entity.position.distanceTo(player.entity.position) > 5) {
+                if (this.lookAtPlayers[playerUsername]) { delete this.lookAtPlayers[playerUsername] }
+                continue
+            }
+
+            if (!this.lookAtPlayers[playerUsername]) {
+                this.lookAtPlayers[playerUsername] = {
+                    startedLookingAt: performance.now(),
+                    endedLookingAt: 0,
+                }
+            } else {
+                const p = this.lookAtPlayers[playerUsername]
+                if (p.startedLookingAt) {
+                    if (performance.now() - p.startedLookingAt < 3000) {
+                        selected = this.bot.players[playerUsername]
+                        break
+                    } else if (!p.endedLookingAt) {
+                        p.endedLookingAt = performance.now()
+                        p.startedLookingAt = 0
+                        continue
+                    }
+                }
+                if (p.endedLookingAt) {
+                    if (performance.now() - p.endedLookingAt < 7000) {
+                        continue
+                    } else if (!p.startedLookingAt) {
+                        p.endedLookingAt = 0
+                        p.startedLookingAt = performance.now()
+                        selected = this.bot.players[playerUsername]
+                        break
+                    }
+                }
+                delete this.lookAtPlayers[playerUsername]
+            }
+        }
+
+        if (!selected) { return false }
+
+        const playerEye = selected.entity.position.offset(0, 1.6, 0)
 
         // const vec = rotationToVector(nearest.pitch, nearest.yaw)
         // 
@@ -1001,6 +1065,7 @@ module.exports = class BruhBot {
                     yield* goto.task(bot, {
                         destination: location.clone(),
                         range: 2,
+                        avoidOccupiedDestinations: true,
                     })
                 },
                 id: function (args) {

@@ -26,6 +26,7 @@ function* plant(bot, placeOn, sapling, clearGrass) {
             // block: placeOn.position.clone(),
             destination: above.position.clone(),
             range: 3,
+            avoidOccupiedDestinations: true,
         })
         console.log(`[Bot "${bot.bot.username}"] Planting ... Destroy grass`)
         yield* wrap(bot.bot.dig(above, true))
@@ -41,6 +42,7 @@ function* plant(bot, placeOn, sapling, clearGrass) {
     yield* goto.task(bot, {
         destination: placeOn.position.clone(),
         range: 2,
+        avoidOccupiedDestinations: true,
     })
     console.log(`[Bot "${bot.bot.username}"] Planting ... Equiping item`)
     yield* wrap(bot.bot.equip(sapling, 'hand'))

@@ -75,6 +75,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         destination: chestPosition.clone(),
                         range: 3,
+                        avoidOccupiedDestinations: true,
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
