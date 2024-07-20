@@ -3,36 +3,24 @@ const { sleepG } = require('../utils/tasks')
 const goto = require("./goto")
 
 /**
- * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: Vec3; minLifetime?: number; }>}
+ * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: Vec3; minLifetime?: number; items?: ReadonlyArray<number>; }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        let nearest = bot.env.getClosestItem(bot, null, args)
-    
-        // if ('error' in nearest) {
-        //     const nearestArrow = bot.env.getClosestArrow(bot)
-        //     if ('result' in nearestArrow) {
-        //         nearest = nearestArrow
-        //     }
-        // }
-    
-        if ('error' in nearest) {
-            const nearestXp = bot.env.getClosestXp(bot, args)
-            if ('result' in nearestXp) {
-                nearest = nearestXp
-            }
-        }
+        const nearest = bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.type) : null, args)
     
         if ('error' in nearest) {
             throw nearest.error
         }
     
         const item = nearest.result.getDroppedItem()
+
+        if (!item) {
+            throw `This aint an item`
+        }
         
-        if (item) {
-            if (bot.isInventoryFull(item.type)) {
-                throw `Inventory is full`
-            }
+        if (bot.isInventoryFull(item.type)) {
+            throw `Inventory is full`
         }
     
         yield* goto.task(bot, {
@@ -63,7 +51,7 @@ module.exports = {
         // }
     },
     id: function(args) {
-        return `pickup-item-${args.point}-${args.inAir}-${args.maxDistance}-${args.minLifetime}`
+        return `pickup-item-${(args.point ? `${Math.round(args.point.x)}-${Math.round(args.point.y)}-${Math.round(args.point.z)}` : 'null')}-${args.inAir}-${args.maxDistance}-${args.minLifetime}`
     },
     humanReadableId: function(args) {
         return `Picking up items`

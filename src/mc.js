@@ -9,6 +9,64 @@ const MinecraftData = require('./mc-data')
  */
 
 /**
+ * @typedef {'break' | 'activate'} HarvestMode
+ */
+
+/**
+ * @typedef {SimpleCrop | SeededCrop | BlockCrop | FruitCrop | Tree} AnyCrop
+ */
+
+/**
+ * @typedef {{
+ *   growsOnBlock: 'solid' | ReadonlyArray<string>;
+ *   growsOnSide: 'top' | 'bottom' | 'side';
+ *   canUseBonemeal: boolean;
+ * }} GeneralCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'simple';
+ *   seed: string;
+ *   grownAge: number;
+ * }} SimpleCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'seeded';
+ *   seed: string;
+ *   grownAge: number;
+ * }} SeededCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'grows_block';
+ *   seed: string;
+ *   grownBlock: string;
+ *   attachedCropName?: string;
+ * }} BlockCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'grows_fruit';
+ *   seed: string;
+ * }} FruitCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'tree';
+ *   sapling: string;
+ *   log: string;
+ *   size: 'small' | 'can-be-large' | 'always-large';
+ *   branches: 'never' | 'sometimes' | 'always';
+ * }} Tree
+ */
+
+/**
  * @typedef { 'wooden' | 'stone' | 'iron' | 'golden' | 'diamond' | 'netherite' } ToolLevel
  */
 
@@ -29,17 +87,17 @@ module.exports = class MC {
      * @readonly
      * @type {{ [block: string]: undefined | 'yes' | 'break' }}
      */
-    static replaceableBlocks = {
+    static replaceableBlocks = Object.freeze({
         'air': 'yes',
         'cave_air': 'yes',
         'short_grass': 'break',
         'tall_grass': 'break',
-    }
+    })
 
     /**
      * @readonly
      */
-    static tools = {
+    static tools = Object.freeze({
         sword: {
             wooden: 'wooden_sword',
             stone: 'stone_sword',
@@ -80,45 +138,293 @@ module.exports = class MC {
             diamond: 'diamond_hoe',
             netherite: 'netherite_hoe',
         },
-    }
+    })
 
     /**
      * @readonly
-     * @type {[ 'wooden', 'stone', 'iron', 'golden', 'diamond', 'netherite']}
+     * @type {readonly [ 'wooden', 'stone', 'iron', 'golden', 'diamond', 'netherite']}
      */
-    static toolLevels = [
+    static toolLevels = Object.freeze([
         'wooden',
         'stone',
         'iron',
         'golden',
         'diamond',
         'netherite',
-    ]
+    ])
 
     /**
      * @readonly
-     * @type {ReadonlyArray<string>}
      */
-    static cropBlocks = [
-        'potatoes',
-        'beetroots',
-        'wheat',
-        'carrots',
-        'melon_stem',
-        'pumpkin_stem',
-    ]
+    static soilBlocks = Object.freeze([
+        'grass_block',
+        'podzol',
+        'mycelium',
+        'coarse_dirt',
+        'dirt',
+        'farmland',
+        'rooted_dirt',
+        'mud',
+        'moss_block',
+        'muddy_mangrove_roots',
+    ])
 
     /**
      * @readonly
-     * @type {ReadonlyArray<number>}
+     * @type {Record<string, AnyCrop>}
      */
-    get simpleSeeds() {
-        return [
-            this.data.itemsByName['wheat_seeds'].id,
-            this.data.itemsByName['beetroot_seeds'].id,
-            this.data.itemsByName['carrot'].id,
-            this.data.itemsByName['potato'].id,
-        ]
+    static cropsByBlockName = {
+        'potatoes': {
+            type: 'simple',
+            seed: 'potato',
+            grownAge: 7,
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'beetroots': {
+            type: 'seeded',
+            seed: 'beetroot_seeds',
+            grownAge: 3,
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'wheat': {
+            type: 'seeded',
+            seed: 'wheat_seeds',
+            grownAge: 7,
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'carrots': {
+            type: 'simple',
+            seed: 'carrot',
+            grownAge: 7,
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'melon_stem': {
+            type: 'grows_block',
+            seed: 'melon_seeds',
+            grownBlock: 'melon',
+            attachedCropName: 'attached_melon_stem',
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'pumpkin_stem': {
+            type: 'grows_block',
+            seed: 'pumpkin_seeds',
+            grownBlock: 'pumpkin',
+            attachedCropName: 'attached_pumpkin_stem',
+            growsOnBlock: [ 'farmland' ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        // 'pitcher_crop': {
+        //     type: 'seeded',
+        //     seed: 'pitcher_pod',
+        // },
+        // 'torchflower_crop': {
+        //     type: 'seeded',
+        //     seed: 'torchflower_seeds',
+        // },
+        'sweet_berry_bush': {
+            type: 'grows_fruit',
+            seed: 'sweet_berries',
+            growsOnBlock: [
+                'grass_block',
+                'dirt',
+                'podzol',
+                'coarse_dirt',
+                'farmland',
+                'moss_block',
+            ],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+        },
+        'cocoa': {
+            type: 'simple',
+            seed: 'cocoa_beans',
+            grownAge: 2,
+            growsOnBlock: [
+                'jungle_log',
+                'jungle_wood',
+                'stripped_jungle_log',
+                'stripped_jungle_wood',
+            ],
+            growsOnSide: 'side',
+            canUseBonemeal: true,
+        },
+        'nether_wart': {
+            type: 'simple',
+            seed: 'nether_wart',
+            grownAge: 3,
+            growsOnBlock: [ 'soul_sand' ],
+            growsOnSide: 'top',
+            canUseBonemeal: false,
+        },
+        'cave_vines': {
+            type: 'grows_fruit',
+            seed: 'glow_berries',
+            growsOnBlock: 'solid',
+            growsOnSide: 'bottom',
+            canUseBonemeal: true,
+        },
+        'cave_vines_plant': {
+            type: 'grows_fruit',
+            seed: 'glow_berries',
+            growsOnBlock: 'solid',
+            growsOnSide: 'bottom',
+            canUseBonemeal: true,
+        },
+        'oak_sapling': {
+            type: 'tree',
+            sapling: 'oak_sapling',
+            log: 'oak_log',
+            size: 'small',
+            branches: 'sometimes',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'spruce_sapling': {
+            type: 'tree',
+            sapling: 'spruce_sapling',
+            log: 'spruce_log',
+            size: 'can-be-large',
+            branches: 'never',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'birch_sapling': {
+            type: 'tree',
+            sapling: 'birch_sapling',
+            log: 'birch_log',
+            size: 'small',
+            branches: 'never',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'jungle_sapling': {
+            type: 'tree',
+            sapling: 'jungle_sapling',
+            log: 'jungle_log',
+            size: 'can-be-large',
+            branches: 'never',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'acacia_sapling': {
+            type: 'tree',
+            sapling: 'acacia_sapling',
+            log: 'acacia_log',
+            size: 'small',
+            branches: 'always',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'dark_oak_sapling': {
+            type: 'tree',
+            sapling: 'dark_oak_sapling',
+            log: 'dark_oak_log',
+            size: 'always-large',
+            branches: 'never',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'mangrove_propagule': {
+            type: 'tree',
+            sapling: 'mangrove_propagule',
+            log: 'mangrove_log',
+            size: 'small',
+            branches: 'always',
+            canUseBonemeal: true,
+            growsOnBlock: [
+                ...MC.soilBlocks,
+                'clay',
+            ],
+            growsOnSide: 'top',
+        },
+        'cherry_sapling': {
+            type: 'tree',
+            sapling: 'cherry_sapling',
+            log: 'cherry_log',
+            size: 'small',
+            branches: 'always',
+            canUseBonemeal: true,
+            growsOnBlock: MC.soilBlocks,
+            growsOnSide: 'top',
+        },
+        'azalea': {
+            type: 'tree',
+            sapling: 'azalea',
+            log: 'oak_log',
+            size: 'small',
+            branches: 'always',
+            canUseBonemeal: true,
+            growsOnBlock: [
+                ...MC.soilBlocks,
+                'clay',
+            ],
+            growsOnSide: 'top',
+        },
+        'flowering_azalea': {
+            type: 'tree',
+            sapling: 'flowering_azalea',
+            log: 'oak_log',
+            size: 'small',
+            branches: 'always',
+            canUseBonemeal: true,
+            growsOnBlock: [
+                ...MC.soilBlocks,
+                'clay',
+            ],
+            growsOnSide: 'top',
+        },
+    }
+
+    /**
+     * @param {string} blockName
+     * @returns {(AnyCrop & { cropName: string }) | null}
+     */
+    static findCropByAnyBlockName(blockName) {
+        for (const cropBlockName in MC.cropsByBlockName) {
+            const crop = MC.cropsByBlockName[cropBlockName]
+            if (cropBlockName === blockName) {
+                return {
+                    ...crop,
+                    cropName: cropBlockName,
+                }
+            }
+            switch (crop.type) {
+                case 'tree':
+                    if (blockName === crop.log) {
+                        return {
+                            ...crop,
+                            cropName: cropBlockName,
+                        }
+                    }
+                    break
+                case 'grows_block':
+                    if (crop.attachedCropName && blockName === crop.attachedCropName) {
+                        return {
+                            ...crop,
+                            cropName: cropBlockName,
+                        }
+                    }
+                    break
+            }
+        }
+        return null
     }
 
     /**

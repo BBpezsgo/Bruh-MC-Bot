@@ -19,6 +19,9 @@
 		"bun.debugTerminal": {
 			"enabled": true,
 			"stopOnEntry": false,
+		},
+		"files.readonlyInclude": {
+			"node_modules/**": true
 		}
 	}
 }

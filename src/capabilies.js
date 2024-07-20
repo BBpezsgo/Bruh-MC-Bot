@@ -1,11 +1,11 @@
 module.exports = class Capabilies {
     /**
-     * @typedef {'move' | 'use-hand'} Capability
+     * @typedef {'move' | 'use-hand' | 'look'} Capability
      */
 
     /**
      * @private @readonly
-     * @type {{ [capability in Capability]: boolean }}
+     * @type {Record<Capability, boolean>}
      */
     capabilies
 
@@ -16,6 +16,7 @@ module.exports = class Capabilies {
         this.capabilies = {
             'move': true,
             'use-hand': true,
+            'look': true,
         }
     }
 

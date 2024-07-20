@@ -6,14 +6,14 @@ import * as viewer from 'prismarine-viewer'
 declare module 'mineflayer' {
     interface Bot {
         readonly collectBlock: collectblock.CollectBlock
-        readonly viewer: viewer.ViewerAPI
+        // readonly viewer: viewer.ViewerAPI
 		readonly pathfinder: Pathfinder
-        readonly webInventory: {
-            options: Options
-            isRunning: boolean
-            start?: () => Promise<void>
-            stop?: () => Promise<void>
-        }
+        // readonly webInventory: {
+        //     options: Options
+        //     isRunning: boolean
+        //     start?: () => Promise<void>
+        //     stop?: () => Promise<void>
+        // }
 		
 		parseBedMetadata(block: Block): {
 		    part: boolean;

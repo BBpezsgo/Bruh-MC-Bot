@@ -11,6 +11,12 @@ function* sleepG(ms) {
 }
 
 /**
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
+
+/**
  * @template T
  * @param {Promise<T>} task
  * @param {number} ms
@@ -55,6 +61,26 @@ function* wrap(promise) {
 }
 
 /**
+ * @template {string} TEvent
+ * @param {TEvent} event
+ * @param {{ once: (event: TEvent, callback: (...args: any[]) => void) => void }} emitter
+ * @returns {import('../task').Task<Array<any>>}
+ */
+function* waitForEvent(emitter, event) {
+    let emitted = false
+    let args = null
+    // @ts-ignore
+    emitter.once(event, (..._args) => {
+        emitted = true
+        args = _args
+    })
+    while (!emitted) {
+        yield
+    }
+    return args
+}
+
+/**
  * @template T
  * @param {T} result
  * @returns {Generator<void, T, void>}
@@ -65,7 +91,9 @@ function* finished(result) {
 
 module.exports = {
     sleepG,
+    sleep,
     timeout,
     wrap,
     finished,
+    waitForEvent,
 }

@@ -3,7 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require("./serializing")
 const { wrap, sleepG } = require("./utils/tasks")
-const { filterHostiles } = require("./utils/other")
+const { filterHostiles, directBlockNeighbours } = require("./utils/other")
 const { Block } = require("prismarine-block")
 const { Item } = require("prismarine-item")
 const MC = require("./mc")
@@ -17,6 +17,13 @@ const { goals } = require("mineflayer-pathfinder")
  *   content: Record<string, number>;
  *   myItems: Record<string, number>;
  * }} SavedChest
+ */
+
+/**
+ * @typedef {{
+ *   position: Vec3;
+ *   block: string;
+ * }} SavedCrop
  */
 
 /**
@@ -71,7 +78,7 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {Array<{ position: Vec3; block: number; }>}
+     * @type {Array<SavedCrop>}
      */
     crops
 
@@ -145,12 +152,12 @@ module.exports = class Environment {
             delete this.allocatedBlocks[hash]
         }
 
-        if (isPlace) {
-            if (MC.cropBlocks.includes(newBlock?.name)) {
+        if (isPlace && newBlock) {
+            if (newBlock.name in MC.cropsByBlockName) {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(newBlock.position)) {
-                        crop.block = newBlock.type
+                        crop.block = newBlock.name
                         isSaved = true
                         break
                     }
@@ -158,18 +165,18 @@ module.exports = class Environment {
                 if (!isSaved) {
                     this.crops.push({
                         position: newBlock.position.clone(),
-                        block: newBlock.type,
+                        block: newBlock.name,
                     })
                 }
             }
         }
 
         if (isBreak) {
-            if (MC.cropBlocks.includes(oldBlock?.name)) {
+            if (oldBlock && oldBlock.name in MC.cropsByBlockName) {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(oldBlock.position)) {
-                        crop.block = oldBlock.type
+                        crop.block = oldBlock.name
                         isSaved = true
                         break
                     }
@@ -177,7 +184,7 @@ module.exports = class Environment {
                 if (!isSaved) {
                     this.crops.push({
                         position: oldBlock.position.clone(),
-                        block: oldBlock.type,
+                        block: oldBlock.name,
                     })
                 }
             }
@@ -422,47 +429,62 @@ module.exports = class Environment {
 
     /**
      * @param {import('./bruh-bot')} bot
-     * @param {Vec3} point
-     * @returns {Block | null}
+     * @param {Vec3} plantPosition
+     * @param {import("./mc").AnyCrop} plant
+     * @param {boolean} exactPosition
+     * @param {boolean} exactBlock
+     * @returns {{ block: Block; faceVector: Vec3; isExactPosition: boolean; isExactBlock: boolean; } | null}
      */
-    getPlantableBlock(bot, point) {
-        return bot.bot.findBlock({
-            matching: [
-                bot.mc.data.blocksByName['grass_block'].id,
+    getPlantableBlock(bot, plantPosition, plant, exactPosition, exactBlock) {
+        if (plant.growsOnBlock === 'solid') {
+            // TODO: this
+            return null
+        }
+        const growsOnBlock = plant.growsOnBlock.map(v => bot.mc.data.blocksByName[v].id)
+        if (!exactBlock && plant.growsOnBlock.includes('farmland')) {
+            const hoeableBlocks = [
                 bot.mc.data.blocksByName['dirt'].id,
-            ],
-            point: point,
-            maxDistance: 5,
+                bot.mc.data.blocksByName['grass_block'].id,
+                bot.mc.data.blocksByName['dirt_path'].id,
+            ]
+            for (const hoeableBlock of hoeableBlocks) {
+                if (!growsOnBlock.includes(hoeableBlock)) {
+                    growsOnBlock.push(hoeableBlock)
+                }
+            }
+        }
+        const bestBlock = bot.bot.findBlock({
+            matching: growsOnBlock,
+            point: plantPosition,
+            maxDistance: exactPosition ? 1 : 10,
             useExtraInfo: (/** @type {Block} */ block) => {
-                const above = bot.bot.blockAt(block.position.offset(0, 1, 0))?.name
-                return (
-                    above === 'air' ||
-                    above === 'short_grass' ||
-                    above === 'tall_grass'
-                )
+                const neighbours = directBlockNeighbours(block.position, plant.growsOnSide)
+                for (const neighbour of neighbours) {
+                    const neighbourBlock = bot.bot.blockAt(neighbour)
+                    if (MC.replaceableBlocks[neighbourBlock.name] !== 'yes') { continue }
+                    return true
+                }
+                return false
             },
         })
-    }
-
-    /**
-     * @param {import('./bruh-bot')} bot
-     * @param {Vec3} point
-     * @returns {Block | null}
-     */
-    getFreeFarmland(bot, point) {
-        return bot.bot.findBlock({
-            matching: [
-                bot.mc.data.blocksByName['farmland'].id,
-            ],
-            point: point,
-            maxDistance: 10,
-            useExtraInfo: (/** @type {Block} */ block) => {
-                const above = bot.bot.blockAt(block.position.offset(0, 1, 0)).name
-                return (
-                    above === 'air'
-                )
-            },
-        })
+        if (!bestBlock) {
+            return null
+        }
+        if (!growsOnBlock.includes(bestBlock.type)) {
+            return null
+        }
+        const neighbours = directBlockNeighbours(bestBlock.position, plant.growsOnSide)
+        for (const neighbour of neighbours) {
+            const neighbourBlock = bot.bot.blockAt(neighbour)
+            if (MC.replaceableBlocks[neighbourBlock.name] !== 'yes') { continue }
+            return {
+                block: bestBlock,
+                faceVector: neighbour.offset(-bestBlock.position.x, -bestBlock.position.y, -bestBlock.position.z),
+                isExactPosition: exactPosition,
+                isExactBlock: plant.growsOnBlock.includes(bestBlock.name),
+            }
+        }
+        return null
     }
 
     /**
@@ -472,55 +494,91 @@ module.exports = class Environment {
      * @returns {Array<Vec3>}
      */
     getCrops(bot, farmPosition, grown) {
+        const cropBlockIds = [ ]
+        for (const cropName in MC.cropsByBlockName) {
+            const crop = MC.cropsByBlockName[cropName]
+            switch (crop.type) {
+                case 'tree':
+                    cropBlockIds.push(bot.mc.data.blocksByName[crop.log].id)
+                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
+                    break
+                case 'grows_block':
+                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
+                    if (crop.attachedCropName) {
+                        cropBlockIds.push(bot.mc.data.blocksByName[crop.attachedCropName].id)
+                    }
+                    break
+                default:
+                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
+                    break
+            }
+        }
         return bot.bot.findBlocks({
-            matching: [
-                bot.mc.data.blocksByName['wheat'].id,
-                bot.mc.data.blocksByName['carrots'].id,
-                bot.mc.data.blocksByName['beetroots'].id,
-                bot.mc.data.blocksByName['potatoes'].id,
-                bot.mc.data.blocksByName['melon'].id,
-                bot.mc.data.blocksByName['pumpkin'].id,
-            ],
+            matching: cropBlockIds,
             useExtraInfo: (/** @type {Block} */ block) => {
-                /** @type {number | null | undefined} */
-                let goodAge = undefined
-                switch (block.name) {
-                    case 'wheat':
-                    case 'carrots':
-                    case 'potatoes':
-                        goodAge = 7
+                /** @type {boolean} */
+                let isGrown = false
+                const cropInfo = MC.findCropByAnyBlockName(block.name)
+                if (!cropInfo) {
+                    console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
+                    return false
+                }
+                switch (cropInfo.type) {
+                    case 'seeded':
+                    case 'simple': {
+                        const age = block.getProperties()?.['age']
+                        if (typeof age !== 'number') { return false }
+                        isGrown = age >= cropInfo.grownAge
                         break
-
-                    case 'beetroots':
-                        goodAge = 3
+                    }
+                    case 'grows_block': {
+                        let fruitBlock = null
+                        for (const neighbour of directBlockNeighbours(block.position, 'side')) {
+                            const neighbourBlock = bot.bot.blockAt(neighbour)
+                            if (neighbourBlock && neighbourBlock.name === cropInfo.grownBlock) {
+                                fruitBlock = neighbourBlock
+                                break
+                            }
+                        }
+                        isGrown = !!fruitBlock
                         break
-
-                    case 'melon':
-                    case 'pumpkin':
-                        goodAge = null
+                    }
+                    case 'grows_fruit': {
+                        switch (block.name) {
+                            case 'cave_vines':
+                            case 'cave_vines_plant':
+                                const berries = block.getProperties()?.['berries']
+                                if (typeof berries !== 'boolean') { return false }
+                                isGrown = berries
+                                break
+                            case 'sweet_berry_bush':
+                                const age = block.getProperties()?.['age']
+                                if (typeof age !== 'number') { return false }
+                                isGrown = age >= 3
+                                break
+                            default:
+                                console.warn(`Unimplemented fruit crop "${block.name}"`)
+                                return false
+                        }
                         break
-
-                    default:
+                    }
+                    case 'tree': {
+                        if (!this.crops.find(v => v.position.equals(block.position))) {
+                            return false
+                        }
+                        if (block.name === cropInfo.log) {
+                            isGrown = true
+                        } else {
+                            isGrown = false
+                        }
+                        break
+                    }
+                    default: {
                         return false
+                    }
                 }
 
-                if (goodAge) {
-                    const age = block.getProperties()['age']
-                    if (!age) { return false }
-                    if (typeof age !== 'number') { return false }
-
-                    if (grown) {
-                        return age >= goodAge
-                    } else {
-                        return age < goodAge
-                    }
-                } else {
-                    if (grown) {
-                        return true
-                    } else {
-                        return false
-                    }
-                }
+                return grown === isGrown
             },
             point: farmPosition,
         })
@@ -535,6 +593,7 @@ module.exports = class Environment {
      *   point?: Vec3;
      *   evenIfFull?: boolean;
      *   minLifetime?: number;
+     *   items?: ReadonlyArray<number>; 
      * }} args
      * @returns {import('./result').Result<import("prismarine-entity").Entity>}
      */
@@ -759,7 +818,7 @@ module.exports = class Environment {
      * @returns {import("./task").Task<boolean>}
      */
     *waitUntilBlockIs(blockPosition, waitFor) {
-          /**
+        /**
          * @type {PositionHash}
          */
         const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}`
@@ -804,6 +863,7 @@ module.exports = class Environment {
     /**
      * @param {string} bot
      * @param {Vec3} point
+     * @returns {boolean}
      */
     isDestinationOccupied(bot, point) {
         for (const other of this.bots) {

@@ -301,6 +301,11 @@ module.exports = {
                     continue
                 }
             }
+
+            if (distance > distanceToUseRangeWeapons && !bot.searchRangeWeapon()) {
+                console.log(`[Bot "${bot.bot.username}"]: Target too far away, stop attacking it`)
+                break
+            }
     
             if (args.target && args.target.isValid) {
                 startMoving()

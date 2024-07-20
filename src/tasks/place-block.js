@@ -58,7 +58,7 @@ module.exports = {
             }
 
             if (!args.clearGrass) {
-                throw `Can't replant this: block above it is "${above.name}" and I'm not allowed to clear grass`
+                throw `Can't replant this: block above is "${above.name}" and I'm not allowed to clear grass`
             }
 
             yield* goto.task(bot, {

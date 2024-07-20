@@ -3,21 +3,23 @@ const { wrap } = require('../utils/tasks')
 const { Block } = require('prismarine-block')
 const goto = require('./goto')
 const hoeing = require('./hoeing')
+const MC = require('../mc')
 
 /**
  * @param {import('../bruh-bot')} bot
  * @param {Block} placeOn
+ * @param {Vec3} placeVector
  * @param {import("prismarine-item").Item} seedItem
  */
-function* plant(bot, placeOn, seedItem) {
-    const above = bot.bot.blockAt(placeOn.position.offset(0, 1, 0))
+function* plant(bot, placeOn, placeVector, seedItem) {
+    const above = bot.bot.blockAt(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
 
     if (bot.quietMode) {
         throw `Can't plant in quiet mode`
     }
 
     if (above.name !== 'air') {
-        throw `Can't plant seed: block above it is "${above.name}"`
+        throw `Can't plant seed: block above is "${above.name}"`
     }
 
     if (!bot.env.allocateBlock(bot.bot.username, above.position.clone(), 'place', { item: seedItem.type })) {
@@ -37,16 +39,18 @@ function* plant(bot, placeOn, seedItem) {
 
     if (bot.bot.heldItem) {
         console.log(`[Bot "${bot.bot.username}"] Planting seed ... Place block`)
-        yield* wrap(bot.bot.placeBlock(placeOn, new Vec3(0, 1, 0)))
+        yield* wrap(bot.bot.placeBlock(placeOn, placeVector))
     }
 }
 
 /**
  * @type {import('../task').TaskDef<number, {
- *   seedItems?: ReadonlyArray<number>;
- *   harvestedCrops?: ReadonlyArray<{ position: Vec3; block: number; }>;
  *   fallbackToNear?: boolean;
- * }> & {
+ * } & ({
+ *   harvestedCrops: ReadonlyArray<import('../environment').SavedCrop>;
+ * } | {
+ *   seedItems: ReadonlyArray<number>;
+ * })> & {
  *   plant: plant;
  * }}
  */
@@ -54,92 +58,93 @@ module.exports = {
     task: function*(bot, args) {
         let palntedCount = 0
 
-        if (args.harvestedCrops) {
-            for (const harvestedCrop of args.harvestedCrops) {
-                const seedId = bot.getCropSeed(harvestedCrop.block)
-                if (!seedId) { continue }
-                console.log(`[Bot "${bot.bot.username}"] Try plant "${harvestedCrop.block}" at ${harvestedCrop.position}`)
+        if ('harvestedCrops' in args) {
+            for (const savedCrop of args.harvestedCrops) {
+                const crop = MC.cropsByBlockName[savedCrop.block]
+                if (!crop) { continue }
+                console.log(`[Bot "${bot.bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
 
-                const seed = bot.bot.inventory.findInventoryItem(seedId, null, false)
+                const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
+                const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[seedName].id, null, false)
                 if (!seed) {
-                    console.warn(`[Bot "${bot.bot.username}"] Can't replant this: doesn't have "${seedId}"`)
+                    console.warn(`[Bot "${bot.bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${seedName}"`)
                     continue
                 }
 
-                const at = bot.bot.blockAt(harvestedCrop.position)
-                /** @type {Block | null} */
-                let placeOn = null
-                if (!at || at.name === 'air') {
-                    let below = bot.bot.blockAt(harvestedCrop.position.offset(0, -1, 0))
-                    if (below.name === 'farmland') {
-                        console.log(`[Bot "${bot.bot.username}"] Try plant on ${below.name}`)
-                        yield* plant(bot, below, seed)
-                        continue
-                    } else if (below.name === 'dirt' ||
-                               below.name === 'grass_block') {
+                const at = bot.bot.blockAt(savedCrop.position)
+
+                if (at && MC.replaceableBlocks[at.name] !== 'yes') {
+                    console.warn(`[Bot "${bot.bot.username}"] There is something else there`)
+                    continue
+                }
+                if (crop.type === 'tree' &&
+                    crop.size !== 'small') {
+                    console.warn(`[Bot "${bot.bot.username}"] This tree is too big to me`)
+                }
+
+                let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position, crop, true, false)
+
+                if (!placeOn) {
+                    console.warn(`[Bot "${bot.bot.username}"] Can't replant "${seed.name}": couldn't find a good spot`)
+                    continue
+                }
+
+                if (!placeOn.isExactBlock &&
+                    crop.growsOnBlock !== 'solid' &&
+                    crop.growsOnBlock.length === 1 &&
+                    crop.growsOnBlock[0] === 'farmland' &&
+                    (
+                        placeOn.block.name === 'dirt' ||
+                        placeOn.block.name === 'grass_block' ||
+                        placeOn.block.name === 'dirt_path'
+                    )) {
                         try {
                             yield* hoeing.task(bot, {
-                                block: below.position.clone(),
+                                block: placeOn.block.position.clone(),
                                 gatherTool: false,
                             })
                         } catch (error) {
                             console.error(error)
                             continue
                         }
-                    } else {
-                        console.warn(`[Bot "${bot.bot.username}"] Can't replant this on ${below.name ?? 'null'}`)
-                        continue
-                    }
-                    yield
-                    below = bot.bot.blockAt(harvestedCrop.position.offset(0, -1, 0))
-                    if (below.name !== 'farmland') {
-                        console.warn(`[Bot "${bot.bot.username}"] Failed to hoe`)
-                        continue
-                    }
-                    placeOn = below
                 }
 
-                if (!placeOn && args.fallbackToNear) {
-                    console.warn(`[Bot "${bot.bot.username}"] Falling back to nearest free farmland ...`)
-                    placeOn = bot.env.getFreeFarmland(bot, harvestedCrop.position)
-                }
+                placeOn = bot.env.getPlantableBlock(bot, savedCrop.position, crop, true, false)
 
-                if (!placeOn) {
-                    console.warn(`[Bot "${bot.bot.username}"] Place on is null`)
+                if (!placeOn.isExactBlock) {
+                    console.warn(`[Bot "${bot.bot.username}"] Can't replant ${seed.name}: couldn't find a good spot`)
                     continue
                 }
 
-                console.log(`[Bot "${bot.bot.username}"] Try plant on ${placeOn.name}`)
-
-                yield* plant(bot, placeOn, seed)
-
-                console.log(`[Bot "${bot.bot.username}"] Seed ${seed.name} successfully planted`)
+                console.log(`[Bot "${bot.bot.username}"] Relant on ${placeOn.block.name}`)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
                 palntedCount++
+                continue
             }
         } else {
-            if (!args.seedItems) {
-                throw new Error(`"this.seedItems" is null`)
-            }
-
             while (true) {
                 console.log(`[Bot "${bot.bot.username}"] Try plant seed`)
 
                 const seed = bot.searchItem(...args.seedItems)
+                if (!seed) { break }
 
-                if (!seed) {
-                    break
-                }
+                const cropInfo = Object.values(MC.cropsByBlockName).find(v => {
+                    if (v.type === 'tree') {
+                        return v.sapling === seed.name
+                    } else {
+                        return v.seed === seed.name
+                    }
+                })
+                if (!cropInfo) { break }
+                if (cropInfo.type === 'tree') { break }
 
-                const placeOn = bot.env.getFreeFarmland(bot, bot.bot.entity.position.clone())
-                if (!placeOn) {
-                    break
-                }
+                const placeOn = bot.env.getPlantableBlock(bot, bot.bot.entity.position.clone(), cropInfo, false, true)
+                if (!placeOn) { break }
 
-                console.log(`[Bot "${bot.bot.username}"] Try plant ${seed.displayName} on ${placeOn.name}`)
+                console.log(`[Bot "${bot.bot.username}"] Plant ${seed.displayName} on ${placeOn.block.name}`)
 
-                yield* plant(bot, placeOn, seed)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
 
-                console.log(`[Bot "${bot.bot.username}"] Seed successfully planted`)
                 palntedCount++
             }
         }

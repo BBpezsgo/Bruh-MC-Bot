@@ -25,6 +25,7 @@ const mlg = require('./tasks/mlg')
 const clearMlgJunk = require('./tasks/clear-mlg-junk')
 const giveAll = require('./tasks/give-all')
 const pickupItem = require('./tasks/pickup-item')
+const pickupXp = require('./tasks/pickup-xp')
 const harvest = require('./tasks/harvest')
 const compost = require('./tasks/compost')
 // @ts-ignore
@@ -36,6 +37,8 @@ const smelt = require('./tasks/smelt')
 const blockExplosion = require('./tasks/block-explosion')
 const plantSeed = require('./tasks/plant-seed')
 const dumpToChest = require('./tasks/dump-to-chest')
+const dig = require('./tasks/dig')
+const giveTo = require('./tasks/give-to')
 
 const priorities = Object.freeze({
     critical: 300,
@@ -119,6 +122,11 @@ module.exports = class BruhBot {
      * @type {MineFlayerPathfinder.Movements}
      */
     gentleMovements
+    /**
+     * @readonly
+     * @type {MineFlayerPathfinder.Movements}
+     */
+    cutTreeMovements
 
     /**
      * @private @readonly
@@ -266,6 +274,8 @@ module.exports = class BruhBot {
         this.restrictedMovements = null
         // @ts-ignore
         this.gentleMovements = null
+        // @ts-ignore
+        this.cutTreeMovements = null
 
         this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply)))
         this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply)))
@@ -305,11 +315,15 @@ module.exports = class BruhBot {
             this.restrictedMovements = new MineFlayerPathfinder.Movements(this.bot)
             // @ts-ignore
             this.gentleMovements = new MineFlayerPathfinder.Movements(this.bot)
+            // @ts-ignore
+            this.cutTreeMovements = new MineFlayerPathfinder.Movements(this.bot)
     
             BruhBot.setPermissiveMovements(this.permissiveMovements, this.mc)
             BruhBot.setRestrictedMovements(this.restrictedMovements, this.mc)
             BruhBot.setGentleMovements(this.gentleMovements, this.mc)
-    
+            BruhBot.setRestrictedMovements(this.cutTreeMovements, this.mc)
+            this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.data.blocksByName['oak_leaves'].id)
+
             console.log(`[Bot "${this.bot.username}"] Ready`)
         })
 
@@ -383,7 +397,11 @@ module.exports = class BruhBot {
             }
 
             const hostile = this.bot.nearestEntity(v => {
-                return filterHostiles(v, this.bot.entity.position) ? true : false
+                const hostileRange = filterHostiles(v, this.bot.entity.position)
+                if (!hostileRange) { return false }
+                const distance = v.position.distanceTo(this.bot.entity.position)
+                if (distance > hostileRange) { return false }
+                return true
             })
 
             if (hostile) {
@@ -456,15 +474,18 @@ module.exports = class BruhBot {
                 }, null, priorities.cleanup)
             }
             
-            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 }) ||
-                'result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
+            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 })) {
                 this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, 1)
             }
-            
+
+            if ('result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
+                this.tasks.push(this, pickupXp, { maxDistance: 5 }, 1)
+            }
+
             if (this.tryAutoHarvestInterval.is()) {
                 if (this.env.getCrops(this, this.bot.entity.position.clone(), true).length > 0) {
                     const harvestTask = this.tasks.push(this, harvest, { }, priorities.unnecessary)
-                    if (harvestTask) {
+                    /*if (harvestTask) {
                         harvestTask.wait()
                             .then(() => {
                                 const goal = this.tasks.push(this, compost, null, priorities.unnecessary)
@@ -472,52 +493,33 @@ module.exports = class BruhBot {
                             .catch(() => {
                                 
                             })
-                    }
+                    }*/
                 } else {
-                    /** @type {Array<{ position: Vec3; block: number; }>} */
-                    const yeah = [ ]
+                    /** @type {Array<import('./environment').SavedCrop>} */
+                    const crops = [ ]
                     for (const crop of this.env.crops) {
                         const blockAt = this.bot.blockAt(crop.position)
                         if (!blockAt) { continue }
-                        if (blockAt.name === 'air') { yeah.push(crop) }
+                        if (blockAt.name === 'air') { crops.push(crop) }
                     }
-                    if (yeah.length > 0) {
+                    if (crops.length > 0) {
                         this.tasks.push(this, plantSeed, {
-                            harvestedCrops: yeah,
+                            harvestedCrops: crops,
                         }, priorities.unnecessary)
                     }
                 }
             }
 
+            /*
             if (this.dumpTrashInterval.is()) {
-                const trashItems = this.bot.inventory.items().filter(v => {
-                    if (this.mc.nontrashItems(true).includes(v.type)) {
-                        return false
-                    }
-                    return true
-                })
+                const trashItems = this.getTrashItems()
 
-                /**
-                 * @type {Array<dumpToChest.CountedItem>}
-                 */
-                const countedCrashItems = [ ]
-                let foodPointsInInventory = 0
-                for (const trashItem of trashItems) {
-                    const food = this.mc.data.foods[trashItem.type]
-                    if (!food ||
-                        foodPointsInInventory > 40 ||
-                        MC.badFoods.includes(trashItem.name)) {
-                        countedCrashItems.push({
-                            item: trashItem.type,
-                            count: trashItem.count,
-                        })
-                        continue
-                    }
-                    foodPointsInInventory += food.foodPoints * trashItem.count
-                }
+                const countedCrashItems = trashItems.map(v => ({ item: v.type, count: v.count }))
                 this.tasks.push(this, dumpToChest, { items: countedCrashItems }, priorities.unnecessary)
             }
+            */
 
+            /*
             if (this.tryAutoCookInterval.is()) {
                 const rawFood = this.searchItem(...MC.rawFoods)
                 if (rawFood) {
@@ -531,6 +533,7 @@ module.exports = class BruhBot {
                                 this.tasks.push(this, smelt, {
                                     noFuel: true,
                                     recipes: recipe,
+                                    count: this.itemCount(rawFood.type),
                                 }, priorities.unnecessary)
                                 return
                             }
@@ -538,59 +541,38 @@ module.exports = class BruhBot {
                     }
                 }
             }
+            */
 
             if (this.ensureEquipmentInterval.is()) {
-                let pickaxe = null
-                let sword = null
-                let fishing_rod = null
-                let shield = null
-                let hoe = null
-                let water_bucket = null
+                let pickaxe = Math.max(...[
+                    this.itemCount('wooden_pickaxe'),
+                    this.itemCount('stone_pickaxe'),
+                    this.itemCount('iron_pickaxe'),
+                    this.itemCount('golden_pickaxe'),
+                    this.itemCount('diamond_pickaxe'),
+                    this.itemCount('netherite_pickaxe'),
+                ]) > 0
+                let sword = Math.max(...[
+                    this.itemCount('wooden_sword'),
+                    this.itemCount('stone_sword'),
+                    this.itemCount('iron_sword'),
+                    this.itemCount('golden_sword'),
+                    this.itemCount('diamond_sword'),
+                    this.itemCount('netherite_sword'),
+                ]) > 0
+                let fishing_rod = this.itemCount('fishing_rod') > 0
+                let shield = this.itemCount('shield') > 0
+                let hoe = Math.max(...[
+                    this.itemCount('wooden_hoe'),
+                    this.itemCount('stone_hoe'),
+                    this.itemCount('iron_hoe'),
+                    this.itemCount('golden_hoe'),
+                    this.itemCount('diamond_hoe'),
+                    this.itemCount('netherite_hoe'),
+                ]) > 0
+                let water_bucket = this.itemCount('water_bucket') > 0
                 let foodPointsInInventory = 0
                 for (const item of this.bot.inventory.items()) {
-                    switch (item.name) {
-                        case 'wooden_hoe':
-                        case 'stone_hoe':
-                        case 'iron_hoe':
-                        case 'golden_hoe':
-                        case 'diamond_hoe':
-                        case 'netherite_hoe':
-                            hoe = item
-                            break
-
-                        case 'wooden_pickaxe':
-                        case 'stone_pickaxe':
-                        case 'iron_pickaxe':
-                        case 'golden_pickaxe':
-                        case 'diamond_pickaxe':
-                        case 'netherite_pickaxe':
-                            pickaxe = item
-                            break
-
-                        case 'wooden_sword':
-                        case 'stone_sword':
-                        case 'iron_sword':
-                        case 'golden_sword':
-                        case 'diamond_sword':
-                        case 'netherite_sword':
-                            sword = item
-                            break
-
-                        case 'shield':
-                            shield = item
-                            break
-
-                        case 'fishing_rod':
-                            fishing_rod = item
-                            break
-
-                        case 'water_bucket':
-                            water_bucket = item
-                            break
-
-                        default:
-                            break
-                    }
                     if (!MC.badFoods.includes(item.name)) {
                         const food = this.mc.data.foods[item.type]
                         if (food) {
@@ -747,8 +729,8 @@ module.exports = class BruhBot {
 
         this.bot.on('end', (reason) => {
             this.env.removeBot(this)
-            this.bot.webInventory?.stop?.()
-            this.bot.viewer?.close()
+            // this.bot.webInventory?.stop?.()
+            // this.bot.viewer?.close()
 
             switch (reason) {
                 case 'socketClosed':
@@ -768,22 +750,41 @@ module.exports = class BruhBot {
             this.env.save()
         })
         
-        this.bot.on('path_update', (r) => {
-            if (this.bot.viewer) {
-                const path = [this.bot.entity.position.offset(0, 0.5, 0)]
-                for (const node of r.path) {
-                    path.push(new Vec3(node.x, node.y + 0.5, node.z ))
-                }
-                this.bot.viewer.drawLine('path', path, 0xffffff)
+        // this.bot.on('path_update', (r) => {
+        //     if (this.bot.viewer) {
+        //         const path = [this.bot.entity.position.offset(0, 0.5, 0)]
+        //         for (const node of r.path) {
+        //             path.push(new Vec3(node.x, node.y + 0.5, node.z ))
+        //         }
+        //         this.bot.viewer.drawLine('path', path, 0xffffff)
+        //     }
+        // })
+        
+        // this.bot.on('path_reset', (reason) => {
+        //     this.bot.viewer?.erase('path')
+        // })
+        
+        // this.bot.on('path_stop', () => {
+        //     this.bot.viewer?.erase('path')
+        // })
+    }
+
+    getTrashItems() {
+        let foodPointsInInventory = 0
+        return this.bot.inventory.items().filter(v => {
+            if (this.mc.nontrashItems(false).includes(v.type)) {
+                return false
             }
-        })
-        
-        this.bot.on('path_reset', (reason) => {
-            this.bot.viewer?.erase('path')
-        })
-        
-        this.bot.on('path_stop', () => {
-            this.bot.viewer?.erase('path')
+            const food = this.mc.data.foods[v.type]
+            if (food && !MC.badFoods.includes(v.name)) {
+                if (foodPointsInInventory > 40) {
+                    return true
+                }
+                foodPointsInInventory += food.foodPoints * v.count
+                return false
+            } else {
+                return true
+            }
         })
     }
 
@@ -837,7 +838,9 @@ module.exports = class BruhBot {
             }
         }
 
-        if (!selected) { return false }
+        if (!selected) {
+            return false
+        }
 
         const playerEye = selected.entity.position.offset(0, 1.6, 0)
 
@@ -1066,6 +1069,7 @@ module.exports = class BruhBot {
                         destination: location.clone(),
                         range: 2,
                         avoidOccupiedDestinations: true,
+                        timeout: 30000,
                     })
                 },
                 id: function (args) {
@@ -1122,6 +1126,22 @@ module.exports = class BruhBot {
         if (message === 'give all') {
             const task = this.tasks.push(this, giveAll, {
                 player: sender,
+                onStatusMessage: respond,
+            }, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(result => respond(`There it is`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already on my way`)
+            }
+        }
+
+        if (message === 'give trash') {
+            const task = this.tasks.push(this, giveTo, {
+                player: sender,
+                items: this.getTrashItems(),
                 onStatusMessage: respond,
             }, priorities.user)
             if (task) {
@@ -1260,6 +1280,7 @@ module.exports = class BruhBot {
             'campfire',
             'composter',
             'sculk_sensor',
+            'sweet_berry_bush',
         ]
 
         for (const blockToAvoid of blocksToAvoid) {
@@ -1736,44 +1757,6 @@ module.exports = class BruhBot {
                 }
             }
         }
-        return null
-    }
-
-    /**
-     * @param {Block | import('minecraft-data').Block | number | string} crop
-     * @returns {number | null}
-     */
-    getCropSeed(crop) {
-        if (typeof crop === 'number') {
-            crop = this.mc.data.blocks[crop]
-        }
-
-        if (typeof crop === 'string') {
-            crop = this.mc.data.blocksByName[crop]
-        }
-
-        if (!crop.drops) { return null }
-
-        for (const _drop of crop.drops) {
-            if (typeof _drop === 'number') {
-                if (this.mc.simpleSeeds.includes(_drop)) {
-                    return _drop
-                }
-                continue
-            }
-
-            if (typeof _drop.drop === 'number') {
-                if (this.mc.simpleSeeds.includes(_drop.drop)) {
-                    return _drop.drop
-                }
-                continue
-            }
-
-            if (this.mc.simpleSeeds.includes(_drop.drop.id)) {
-                return _drop.drop.id
-            }
-        }
-        
         return null
     }
 

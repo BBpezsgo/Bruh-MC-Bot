@@ -100,29 +100,31 @@ function filterHostiles(entity, point = null) {
 
     if (point) {
         const hostileAttackDistance = {
-            'creeper': 15,
-            'zombie': 35,
-            'skeleton': 16,
-            'cave_spider': 16,
-            'endermite': 16,
-            'evoker': 12,
-            'hoglin': 16,
-            'magma_cube': 16,
-            'husk': 35,
+            'evoker':           12, // 12,
+            'creeper':          12, // 15,
+            'skeleton':         12, // 16,
+            'cave_spider':      12, // 16,
+            'endermite':        12, // 16,
+            'hoglin':           12, // 16,
+            'magma_cube':       12, // 16,
+            'slime':            12, // 16,
+            'wither_skeleton':  12, // 16,
+            'witch':            12, // 16,
+            'spider':           12, // 16,
+            'stray':            12, // 16,
+            'ravager':          12, // 32,
+            'husk':             12, // 35,
+            'zombie_villager':  12, // 35,
+            'zombie':           12, // 35,
+
             'piglin': null,
             'piglin_brute': null,
             'pillager': null,
-            'slime': 16,
             'silverfish': null,
-            'ravager': 32,
-            'spider': 16,
-            'stray': 16,
             'zoglin': null,
-            'wither_skeleton': 16,
-            'witch': 16,
             'vindicator': null,
-            'zombie_villager': 35,
         }[entity.name ?? '']
+
         if (hostileAttackDistance) {
             const distnace = point.distanceTo(entity.position)
             if (distnace > hostileAttackDistance) {
@@ -228,6 +230,69 @@ function parseLocationH(text) {
     return new Vec3(x, y, z)
 }
 
+/**
+ * @param {Vec3} [origin]
+ * @param {ReadonlyArray<'top' | 'bottom' | 'side'>} sides
+ * @returns {Array<Vec3>}
+ */
+function directBlockNeighbours(origin, ...sides) {
+    if (!origin) { origin = new Vec3(0, 0, 0) }
+    if (sides.length === 0) {
+        return [
+            new Vec3(origin.x + 1, origin.y, origin.z),
+            new Vec3(origin.x - 1, origin.y, origin.z),
+            new Vec3(origin.x, origin.y + 1, origin.z),
+            new Vec3(origin.x, origin.y - 1, origin.z),
+            new Vec3(origin.x, origin.y, origin.z + 1),
+            new Vec3(origin.x, origin.y, origin.z - 1),
+        ]   
+    } else {
+        /** @type {Array<Vec3>} */
+        const result = [ ]
+        const _top = new Vec3(origin.x, origin.y + 1, origin.z)
+        const _bottom = new Vec3(origin.x, origin.y - 1, origin.z)
+        const _side1 = new Vec3(origin.x + 1, origin.y, origin.z)
+        const _side2 = new Vec3(origin.x - 1, origin.y, origin.z)
+        const _side3 = new Vec3(origin.x, origin.y, origin.z + 1)
+        const _side4 = new Vec3(origin.x, origin.y, origin.z - 1)
+        for (const side of sides) {
+            switch (side) {
+                case 'top': {
+                    if (!result.find(v => v.equals(_top))) {
+                        result.push(_top)
+                    }
+                    break
+                }
+                case 'bottom': {
+                    if (!result.find(v => v.equals(_bottom))) {
+                        result.push(_bottom)
+                    }
+                    break
+                }
+                case 'side': {
+                    if (!result.find(v => v.equals(_side1))) {
+                        result.push(_side1)
+                    }
+                    if (!result.find(v => v.equals(_side2))) {
+                        result.push(_side2)
+                    }
+                    if (!result.find(v => v.equals(_side3))) {
+                        result.push(_side3)
+                    }
+                    if (!result.find(v => v.equals(_side4))) {
+                        result.push(_side4)
+                    }
+                    break
+                }
+            
+                default:
+                    break
+            }
+        }
+        return result
+    }
+}
+
 module.exports = {
     itemsDelta,
     backNForthSort,
@@ -236,4 +301,5 @@ module.exports = {
     Timeout,
     Interval,
     parseLocationH,
+    directBlockNeighbours,
 }

@@ -91,8 +91,9 @@ module.exports = {
 
         yield* goto.task(bot, {
             destination: bed.position.clone(),
-            range: 3,
+            range: 2,
             avoidOccupiedDestinations: true,
+            timeout: 30000,
         })
 
         yield* wrap(bot.bot.sleep(bed))

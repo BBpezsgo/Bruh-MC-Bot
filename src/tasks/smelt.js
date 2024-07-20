@@ -87,20 +87,18 @@ function findBestFurnace(bot, recipes, noFuel) {
  * @param {import('../bruh-bot')} bot
  * @param {Block} campfire
  * @param {import('../mc-data').CampfireRecipe} recipe
+ * @param {number} count
  * @returns {import('../task').Task<Item>}
  */
-function* doCampfire(bot, campfire, recipe) {
+function* doCampfire(bot, campfire, recipe, count) {
     const result = bot.mc.data.itemsByName[recipe.result]
+    if (!result) { throw `What?` }
 
     if (!campfire.getProperties()['lit']) {
         throw `This campfire is out`
     }
 
-    const exceedingWaitTime = 3000
-
-    if (!result) {
-        throw `qa`
-    }
+    const exceedingWaitTime = 1000
 
     console.log(`[Bot: "${bot.bot.username}"]: Doing campfire ...`)
 
@@ -125,6 +123,7 @@ function* doCampfire(bot, campfire, recipe) {
      * @type {Item | null}
      */
     let pickedUp = null
+    let placedCount = 0
 
     /**
      * @param {import('prismarine-entity').Entity} collector
@@ -140,13 +139,24 @@ function* doCampfire(bot, campfire, recipe) {
         if (dropped.type !== result.id) { return }
         console.log(`[Bot "${bot.bot.username}"] This is the expected result`)
         pickedUp = dropped
-        bot.bot.removeListener('playerCollect', onPickUp)
+        placedCount--
+        if (placedCount <= 0) {
+            bot.bot.removeListener('playerCollect', onPickUp)
+        }
     }
 
-    console.log(`[Bot: "${bot.bot.username}"]: Food placed on campfire`)
+    for (let i = 0; i < count; i++) {
+        // @ts-ignore
+        if (campfire.blockEntity['Items'].length >= 4 || placedCount >= 4) {
+            console.log(`[Bot: "${bot.bot.username}"]: Campfire is full`)
+            break
+        }
+        yield* wrap(bot.bot.equip(item, 'hand'))
+        yield* wrap(bot.bot.activateBlock(campfire))
+        console.log(`[Bot: "${bot.bot.username}"]: Food placed on campfire`)
+        placedCount++
+    }
 
-    yield* wrap(bot.bot.equip(item, 'hand'))
-    yield* wrap(bot.bot.activateBlock(campfire))
     bot.bot.addListener('playerCollect', onPickUp)
 
     const minimumTime = new Timeout((recipe.time * 1000))
@@ -155,6 +165,7 @@ function* doCampfire(bot, campfire, recipe) {
         inAir: true,
         point: campfire.position.clone(),
         maxDistance: 4,
+        items: [ result.id ],
     }
 
     console.log(`[Bot: "${bot.bot.username}"]: Wait for ${((recipe.time * 1000) + exceedingWaitTime) / 1000} secs ...`)
@@ -185,6 +196,7 @@ function* doCampfire(bot, campfire, recipe) {
  * @type {import('../task').TaskDef<Item, {
  *   recipes: ReadonlyArray<import('../mc-data').CookingRecipe>;
  *   noFuel: boolean;
+ *   count: number;
  *   onNeedYesNo?: (question: string, timeout: number) => import('../task').Task<boolean | null>;
  * }> & {
  *   findBestFurnace: findBestFurnace;
@@ -219,7 +231,7 @@ module.exports = {
 
         for (const recipe of bestRecipes) {
             if (recipe.type === 'campfire') {
-                return yield* doCampfire(bot, furnaceBlock, recipe)
+                return yield* doCampfire(bot, furnaceBlock, recipe, args.count)
             }
 
             let furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
