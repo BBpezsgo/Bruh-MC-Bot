@@ -10,4 +10,7 @@ module.exports = {
     id: function(args) {
         return null
     },
+    humanReadableId: function(args) {
+        return 'idk'
+    },
 }

@@ -2,7 +2,7 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<void, { player: string; items: ReadonlyArray<{ count: number; type: number; }> }>}
+ * @type {import('../task').TaskDef<void, { player: string; items: ReadonlyArray<{ count: number; name: string; }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -27,9 +27,10 @@ module.exports = {
         let tossedSomething = false
 
         for (const itemToGive of args.items) {
-            const has = bot.bot.inventory.count(itemToGive.type, null)
+            const has = bot.bot.inventory.count(bot.mc.data.itemsByName[itemToGive.name].id, null)
+            if (!has) { continue }
             const countCanGive = Math.min(has, itemToGive.count)
-            yield* wrap(bot.bot.toss(itemToGive.type, null, countCanGive))
+            yield* wrap(bot.bot.toss(bot.mc.data.itemsByName[itemToGive.name].id, null, countCanGive))
             tossedSomething = true
             yield* sleepG(100)
         }

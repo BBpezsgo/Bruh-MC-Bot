@@ -165,7 +165,7 @@ function* doCampfire(bot, campfire, recipe, count) {
         inAir: true,
         point: campfire.position.clone(),
         maxDistance: 4,
-        items: [ result.id ],
+        items: [ result.name ],
     }
 
     console.log(`[Bot: "${bot.bot.username}"]: Wait for ${((recipe.time * 1000) + exceedingWaitTime) / 1000} secs ...`)

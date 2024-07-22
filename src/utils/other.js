@@ -72,10 +72,95 @@ function backNForthSort(blocks) {
 
 /**
  * @param {Entity} entity
- * @param {Vec3 | null} point
+ * @returns {number | undefined}
+ */
+function entityAttackDistance(entity) {
+    const reachDistance = 2
+    return {
+        'evoker':           reachDistance,
+        'creeper':          3,
+        'skeleton':         15,
+        'cave_spider':      reachDistance,
+        'endermite':        reachDistance,
+        'hoglin':           reachDistance,
+        'magma_cube':       reachDistance,
+        'slime':            reachDistance,
+        'wither_skeleton':  reachDistance,
+        'witch':            8,
+        'spider':           reachDistance,
+        'stray':            15,
+        'ravager':          reachDistance,
+        'husk':             reachDistance,
+        'zombie_villager':  reachDistance,
+        'zombie':           reachDistance,
+        'piglin':           reachDistance,
+        'piglin_brute':     reachDistance,
+        'pillager':         8,
+        'silverfish':       reachDistance,
+        'zoglin':           reachDistance,
+        'vindicator':       reachDistance,
+        'enderman':         reachDistance,
+        'zombified_piglin': reachDistance,
+        'ghast':            64,
+    }[entity.name ?? '']
+}
+
+/**
+ * @param {Entity} entity
+ * @returns {number | undefined}
+ */
+function entityRangeOfSight(entity) {
+    return {
+        'evoker':           12,
+        'creeper':          15,
+        'silverfish':       16, // ?
+        'zoglin':           16, // ?
+        'vindicator':       16, // ?
+        'skeleton':         16,
+        'cave_spider':      16,
+        'endermite':        16,
+        'hoglin':           16,
+        'magma_cube':       16,
+        'slime':            16,
+        'wither_skeleton':  16,
+        'witch':            16,
+        'spider':           16,
+        'stray':            16,
+        'ravager':          32,
+        'husk':             35,
+        'zombie_villager':  35,
+        'zombie':           35,
+        'piglin':           16,
+        'piglin_brute':     16,
+        'pillager':         64,
+        'ghast':            64,
+    }[entity.name ?? '']
+}
+
+/**
+ * @param {Entity} entity
+ * @returns {boolean}
+ */
+function canEntityAttack(entity) {
+    if (entity.metadata[2]) { return false }
+    if (entity.metadata[6] === 7) { return false }
+    if (entity.name === 'slime') {
+        if (entity.metadata[16]) { return true }
+        return false
+    }
+    if (entity.name === 'ghast') { return true }
+    if (entity.type !== 'hostile') { return false }
+    if (entity.name === 'zombified_piglin') { return false }
+    if (entity.name === 'enderman') { return false }
+    return true
+}
+
+/**
+ * @param {Entity} entity
+ * @param {Vec3} point
  * @returns {number | null}
  */
-function filterHostiles(entity, point = null) {
+function filterHostiles(entity, point) {
     if (entity.metadata[2]) { return null }
     if (entity.metadata[6] === 7) { return null }
 
@@ -98,42 +183,40 @@ function filterHostiles(entity, point = null) {
         return 0
     }
 
-    if (point) {
-        const hostileAttackDistance = {
-            'evoker':           12, // 12,
-            'creeper':          12, // 15,
-            'skeleton':         12, // 16,
-            'cave_spider':      12, // 16,
-            'endermite':        12, // 16,
-            'hoglin':           12, // 16,
-            'magma_cube':       12, // 16,
-            'slime':            12, // 16,
-            'wither_skeleton':  12, // 16,
-            'witch':            12, // 16,
-            'spider':           12, // 16,
-            'stray':            12, // 16,
-            'ravager':          12, // 32,
-            'husk':             12, // 35,
-            'zombie_villager':  12, // 35,
-            'zombie':           12, // 35,
+    const hostileAttackDistance = {
+        'evoker':           12,
+        'creeper':          15,
+        'skeleton':         16,
+        'cave_spider':      16,
+        'endermite':        16,
+        'hoglin':           16,
+        'magma_cube':       16,
+        'slime':            16,
+        'wither_skeleton':  16,
+        'witch':            16,
+        'spider':           16,
+        'stray':            16,
+        'ravager':          32,
+        'husk':             35,
+        'zombie_villager':  35,
+        'zombie':           35,
 
-            'piglin': null,
-            'piglin_brute': null,
-            'pillager': null,
-            'silverfish': null,
-            'zoglin': null,
-            'vindicator': null,
-        }[entity.name ?? '']
+        'piglin': null,
+        'piglin_brute': null,
+        'pillager': null,
+        'silverfish': null,
+        'zoglin': null,
+        'vindicator': null,
+    }[entity.name ?? '']
 
-        if (hostileAttackDistance) {
-            const distnace = point.distanceTo(entity.position)
-            if (distnace > hostileAttackDistance) {
-                return 0
-            }
+    if (hostileAttackDistance) {
+        const distnace = point.distanceTo(entity.position)
+        if (distnace > hostileAttackDistance) {
+            return 0
         }
     }
 
-    return 1
+    return hostileAttackDistance
 }
 
 /**
@@ -298,6 +381,9 @@ module.exports = {
     backNForthSort,
     filterHostiles,
     trajectoryTime,
+    canEntityAttack,
+    entityAttackDistance,
+    entityRangeOfSight,
     Timeout,
     Interval,
     parseLocationH,

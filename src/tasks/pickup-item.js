@@ -3,11 +3,11 @@ const { sleepG } = require('../utils/tasks')
 const goto = require("./goto")
 
 /**
- * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: Vec3; minLifetime?: number; items?: ReadonlyArray<number>; }>}
+ * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: Vec3; minLifetime?: number; items?: ReadonlyArray<string>; }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        const nearest = bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.type) : null, args)
+        const nearest = bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
     
         if ('error' in nearest) {
             throw nearest.error

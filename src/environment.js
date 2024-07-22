@@ -40,6 +40,54 @@ const { goals } = require("mineflayer-pathfinder")
  * })} AllocatedBlock
  */
 
+class ItemRequest {
+    /**
+     * @readonly
+     * @type {import('./bruh-bot').ItemLock}
+     */
+    lock
+
+    /**
+     * @private @readonly
+     * @type {number}
+     */
+    nevermindAt
+
+    /**
+     * @private
+     * @type {'none' | 'on-the-way' | 'done'}
+     */
+    status
+
+    /**
+     * @readonly
+     * @type {(result: boolean) => void}
+     */
+    callback
+
+    /**
+     * @param {import('./bruh-bot').ItemLock} lock
+     * @param {number} timeout
+     * @param {(result: boolean) => void} [callback]
+     */
+    constructor(lock, timeout, callback) {
+        this.lock = lock
+        this.nevermindAt = performance.now() + timeout
+        this.status = 'none'
+        this.callback = callback
+    }
+
+    getStatus() {
+        if (this.status !== 'none') { return this.status }
+        if (performance.now() >= this.nevermindAt) { return 'timed-out' }
+        return 'none'
+    }
+
+    onTheWay() {
+        this.status = 'on-the-way'
+    }
+}
+
 /**
  * @typedef {`${number}-${number}-${number}`} PositionHash
  */
@@ -98,13 +146,19 @@ module.exports = class Environment {
      * @private
      * @type {NodeJS.Timeout}
      */
-    saveInterval
+    interval
+
+    /**
+     * @readonly
+     * @type {Array<ItemRequest>}
+     */
+    itemRequests
 
     /**
      * @param {string} filePath
      */
     constructor(filePath) {
-        this.bots = [ ]
+        this.bots = []
         this.filePath = filePath
 
         this.crops = []
@@ -112,7 +166,8 @@ module.exports = class Environment {
         this.playerPositions = {}
         this.entityHurtTimes = {}
         this.entitySpawnTimes = {}
-        this.allocatedBlocks = { }
+        this.allocatedBlocks = {}
+        this.itemRequests = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment]: File not found at "${this.filePath}"`)
@@ -213,12 +268,19 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      */
     addBot(bot) {
-        if (!this.saveInterval) {
-            this.saveInterval = setInterval(() => {
+        if (!this.interval) {
+            this.interval = setInterval(() => {
                 this.save()
+                for (let i = this.itemRequests.length - 1; i >= 0; i--) {
+                    if (this.itemRequests[i].getStatus() === 'done' ||
+                        this.itemRequests[i].getStatus() === 'timed-out') {
+                        this.itemRequests[i].lock.isUnlocked = true
+                        this.itemRequests.splice(i, 1)
+                    }
+                }
                 if (this.bots.length === 0) {
-                    clearInterval(this.saveInterval)
-                    this.saveInterval = null
+                    clearInterval(this.interval)
+                    this.interval = null
                 }
             }, 10000)
         }
@@ -242,9 +304,9 @@ module.exports = class Environment {
         }
 
         if (this.bots.length === 0) {
-            if (this.saveInterval) {
-                clearInterval(this.saveInterval)
-                this.saveInterval = null
+            if (this.interval) {
+                clearInterval(this.interval)
+                this.interval = null
             }
             this.save()
         }
@@ -333,7 +395,7 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      * @param {Chest} chest
      * @param {Vec3} chestPosition
-     * @param {number} item
+     * @param {string} item
      * @param {number} count
      */
     *chestDeposit(bot, chest, chestPosition, item, count) {
@@ -362,10 +424,10 @@ module.exports = class Environment {
 
         if (count > 0) {
             actualCount = Math.min(count, bot.itemCount(item))
-            yield* wrap(chest.deposit(item, null, actualCount))
+            yield* wrap(chest.deposit(bot.mc.data.itemsByName[item].id, null, actualCount))
         } else {
-            actualCount = Math.min(-count, chest.containerCount(item, null))
-            yield* wrap(chest.withdraw(item, null, actualCount))
+            actualCount = Math.min(-count, chest.containerCount(bot.mc.data.itemsByName[item].id, null))
+            yield* wrap(chest.withdraw(bot.mc.data.itemsByName[item].id, null, actualCount))
         }
 
         saved.content = {}
@@ -375,11 +437,11 @@ module.exports = class Environment {
             saved.content[item.name] += item.count
         }
 
-        saved.myItems[bot.mc.data.items[item].name] ??= 0
+        saved.myItems[item] ??= 0
         if (count > 0) {
-            saved.myItems[bot.mc.data.items[item].name] += actualCount
+            saved.myItems[item] += actualCount
         } else {
-            saved.myItems[bot.mc.data.items[item].name] -= actualCount
+            saved.myItems[item] -= actualCount
         }
 
         return actualCount
@@ -494,7 +556,7 @@ module.exports = class Environment {
      * @returns {Array<Vec3>}
      */
     getCrops(bot, farmPosition, grown) {
-        const cropBlockIds = [ ]
+        const cropBlockIds = []
         for (const cropName in MC.cropsByBlockName) {
             const crop = MC.cropsByBlockName[cropName]
             switch (crop.type) {
@@ -593,7 +655,6 @@ module.exports = class Environment {
      *   point?: Vec3;
      *   evenIfFull?: boolean;
      *   minLifetime?: number;
-     *   items?: ReadonlyArray<number>; 
      * }} args
      * @returns {import('./result').Result<import("prismarine-entity").Entity>}
      */
@@ -689,7 +750,7 @@ module.exports = class Environment {
      */
     possibleDirectHostileAttack(bot) {
         return bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
-            if (!filterHostiles(entity)) { return false }
+            if (!filterHostiles(entity, bot.bot.entity.position)) { return false }
 
             if (!entity.name) {
                 return false
@@ -761,27 +822,30 @@ module.exports = class Environment {
      * @param {'dig'} type
      * @param {any} [args]
      * @returns {boolean}
-     */ /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3} position
-     * @param {'place'} type
-     * @param {{ item: number; }} args
-     * @returns {boolean}
-     */ /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3} position
-     * @param {'hoe'} type
-     * @param {any} [args]
-     * @returns {boolean}
-     */ /**
-     * @param {string} bot
-     * @param {Vec3} position
-     * @param {'dig' | 'place' | 'hoe'} type
-     * @param {any} [args]
-     * @returns {boolean}
      */
+    /**
+    * @overload
+    * @param {string} bot
+    * @param {Vec3} position
+    * @param {'place'} type
+    * @param {{ item: number; }} args
+    * @returns {boolean}
+    */
+   /**
+    * @overload
+    * @param {string} bot
+    * @param {Vec3} position
+    * @param {'hoe'} type
+    * @param {any} [args]
+    * @returns {boolean}
+    */
+   /**
+    * @param {string} bot
+    * @param {Vec3} position
+    * @param {'dig' | 'place' | 'hoe'} type
+    * @param {any} [args]
+    * @returns {boolean}
+    */
     allocateBlock(bot, position, type, args) {
         /**
          * @type {PositionHash}
@@ -878,5 +942,48 @@ module.exports = class Environment {
             }
         }
         return false
+    }
+
+    /**
+     * @param {import('./bruh-bot').ItemLock} lock
+     * @param {number} timeout
+     * @returns {import("./task").Task<boolean>}
+     */
+    *requestItem(lock, timeout) {
+        let isDone = false
+        let result = false
+        const request = new ItemRequest(
+            lock,
+            timeout,
+            (_result) => {
+                result = _result
+                isDone = true
+            }
+        )
+        this.itemRequests.push(request)
+
+        while (!isDone) {
+            yield
+        }
+
+        return result
+    }
+
+    /**
+     * @param {string} requestor
+     * @param {string} item
+     * @param {number} count
+     */
+    lockOthersItems(requestor, item, count) {
+        let locked = 0
+        const locks = [ ]
+        for (const bot of this.bots) {
+            if (bot.bot.username === requestor) { continue }
+            const lock = bot.tryLockItems(requestor, item, count - locked)
+            if (!lock) { continue }
+            locked += lock.count
+            locks.push(lock)
+        }
+        return locks
     }
 }

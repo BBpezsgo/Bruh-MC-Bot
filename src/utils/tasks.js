@@ -61,15 +61,14 @@ function* wrap(promise) {
 }
 
 /**
- * @template {string} TEvent
- * @param {TEvent} event
- * @param {{ once: (event: TEvent, callback: (...args: any[]) => void) => void }} emitter
- * @returns {import('../task').Task<Array<any>>}
+ * @template {{ once: (event: string, callback: (...args: Array<any>) => void) => void }} TEmitter
+ * @param {TEmitter} emitter
+ * @param {Parameters<TEmitter['once']>[0]} event
+ * @returns {import('../task').Task<Parameters<Parameters<emitter['once']>[1]>>}
  */
 function* waitForEvent(emitter, event) {
     let emitted = false
     let args = null
-    // @ts-ignore
     emitter.once(event, (..._args) => {
         emitted = true
         args = _args

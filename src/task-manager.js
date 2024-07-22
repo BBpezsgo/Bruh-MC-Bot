@@ -61,7 +61,7 @@ class ManagedTask {
     /**
      * @param {Priority<TArgs>} priority
      * @param {TaskStatus} status
-     * @param {import('./task').CommontArgs<TArgs>} args
+     * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
      * @param {import("./task").TaskDef<TResult, TArgs, TError>} def
      * @param {import("./task").Task<TResult> | null} task
@@ -188,9 +188,16 @@ module.exports = class TaskManager {
 
     get isIdle() { return this._queue.length === 0 && this._running.length === 0 }
 
+    /**
+     * @private
+     * @type {boolean}
+     */
+    _isStopping
+
     constructor() {
         this._queue = [ ]
         this._running = [ ]
+        this._isStopping = false
     }
 
     /**
@@ -199,11 +206,14 @@ module.exports = class TaskManager {
      * @template TError
      * @param {import('./bruh-bot')} bot
      * @param {import('./task').TaskDef<TResult, TArgs, TError>} task
-     * @param {import('./task').CommontArgs<TArgs>} args
+     * @param {import('./task').CommonArgs<TArgs>} args
      * @param {Priority<TArgs>} priority
      * @returns {ManagedTask<TResult, TArgs, TError> | null}
      */
     push(bot, task, args, priority = 0) {
+        if (this._isStopping) {
+            return null
+        }
         const id = task.id(args)
         if (this.has(id)) {
             // console.log(`Task "${id}" already added`)
@@ -230,6 +240,7 @@ module.exports = class TaskManager {
     }
 
     /**
+     * @private
      * @param {ManagedTask} a
      * @param {ManagedTask} b
      * **Returns:**
@@ -248,6 +259,7 @@ module.exports = class TaskManager {
     }
 
     /**
+     * @private
      * @param {ReadonlyArray<ManagedTask>} tasks
      * @returns {number}
      */
@@ -266,6 +278,7 @@ module.exports = class TaskManager {
     }
 
     /**
+     * @private
      * @param {Array<ManagedTask>} tasks
      * @returns {ManagedTask | null}
      */
@@ -337,7 +350,7 @@ module.exports = class TaskManager {
             } else {
                 return null
             }
-        } else if (this._queue.length > 0) {
+        } else if (this._queue.length > 0 && !this._isStopping) {
             const nextTask = TaskManager.takeImportantTask(this._queue)
             if (nextTask) {
                 nextTask.start()
@@ -349,6 +362,25 @@ module.exports = class TaskManager {
         } else {
             return null
         }
+    }
+
+    /**
+     * @returns {Promise<void>}
+     */
+    finish() {
+        this._isStopping = true
+        return new Promise(resolve => {
+            const interval = setInterval(() => {
+                for (const task of this._queue) {
+                    task.cancel()
+                }
+                this._queue.splice(0, this._queue.length)
+                if (this._running.length === 0) {
+                    clearInterval(interval)
+                    resolve()
+                }
+            }, 100)
+        })
     }
 
     stop() {

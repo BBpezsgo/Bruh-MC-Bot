@@ -35,6 +35,7 @@ module.exports = {
             cropPositions = backNForthSort(cropPositions)
 
             for (const cropPosition of cropPositions) {
+                yield
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
                 console.log(`[Bot "${bot.bot.username}"]: Harvesting ${cropBlock.name} ...`)

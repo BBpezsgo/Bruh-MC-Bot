@@ -60,6 +60,7 @@ module.exports = {
 
         if ('harvestedCrops' in args) {
             for (const savedCrop of args.harvestedCrops) {
+                yield
                 const crop = MC.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 console.log(`[Bot "${bot.bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
