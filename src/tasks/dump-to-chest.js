@@ -28,7 +28,7 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @typedef {{ item: number; count: number; }} CountedItem
+ * @typedef {{ item: string; count: number; }} CountedItem
  */
 
 /**
@@ -45,7 +45,7 @@ module.exports = {
         }
 
         /**
-         * @type {Record<number, number>}
+         * @type {Record<string, number>}
          */
         const originalCount = { }
         for (const item of args.items) {
@@ -102,7 +102,7 @@ module.exports = {
                     if (have === 0) {
                         return true
                     }
-                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.data.items[itemToDeposit.item].stackSize, have)
+                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.data.itemsByName[itemToDeposit.item].stackSize, have)
                     if (count === 0) {
                         return true
                     }

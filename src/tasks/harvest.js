@@ -1,6 +1,6 @@
 const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
-const { backNForthSort, directBlockNeighbours } = require('../utils/other')
+const { backNForthSort, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const plantSeed = require('./plant-seed')
@@ -74,10 +74,10 @@ module.exports = {
                     }
                     case 'grows_block': {
                         let fruitBlock = null
-                        for (const neighbour of directBlockNeighbours(cropBlock.position)) {
-                            const neighbourBlock = bot.bot.blockAt(neighbour)
-                            if (neighbourBlock && neighbourBlock.name === cropInfo.grownBlock) {
-                                fruitBlock = neighbourBlock
+                        for (const neighbor of directBlockNeighbors(cropBlock.position)) {
+                            const neighborBlock = bot.bot.blockAt(neighbor)
+                            if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
+                                fruitBlock = neighborBlock
                                 break
                             }
                         }
@@ -109,7 +109,7 @@ module.exports = {
                         }
                         yield* dig.task(bot, {
                             block: cropBlock,
-                            alsoTheNeighbours: true,
+                            alsoTheNeighbors: true,
                         })
                         break
                     }

@@ -1,6 +1,6 @@
 /**
  * @template [TResult = any]
- * @template [TArgs = any]
+ * @template {{}} [TArgs = any]
  * @template [TError = any]
  */
 class ManagedTask {
@@ -36,7 +36,7 @@ class ManagedTask {
     
     /**
      * @readonly
-     * @type {TArgs}
+     * @type {import('./task').CommonArgs<TArgs>}
      */
     args
     
@@ -120,21 +120,18 @@ class ManagedTask {
     finish(result) {
         // @ts-ignore
         this.status = 'done'
-    
         console.log(`[Tasks]: Task "${this.getId()}" finished with result`, result)
     }
 
     fail() {
         // @ts-ignore
         this.status = 'done'
-    
         console.log(`[Tasks]: Task "${this.getId()}" failed`)
     }
 
     cancel() {
         // @ts-ignore
         this.status = 'done'
-    
         console.log(`[Tasks]: Task "${this.getId()}" canceled`)
     }
 

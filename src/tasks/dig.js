@@ -5,7 +5,7 @@ const goto = require('./goto')
 const { Vec3 } = require('vec3')
 
 /**
- * @type {import('../task').TaskDef<number, { block: Block; alsoTheNeighbours: boolean; }>}
+ * @type {import('../task').TaskDef<number, { block: Block; alsoTheNeighbors: boolean; }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -77,7 +77,7 @@ module.exports = {
                     })
                 
                     if (tool?.has) {
-                        console.log(`[Bot "${bot.bot.username}"] Equiping "${tool.item.displayName}" ...`)
+                        console.log(`[Bot "${bot.bot.username}"] Equipping "${tool.item.displayName}" ...`)
                         yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
                     }
                 
@@ -92,13 +92,13 @@ module.exports = {
                     console.log(`[Bot "${bot.bot.username}"] Block will be digged by someone else, skipping`)
                 }
             } catch (error) {
-                if (!args.alsoTheNeighbours) {
+                if (!args.alsoTheNeighbors) {
                     throw error
                 } else {
                     console.warn(error)
                 }
             } finally {
-                if (args.alsoTheNeighbours) {
+                if (args.alsoTheNeighbors) {
                     current = bot.bot.findBlock({
                         point: current.position.clone(),
                         matching: current.type,

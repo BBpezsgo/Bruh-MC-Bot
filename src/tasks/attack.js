@@ -64,7 +64,7 @@ module.exports = {
             }
 
             if (meleeWeapon) {
-                console.log(`[Bot "${bot.bot.username}"]: Melee weapon "${meleeWeapon.name}" equiped`)
+                console.log(`[Bot "${bot.bot.username}"]: Melee weapon "${meleeWeapon.name}" equipped`)
             } else {
                 console.log(`[Bot "${bot.bot.username}"]: No melee weapon found`)
             }

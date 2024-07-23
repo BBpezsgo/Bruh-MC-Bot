@@ -5,7 +5,6 @@ import * as viewer from 'prismarine-viewer'
 
 declare module 'mineflayer' {
     interface Bot {
-        readonly collectBlock: collectblock.CollectBlock
         // readonly viewer: viewer.ViewerAPI
 		readonly pathfinder: Pathfinder
         // readonly webInventory: {

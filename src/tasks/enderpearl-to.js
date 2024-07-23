@@ -28,7 +28,7 @@ module.exports = {
         }
         
         if (grade.blockInTrayect) {
-            throw `There are blocks (${grade.blockInTrayect.name}) intersecting the trayecotry`
+            throw `There are blocks (${grade.blockInTrayect.name}) intersecting the trajectory`
         }
 
         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))

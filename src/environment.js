@@ -3,7 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require("./serializing")
 const { wrap, sleepG } = require("./utils/tasks")
-const { filterHostiles, directBlockNeighbours } = require("./utils/other")
+const { filterHostiles, directBlockNeighbors: directBlockNeighbors } = require("./utils/other")
 const { Block } = require("prismarine-block")
 const { Item } = require("prismarine-item")
 const MC = require("./mc")
@@ -17,6 +17,18 @@ const { goals } = require("mineflayer-pathfinder")
  *   content: Record<string, number>;
  *   myItems: Record<string, number>;
  * }} SavedChest
+ */
+
+/**
+ * @typedef {{
+ *   uuid: string;
+ *   position: Vec3;
+ *   trades: ReadonlyArray<{
+ *     inputItem1: { name: string; count: number; }
+ *     outputItem: { name: string; count: number; }
+ *     inputItem2: { name: string; count: number; } | null
+ *   }>
+ * }} SavedVillager
  */
 
 /**
@@ -120,6 +132,12 @@ module.exports = class Environment {
 
     /**
      * @readonly
+     * @type {Record<string, SavedVillager>}
+     */
+    villagers
+
+    /**
+     * @readonly
      * @type {Record<number, number>}
      */
     entitySpawnTimes
@@ -168,6 +186,7 @@ module.exports = class Environment {
         this.entitySpawnTimes = {}
         this.allocatedBlocks = {}
         this.itemRequests = []
+        this.villagers = {}
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment]: File not found at "${this.filePath}"`)
@@ -177,6 +196,7 @@ module.exports = class Environment {
         this.playerPositions = data.playerPositions ?? this.playerPositions
         this.crops = data.crops ?? this.crops
         this.chests = data.chests ?? this.chests
+        this.villagers = data.villagers ?? this.villagers
         console.log(`[Environment]: Loaded`)
     }
 
@@ -478,6 +498,23 @@ module.exports = class Environment {
         return result
     }
 
+    /**
+     * @param {import("prismarine-entity").Entity} entity
+     * @param {import("mineflayer").Villager} villager
+     */
+    addVillager(entity, villager) {
+        if (!entity.uuid) { return }
+        this.villagers[entity.uuid] = {
+            position: entity.position.clone(),
+            uuid: entity.uuid,
+            trades: villager.trades.map(v => ({
+                inputItem1: { name: v.inputItem1.name, count: v.inputItem1.count },
+                inputItem2: v.hasItem2 ? { name: v.inputItem2.name, count: v.inputItem2.count } : null,
+                outputItem: { name: v.outputItem.name, count: v.outputItem.count },
+            })),
+        }
+    }
+
     save() {
         if (!fs.existsSync(path.dirname(this.filePath))) {
             fs.mkdirSync(path.dirname(this.filePath), { recursive: true })
@@ -486,6 +523,7 @@ module.exports = class Environment {
             playerPositions: this.playerPositions,
             crops: this.crops,
             chests: this.chests,
+            villagers: this.villagers,
         }, replacer, ' '))
     }
 
@@ -520,10 +558,10 @@ module.exports = class Environment {
             point: plantPosition,
             maxDistance: exactPosition ? 1 : 10,
             useExtraInfo: (/** @type {Block} */ block) => {
-                const neighbours = directBlockNeighbours(block.position, plant.growsOnSide)
-                for (const neighbour of neighbours) {
-                    const neighbourBlock = bot.bot.blockAt(neighbour)
-                    if (MC.replaceableBlocks[neighbourBlock.name] !== 'yes') { continue }
+                const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
+                for (const neighbor of neighbors) {
+                    const neighborBlock = bot.bot.blockAt(neighbor)
+                    if (MC.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
                     return true
                 }
                 return false
@@ -535,13 +573,13 @@ module.exports = class Environment {
         if (!growsOnBlock.includes(bestBlock.type)) {
             return null
         }
-        const neighbours = directBlockNeighbours(bestBlock.position, plant.growsOnSide)
-        for (const neighbour of neighbours) {
-            const neighbourBlock = bot.bot.blockAt(neighbour)
-            if (MC.replaceableBlocks[neighbourBlock.name] !== 'yes') { continue }
+        const neighbors = directBlockNeighbors(bestBlock.position, plant.growsOnSide)
+        for (const neighbor of neighbors) {
+            const neighborBlock = bot.bot.blockAt(neighbor)
+            if (MC.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
             return {
                 block: bestBlock,
-                faceVector: neighbour.offset(-bestBlock.position.x, -bestBlock.position.y, -bestBlock.position.z),
+                faceVector: neighbor.offset(-bestBlock.position.x, -bestBlock.position.y, -bestBlock.position.z),
                 isExactPosition: exactPosition,
                 isExactBlock: plant.growsOnBlock.includes(bestBlock.name),
             }
@@ -595,10 +633,10 @@ module.exports = class Environment {
                     }
                     case 'grows_block': {
                         let fruitBlock = null
-                        for (const neighbour of directBlockNeighbours(block.position, 'side')) {
-                            const neighbourBlock = bot.bot.blockAt(neighbour)
-                            if (neighbourBlock && neighbourBlock.name === cropInfo.grownBlock) {
-                                fruitBlock = neighbourBlock
+                        for (const neighbor of directBlockNeighbors(block.position, 'side')) {
+                            const neighborBlock = bot.bot.blockAt(neighbor)
+                            if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
+                                fruitBlock = neighborBlock
                                 break
                             }
                         }

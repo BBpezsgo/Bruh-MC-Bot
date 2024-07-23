@@ -22,12 +22,12 @@ module.exports = {
     task: function*(bot, args) {
         let didMLG = false
     
-        const neighbour = bot.bot.nearestEntity()
-        if (neighbour &&
-            bot.mc.data2.mlg.vehicles.includes(neighbour.name) &&
-            bot.bot.entity.position.distanceTo(neighbour.position) < 6) {
-            console.log(`[Bot "${bot.bot.username}"]: MLG: Mounting "${neighbour.name}" ...`)
-            bot.bot.mount(neighbour)
+        const neighbor = bot.bot.nearestEntity()
+        if (neighbor &&
+            bot.mc.data2.mlg.vehicles.includes(neighbor.name) &&
+            bot.bot.entity.position.distanceTo(neighbor.position) < 6) {
+            console.log(`[Bot "${bot.bot.username}"]: MLG: Mounting "${neighbor.name}" ...`)
+            bot.bot.mount(neighbor)
             didMLG = true
             yield* sleepG(100)
             bot.bot.dismount()

@@ -71,7 +71,7 @@ module.exports = {
 
                     yield* dig.task(bot, {
                         block: junkBlock,
-                        alsoTheNeighbours: false,
+                        alsoTheNeighbors: false,
                     })
                     break
                 }
@@ -86,7 +86,7 @@ module.exports = {
                         target: junkBoat,
                         useBow: false,
                         useMelee: true,
-                        useMeleeWeapon: false
+                        useMeleeWeapon: false,
                     })
                     break
                 }

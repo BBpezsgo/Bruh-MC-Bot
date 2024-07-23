@@ -34,7 +34,7 @@ function* plant(bot, placeOn, placeVector, seedItem) {
         avoidOccupiedDestinations: true,
     })
     
-    console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equiping item`)
+    console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equipping item`)
     yield* wrap(bot.bot.equip(seedItem, 'hand'))
 
     if (bot.bot.heldItem) {
@@ -56,7 +56,7 @@ function* plant(bot, placeOn, placeVector, seedItem) {
  */
 module.exports = {
     task: function*(bot, args) {
-        let palntedCount = 0
+        let plantedCount = 0
 
         if ('harvestedCrops' in args) {
             for (const savedCrop of args.harvestedCrops) {
@@ -117,9 +117,9 @@ module.exports = {
                     continue
                 }
 
-                console.log(`[Bot "${bot.bot.username}"] Relant on ${placeOn.block.name}`)
+                console.log(`[Bot "${bot.bot.username}"] Replant on ${placeOn.block.name}`)
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
-                palntedCount++
+                plantedCount++
                 continue
             }
         } else {
@@ -146,11 +146,11 @@ module.exports = {
 
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
 
-                palntedCount++
+                plantedCount++
             }
         }
 
-        return palntedCount
+        return plantedCount
     },
     id: function(args) {
         return `plant-seed`

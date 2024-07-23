@@ -210,8 +210,8 @@ function filterHostiles(entity, point) {
     }[entity.name ?? '']
 
     if (hostileAttackDistance) {
-        const distnace = point.distanceTo(entity.position)
-        if (distnace > hostileAttackDistance) {
+        const distance = point.distanceTo(entity.position)
+        if (distance > hostileAttackDistance) {
             return 0
         }
     }
@@ -318,7 +318,7 @@ function parseLocationH(text) {
  * @param {ReadonlyArray<'top' | 'bottom' | 'side'>} sides
  * @returns {Array<Vec3>}
  */
-function directBlockNeighbours(origin, ...sides) {
+function directBlockNeighbors(origin, ...sides) {
     if (!origin) { origin = new Vec3(0, 0, 0) }
     if (sides.length === 0) {
         return [
@@ -387,5 +387,5 @@ module.exports = {
     Timeout,
     Interval,
     parseLocationH,
-    directBlockNeighbours,
+    directBlockNeighbors,
 }

@@ -12,5 +12,5 @@ export type TaskDef<TResult, TArgs, TError = any> = {
 }
 
 export type CommonArgs<TArgs> = TArgs extends object ? (TArgs & {
-    onStatusMessage?: (message: string) => void
+    onStatusMessage?: (message: string) => void;
 }) : TArgs

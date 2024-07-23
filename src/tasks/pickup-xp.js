@@ -7,18 +7,18 @@ const goto = require("./goto")
  */
 module.exports = {
     task: function*(bot, args) {        
-        const neares = bot.env.getClosestXp(bot, args)
-        if ('error' in neares) {
-            throw neares.error
+        const nearest = bot.env.getClosestXp(bot, args)
+        if ('error' in nearest) {
+            throw nearest.error
         }
 
         yield* goto.task(bot, {
-            destination: neares.result.position.clone(),
+            destination: nearest.result.position.clone(),
             range: 0,
             avoidOccupiedDestinations: true,
         })
 
-        while (neares.result && neares.result.isValid) {
+        while (nearest.result && nearest.result.isValid) {
             yield* sleepG(100)
         }
     },
