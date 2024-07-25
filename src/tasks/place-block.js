@@ -15,7 +15,7 @@ module.exports = {
         const searchRadius = 5
         const searchHeight = 1
         const faceVector = new Vec3(0, 1, 0)
-    
+
         /** @type {Vec3 | null} */
         let target = null
         for (let x = -searchRadius; x <= searchRadius; x++) {
@@ -25,9 +25,9 @@ module.exports = {
                         z === 0) {
                         continue
                     }
-    
+
                     const current = bot.bot.entity.position.offset(x, y, z)
-    
+
                     const above = bot.bot.blockAt(current.offset(faceVector.x, faceVector.y, faceVector.z))
                     if (MC.replaceableBlocks[above.name]) {
                         if (!target) {
@@ -43,11 +43,11 @@ module.exports = {
                 }
             }
         }
-    
+
         if (!target) {
             throw `Couldn't find a place to place the block`
         }
-    
+
         let above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
         while (above && MC.replaceableBlocks[above.name] === 'break') {
             if (!bot.env.allocateBlock(bot.bot.username, above.position, 'dig')) {
@@ -62,19 +62,15 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                // block: above.position.clone(),
-                destination: above.position.clone(),
-                range: 3,
-                avoidOccupiedDestinations: true,
+                block: above.position.clone(),
             })
-    
+
             yield* wrap(bot.bot.dig(above))
         }
-    
+
         yield* goto.task(bot, {
-            destination: target.clone(),
-            range: 2,
-            avoidOccupiedDestinations: true,
+            point: target.clone(),
+            distance: 2,
         })
 
         yield* wrap(bot.bot.equip(args.item, 'hand'))

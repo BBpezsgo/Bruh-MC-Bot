@@ -50,13 +50,24 @@ const trade = require('./trade')
  *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
  * } | {
  *   type: 'trade';
- *   item: string;
+ *   trade: import('../environment').SavedVillager['trades'][0];
  *   count: number;
  * }} PlanStep
  */
 
 /**
+ * @typedef {{
+ *   movement: number;
+ *   other: number;
+ * }} PlanCost
+ */
+
+/**
  * @typedef {ReadonlyArray<PlanStep | ReadonlyArray<PlanStep>>} Plan
+ */
+
+/**
+ * @typedef {ReadonlyArray<PlanStep>} OrganizedPlan
  */
 
 /**
@@ -71,9 +82,17 @@ const planningLogs = false
 
 /**
  * @param {Plan} plan
+ * @returns {PlanCost}
  */
 function planCost(plan) {
-    let cost = 0
+    /**
+     * @type {PlanCost}
+     */
+    const cost = {
+        movement: 0,
+        other: 0,
+    }
+
     for (const step of plan) {
         if ('type' in step) {
             switch (step.type) {
@@ -83,30 +102,39 @@ function planCost(plan) {
                     break
                 case 'craft': {
                     if (step.recipe.requiresTable) {
-                        cost += 1
+                        cost.other += 1
                     }
                     break
                 }
                 case 'smelt': {
-                    cost += 2
+                    cost.other += 2
                     break
                 }
                 case 'request': {
-                    cost += 5
+                    cost.other += 5
                     break
                 }
                 case 'trade': {
-                    cost += 10
+                    cost.other += 10
                     break
                 }
                 default:
                     break
             }
         } else {
-            cost += planCost(step)
+            const subCost = planCost(step)
+            cost.movement += subCost.movement;
+            cost.other += subCost.other;
         }
     }
     return cost
+}
+
+/**
+ * @param {PlanCost} planCost 
+ */
+function normalizePlanCost(planCost) {
+    return planCost.movement + planCost.other
 }
 
 /**
@@ -126,7 +154,9 @@ function planResult(plan, item) {
                 continue
             }
             if (step.type === 'trade') {
-                count += step.count
+                if (step.trade.outputItem.name === item) {
+                    count += step.count * step.trade.outputItem.count
+                }
                 continue
             }
             if (step.item === item) {
@@ -168,19 +198,19 @@ function* plan(bot, item, count, permissions, context) {
     const _depthPrefix = ' '.repeat(context.depth)
     if (context.recursiveItems.includes(item)) {
         console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
-        return [ ]
+        return []
     }
     if (context.depth > 10) {
         console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Too plan for item "${item}", skipping`)
-        return [ ]
+        return []
     }
 
-    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} Plan ${count} of item "${item}" ...`)
+    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
 
     /**
      * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
      */
-    const result = [ ]
+    const result = []
 
     if (permissions.canUseInventory) {
         yield
@@ -221,7 +251,7 @@ function* plan(bot, item, count, permissions, context) {
                 item: item,
                 count: needFromChest,
             })
-            
+
             if (planResult(result, item) >= count) { return result }
         }
         if (inChestsWithMyItems.length === 0) {
@@ -259,7 +289,7 @@ function* plan(bot, item, count, permissions, context) {
             /**
              * @type {Array<ReadonlyArray<PlanStep>>}
              */
-            const ingredientPlans = [ ]
+            const ingredientPlans = []
             for (const ingredient of recipe.delta) {
                 if (ingredient.count >= 0) { continue }
                 yield
@@ -292,7 +322,7 @@ function* plan(bot, item, count, permissions, context) {
             for (let i = 0; i < actualCraftCount; i++) {
                 multipliedIngredientPaths.push(...ingredientPlans)
             }
-            const thisPlanCost = planCost(multipliedIngredientPaths)
+            const thisPlanCost = normalizePlanCost(planCost(multipliedIngredientPaths))
             if (!bestRecipe || bestRecipeCost > thisPlanCost) {
                 bestRecipe = {
                     plan: multipliedIngredientPaths,
@@ -355,17 +385,56 @@ function* plan(bot, item, count, permissions, context) {
         const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position) - bot.bot.entity.position.distanceSquared(b.position))
         for (const villager of sortedVillagers) {
             yield
-            if (trade.findTradeIndex(bot, villager.trades, {
-                item: item,
-                count: count - planResult(result, item),
-                type: 'buy',
-            }) !== -1) {
-                const entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid)
-                if (!entity || !entity.isValid) { continue }
+            const entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
+            if (!entity || !entity.isValid) { continue }
+            for (const trade of villager.trades) {
+                if (trade.outputItem.name !== item) { continue }
+                const need = count - planResult(result, item)
+                if (need <= 0) { break }
+                const tradeCount = Math.ceil(need / trade.outputItem.count)
+
+                const pricePlan1 = trade.inputItem1 ? yield* plan(bot, trade.inputItem1.name, trade.inputItem1.count * tradeCount, permissions, {
+                    cachedPlans: context.cachedPlans,
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                        trade.outputItem.name,
+                    ],
+                }) : null
+
+                const pricePlan2 = trade.inputItem2 ? yield* plan(bot, trade.inputItem2.name, trade.inputItem2.count * tradeCount, permissions, {
+                    cachedPlans: context.cachedPlans,
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                        trade.outputItem.name,
+                    ],
+                }) : null
+
+                const price1Result = trade.inputItem1 ? planResult([
+                    ...result,
+                    ...(pricePlan1 ?? []),
+                    ...(pricePlan2 ?? []),
+                ], trade.inputItem1.name) : null
+
+                const price2Result = trade.inputItem2 ? planResult([
+                    ...result,
+                    ...(pricePlan1 ?? []),
+                    ...(pricePlan2 ?? []),
+                ], trade.inputItem2.name) : null
+
+                if (trade.inputItem1 && price1Result < trade.inputItem1.count) { continue }
+                if (trade.inputItem2 && price2Result < trade.inputItem2.count) { continue }
+
+                if (pricePlan1) result.push(...pricePlan1)
+                if (pricePlan2) result.push(...pricePlan2)
+
                 result.push({
                     type: 'trade',
-                    item: item,
-                    count: count - planResult(result, item),
+                    trade: trade,
+                    count: tradeCount,
                 })
                 break
             }
@@ -379,7 +448,7 @@ function* plan(bot, item, count, permissions, context) {
 
 /**
  * @param {import('../bruh-bot')} bot
- * @param {ReadonlyArray<PlanStep>} plan
+ * @param {OrganizedPlan} plan
  * @returns {import('../task').Task<void>}
  */
 function* evaluatePlan(bot, plan) {
@@ -405,17 +474,14 @@ function* evaluatePlan(bot, plan) {
                 case 'inventory': continue
                 case 'goto': {
                     yield* goto.task(bot, {
-                        destination: step.destination,
-                        range: step.distance,
-                        avoidOccupiedDestinations: true,
+                        point: step.destination,
+                        distance: step.distance,
                     })
                     continue
                 }
                 case 'chest': {
                     yield* goto.task(bot, {
-                        destination: step.chest.clone(),
-                        range: 2,
-                        avoidOccupiedDestinations: true,
+                        block: step.chest.clone(),
                     })
                     const chestBlock = bot.bot.blockAt(step.chest)
                     if (!chestBlock || chestBlock.name !== 'chest') {
@@ -465,9 +531,7 @@ function* evaluatePlan(bot, plan) {
                             throw `There is no crafting table`
                         }
                         yield* goto.task(bot, {
-                            destination: tableBlock.position.clone(),
-                            range: 2,
-                            avoidOccupiedDestinations: true,
+                            block: tableBlock.position.clone(),
                         })
                         yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
                     } else {
@@ -489,7 +553,7 @@ function* evaluatePlan(bot, plan) {
                         try {
                             yield* pickupItem.task(bot, {
                                 inAir: true,
-                                items: [ lock.item ],
+                                items: [lock.item],
                                 maxDistance: 4,
                                 minLifetime: 0,
                             })
@@ -502,9 +566,8 @@ function* evaluatePlan(bot, plan) {
                 }
                 case 'trade': {
                     yield* trade.task(bot, {
-                        type: 'buy',
-                        item: step.item,
-                        count: step.count,
+                        trade: step.trade,
+                        numberOfTrades: step.count,
                     })
                     continue
                 }
@@ -539,19 +602,19 @@ function stringifyPlan(bot, plan) {
         }
         switch (step.type) {
             case 'inventory': {
-                builder += `I have ${step.count} of ${step.item} in my inventory\n`
+                builder += `I have ${step.count} ${step.item} in my inventory\n`
                 break
             }
             case 'chest': {
-                builder += `I found ${step.count} of ${step.item} in a chest\n`
+                builder += `I found ${step.count} ${step.item} in a chest\n`
                 break
             }
             case 'craft': {
-                builder += `Craft ${step.count} of ${step.recipe.result.count}x ${step.item}\n`
+                builder += `Craft ${step.recipe.result.count} ${step.item}, ${step.count} times\n`
                 break
             }
             case 'smelt': {
-                builder += `Smelt ${step.count} of ${step.item}\n`
+                builder += `Smelt ${step.count} ${step.item}\n`
                 break
             }
             case 'goto': {
@@ -563,7 +626,11 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'trade': {
-                builder += `Trade ${step.count} of ${step.item}\n`
+                if (step.trade.inputItem2) {
+                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name} and ${step.trade.inputItem2.count} ${step.trade.inputItem2.name}, ${step.count} times\n`
+                } else {
+                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name}, ${step.count} times\n`
+                }
                 break
             }
             default: {
@@ -578,10 +645,10 @@ function stringifyPlan(bot, plan) {
 
 /**
  * @param {Plan} plan
- * @returns {ReadonlyArray<PlanStep>}
+ * @returns {OrganizedPlan}
  */
 function organizePlan(plan) {
-    let result = [ ]
+    let result = []
     for (const step of plan) {
         if ('type' in step) {
             result.push(step)
@@ -602,27 +669,34 @@ function organizePlan(plan) {
 }
 
 /**
- * @type {import('../task').TaskDef<void, Args>}
+ * @type {import('../task').TaskDef<void, Args> & {
+ *   planCost: planCost;
+ *   planResult: planResult;
+ *   plan: plan;
+ *   organizePlan: organizePlan;
+ *   stringifyPlan: stringifyPlan;
+ *   normalizePlanCost: normalizePlanCost;
+ * }}
  */
 const def = {
     task: function*(bot, args) {
-        if (typeof args.item === 'string') args.item = [ args.item ]
+        if (typeof args.item === 'string') args.item = [args.item]
 
         /**
          * @type {Array<{ item: string; plan: Plan; planCost: number; planResult: number; }>}
          */
-        const itemsAndPlans = [ ]
+        const itemsAndPlans = []
 
         for (const item of args.item) {
             const itemPlan = yield* plan(bot, item, args.count, args, {
                 depth: 0,
-                recursiveItems: [ ],
-                cachedPlans: { },
+                recursiveItems: [],
+                cachedPlans: {},
             })
             itemsAndPlans.push({
                 item: item,
                 plan: itemPlan,
-                planCost: planCost(itemPlan),
+                planCost: normalizePlanCost(planCost(itemPlan)),
                 planResult: planResult(itemPlan, item),
             })
         }
@@ -645,7 +719,7 @@ const def = {
             throw `Can't gather ${bestPlan.item}`
         }
         if (_planResult < args.count) {
-            throw `I can only gather ${_planResult} of ${bestPlan.item}`
+            throw `I can only gather ${_planResult} ${bestPlan.item}`
         }
         yield* evaluatePlan(bot, _organizedPlan)
     },
@@ -653,8 +727,14 @@ const def = {
         return `gather-${args.count}-${args.item}`
     },
     humanReadableId: function(args) {
-        return `Gathering ${args.count} of ${args.item}`
+        return `Gathering ${args.count} ${args.item}`
     },
+    planCost: planCost,
+    normalizePlanCost: normalizePlanCost,
+    planResult: planResult,
+    plan: plan,
+    organizePlan: organizePlan,
+    stringifyPlan: stringifyPlan,
 }
 
 module.exports = def

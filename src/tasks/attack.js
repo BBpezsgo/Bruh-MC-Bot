@@ -134,10 +134,10 @@ module.exports = {
                 if (distance > 6) {
                     console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
                     yield* goto.task(bot, {
-                        destination: args.target.position.clone(),
-                        range: 5,
+                        point: args.target.position.clone(),
+                        distance: 5,
                         timeout: 500,
-                        avoidOccupiedDestinations: false,
+                        ignoreOthers: true,
                     })
                     reequipMeleeWeapon = true
                     continue
@@ -149,7 +149,6 @@ module.exports = {
                     console.log(`[Bot "${bot.bot.username}"] Reequipping melee weapon ...`)
                     shield = bot.searchItem('shield')
                     yield* equipMeleeWeapon()
-                    // @ts-ignore
                     console.log(`[Bot "${bot.bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                     reequipMeleeWeapon = false
                 }
@@ -212,10 +211,10 @@ module.exports = {
                     if (!grade || grade.blockInTrayect) {
                         console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
-                            destination: args.target.position.clone(),
-                            range: distance - 2,
+                            point: args.target.position.clone(),
+                            distance: distance - 2,
                             timeout: 1000,
-                            avoidOccupiedDestinations: false,
+                            ignoreOthers: true,
                         })
                         reequipMeleeWeapon = true
                         continue

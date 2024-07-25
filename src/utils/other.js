@@ -37,8 +37,8 @@ function itemsDelta(before, after) {
  * @returns {Array<Vec3>}
  */
 function backNForthSort(blocks) {
-    /** @type {{ [index: number]: Array<Vec3> }} */
-    let rows = { }
+    /** @type {Record<number, Array<Vec3>>} */
+    const rows = { }
 
     for (const block of blocks) {
         if (!rows[block.x]) {
@@ -47,14 +47,10 @@ function backNForthSort(blocks) {
         rows[block.x].push(block)
     }
 
-    /** @type {Array<Array<Vec3>>} */
-    const rows2 = [ ]
-    for (const key in rows) {
-        rows2.push(rows[key])
-    }
+    const existingRows = Object.values(rows)
 
-    for (let i = 0; i < rows2.length; i++) {
-        const row = rows2[i]
+    for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i]
         if (i % 2) {
             row.sort((a, b) => a.z - b.z)
         } else {
@@ -62,9 +58,43 @@ function backNForthSort(blocks) {
         }
     }
 
-    const result = [ ]
-    for (const row of rows2) {
-        result.push(...row)
+    return existingRows.flat()
+}
+
+/**
+ * @template T
+ * @param {Vec3} start
+ * @param {ReadonlyArray<T>} points
+ * @param {(element: T) => Vec3} [mapper]
+ * @returns {Array<T>}
+ */
+function basicRouteSearch(start, points, mapper) {
+    // @ts-ignore
+    mapper ??= v => v
+    /**
+     * @type {Array<T>}
+     */
+    const result = []
+    /**
+     * @type {Array<T>}
+     */
+    const heap = [...points]
+
+    let lastPoint = start
+
+    while (heap.length > 0) {
+        let smallestDistance = Infinity
+        let nearestIndex = -1
+        for (let i = 0; i < heap.length; i++) {
+            const d = mapper(heap[i]).distanceTo(lastPoint)
+            if (d >= smallestDistance) { continue }
+            smallestDistance = d
+            nearestIndex = i
+        }
+        if (nearestIndex < 0) { throw new Error(`No point found`) }
+        lastPoint = mapper(heap[nearestIndex])
+        result.push(heap[nearestIndex])
+        heap.splice(nearestIndex, 1)
     }
 
     return result
@@ -379,6 +409,7 @@ function directBlockNeighbors(origin, ...sides) {
 module.exports = {
     itemsDelta,
     backNForthSort,
+    basicRouteSearch,
     filterHostiles,
     trajectoryTime,
     canEntityAttack,

@@ -96,9 +96,7 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                destination: args.block.clone(),
-                range: 3,
-                avoidOccupiedDestinations: true,
+                block: args.block.clone(),
             })
 
             if (above && MC.replaceableBlocks[above.name] === 'break') {
@@ -158,9 +156,7 @@ module.exports = {
                 }
 
                 yield* goto.task(bot, {
-                    destination: dirt.clone(),
-                    range: 3,
-                    avoidOccupiedDestinations: true,
+                    block: dirt.clone(),
                 })
 
                 if (MC.replaceableBlocks[above.name] === 'break') {

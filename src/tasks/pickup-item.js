@@ -24,12 +24,11 @@ module.exports = {
         }
     
         yield* goto.task(bot, {
-            destination: nearest.result.position.clone(),
-            range: 0,
-            avoidOccupiedDestinations: true,
+            point: nearest.result.position.clone(),
+            distance: 0,
         })
     
-        yield* sleepG(200)
+        yield* sleepG(60)
     
         // if (item &&
         //     this.harvestedSaplings && (

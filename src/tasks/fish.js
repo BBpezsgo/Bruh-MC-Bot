@@ -40,9 +40,8 @@ module.exports = {
             }
     
             yield* goto.task(bot, {
-                destination: water.position.clone(),
-                range: 1,
-                avoidOccupiedDestinations: true,
+                point: water.position.clone(),
+                distance: 1,
             })
     
             yield* wrap(bot.bot.equip(fishingRod, 'hand'))

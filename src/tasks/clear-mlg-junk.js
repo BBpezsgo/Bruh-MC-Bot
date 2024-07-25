@@ -33,9 +33,8 @@ module.exports = {
     
                         console.log(`[Bot "${bot.bot.username}"]: Clearing MLG junk: water ...`)
                         yield* goto.task(bot, {
-                            destination: junkBlock.position.clone(),
-                            range: 1,
-                            avoidOccupiedDestinations: true,
+                            block: junkBlock.position.clone(),
+                            reach: 2,
                         })
     
                         console.log(`[Bot "${bot.bot.username}"]: Equip bucket ...`)

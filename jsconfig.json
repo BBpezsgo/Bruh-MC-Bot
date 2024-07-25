@@ -15,10 +15,11 @@
         "noImplicitThis": true,
         "noPropertyAccessFromIndexSignature": true,
         "noUncheckedIndexedAccess": true,
-        
-        "noUnusedLocals": false,
-        "noUnusedParameters": false,
-        "allowUnusedLabels": true
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false
     },
     "exclude": [
         "node_modules",

@@ -1,5 +1,4 @@
 const MineFlayer = require('mineflayer')
-const { Vec3 } = require('vec3')
 const MineFlayerPathfinder = require('mineflayer-pathfinder')
 const MineFlayerElytra = require('mineflayer-elytrafly').elytrafly
 const MineFlayerHawkEye = require('minecrafthawkeye').default
@@ -7,7 +6,6 @@ const MineFlayerArmorManager = require('mineflayer-armor-manager')
 const TaskManager = require('./task-manager')
 const goto = require('./tasks/goto')
 const MC = require('./mc')
-const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const meleeWeapons = require('./melee-weapons')
 const { Interval, parseLocationH, canEntityAttack, entityRangeOfSight, entityAttackDistance } = require('./utils/other')
@@ -25,17 +23,12 @@ const giveAll = require('./tasks/give-all')
 const pickupItem = require('./tasks/pickup-item')
 const pickupXp = require('./tasks/pickup-xp')
 const harvest = require('./tasks/harvest')
-const compost = require('./tasks/compost')
-// @ts-ignore
 const Environment = require('./environment')
 const Memory = require('./memory')
 const sleep = require('./tasks/sleep')
 const enderpearlTo = require('./tasks/enderpearl-to')
-const smelt = require('./tasks/smelt')
 const blockExplosion = require('./tasks/block-explosion')
 const plantSeed = require('./tasks/plant-seed')
-const dumpToChest = require('./tasks/dump-to-chest')
-const dig = require('./tasks/dig')
 const giveTo = require('./tasks/give-to')
 const equipment = require('./equipment')
 
@@ -112,7 +105,6 @@ class ItemLock {
     }
 }
 
-// @ts-ignore
 module.exports = class BruhBot {
     static ItemLock = ItemLock
 
@@ -291,7 +283,6 @@ module.exports = class BruhBot {
         this._isRightHandActive = false
         this.defendMyselfGoal = null
         this.onHeard = null
-        // @ts-ignore
         this.mc = null
         this.aimingEntities = []
         this.lockedItems = []
@@ -307,19 +298,15 @@ module.exports = class BruhBot {
         this.moveAwayInterval = new Interval(3000)
         this.lookAtPlayers = {}
 
-        // @ts-ignore
         this.permissiveMovements = null
-        // @ts-ignore
         this.restrictedMovements = null
-        // @ts-ignore
         this.gentleMovements = null
-        // @ts-ignore
         this.cutTreeMovements = null
 
-        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply)))
-        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply)))
+        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply + '')))
+        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply + '')))
 
-        this.bot.on('target_aiming_at_you', (entity, arrowTrajectory) => {
+        this.bot.on('target_aiming_at_you', (entity) => {
             this.aimingEntities.push(entity)
         })
 
@@ -327,7 +314,7 @@ module.exports = class BruhBot {
             if (this.onHeard) { this.onHeard(soundName) }
         })
 
-        this.bot.on('hardcodedSoundEffectHeard', (soundId, soundCategory) => {
+        this.bot.on('hardcodedSoundEffectHeard', (soundId) => {
             if (this.onHeard) { this.onHeard(soundId) }
         })
 
@@ -365,7 +352,7 @@ module.exports = class BruhBot {
             console.log(`[Bot "${this.bot.username}"] Ready`)
         })
 
-        this.bot.on('move', async (position) => {
+        this.bot.on('move', () => {
             if (!this.mc) { return }
             if (this.bot.entity.velocity.y < this.mc.data2.general.fallDamageVelocity) {
                 this.tasks.tick()
@@ -469,7 +456,6 @@ module.exports = class BruhBot {
 
             if (hostile) {
                 if (!this.defendMyselfGoal || this.defendMyselfGoal.status === 'done' || !this.tasks.has(this.defendMyselfGoal.getId())) {
-                    // @ts-ignore
                     this.defendMyselfGoal = this.tasks.push(this, attack, {
                         target: hostile,
                         useBow: true,
@@ -520,7 +506,7 @@ module.exports = class BruhBot {
 
             if (this.memory.myArrows.length > 0) {
                 this.tasks.push(this, {
-                    task: function* (bot, args) {
+                    task: function*(bot) {
                         const myArrow = bot.memory.myArrows.shift()
                         if (!myArrow) {
                             return
@@ -531,9 +517,8 @@ module.exports = class BruhBot {
                             return
                         }
                         yield* goto.task(bot, {
-                            destination: entity.position.clone(),
-                            range: 1,
-                            avoidOccupiedDestinations: true,
+                            point: entity.position.clone(),
+                            distance: 1,
                         })
                         yield* taskUtils.sleepG(1000)
                         if (entity.isValid) {
@@ -542,21 +527,21 @@ module.exports = class BruhBot {
                             console.log(`[Bot "${bot.bot.username}"] Arrow picked up`)
                         }
                     },
-                    id: function (args) {
+                    id: function() {
                         return `pickup-my-arrows`
                     },
-                    humanReadableId: function (args) {
+                    humanReadableId: function() {
                         return `Picking up my arrows`
                     },
                 }, null, priorities.cleanup)
             }
 
             if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 })) {
-                this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, 1)
+                this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, priorities.unnecessary)
             }
 
             if ('result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
-                this.tasks.push(this, pickupXp, { maxDistance: 5 }, 1)
+                this.tasks.push(this, pickupXp, { maxDistance: 5 }, priorities.unnecessary)
             }
 
             if (this.tryAutoHarvestInterval.is()) {
@@ -620,6 +605,7 @@ module.exports = class BruhBot {
             }
             */
 
+            /*
             if (this.ensureEquipmentInterval.is()) {
                 let foodPointsInInventory = 0
                 for (const item of this.bot.inventory.items()) {
@@ -680,6 +666,7 @@ module.exports = class BruhBot {
                     }
                 }
             }
+            */
 
             if (this.tasks.isIdle || (
                 runningTask &&
@@ -1062,23 +1049,88 @@ module.exports = class BruhBot {
             return
         }
 
-        if (message === 'scan') {
+        if (message.startsWith('plan')) {
+            const itemName = message.replace('plan', '').trimStart()
+            let item = this.mc.data.itemsByName[itemName.toLowerCase()]
+            if (!item) {
+                item = this.mc.data.itemsArray.find(v => v.displayName.toLowerCase() === itemName.toLowerCase())
+            }
+            if (!item) {
+                respond(`I don't know what ${itemName} is`)
+                return
+            }
+            this.tasks.push(this, {
+                task: function*(bot, args) {
+                    const plan = yield* gatherItem.plan(bot, args.item, args.count, args, {
+                        cachedPlans: {},
+                        depth: 0,
+                        recursiveItems: [],
+                    })
+                    const organizedPlan = gatherItem.organizePlan(plan)
+                    const planResult = gatherItem.planResult(organizedPlan, args.item)
+                    const planCost = gatherItem.planCost(organizedPlan)
+                    respond(`There is a plan for ${planResult} ${args.item} with a cost of ${planCost}:`)
+                    respond(gatherItem.stringifyPlan(bot, organizedPlan))
+                },
+                id: function(args) {
+                    return `plan-${args.count}-${args.item}`
+                },
+                humanReadableId: function(args) {
+                    return `Planning ${args.count} ${args.item}`
+                }
+            }, {
+                canCraft: true,
+                canDig: false,
+                canKill: false,
+                canUseChests: true,
+                canUseInventory: true,
+                count: 1,
+                item: item.name,
+                onStatusMessage: respond,
+            }, priorities.user)
+                .wait()
+                .then(() => respond(`Done`))
+                .catch(respond)
+            return
+        }
+
+        if (message === 'scan chests') {
             const task = this.tasks.push(this, {
-                task: (bot, args) => this.env.scanChests(this),
-                id: function (args) {
+                task: () => this.env.scanChests(this),
+                id: function() {
                     return `scan-chests`
                 },
-                humanReadableId: function (args) {
+                humanReadableId: function() {
                     return `Scanning chests`
                 },
             }, null, priorities.user)
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => respond(`Done`))
+                    .then(() => respond(`Done`))
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already scanning chests`)
+            }
+        }
+
+        if (message === 'scan villagers') {
+            const task = this.tasks.push(this, {
+                task: () => this.env.scanVillagers(this),
+                id: function() {
+                    return `scan-villagers`
+                },
+                humanReadableId: function() {
+                    return `Scanning villagers`
+                },
+            }, null, priorities.user)
+            if (task) {
+                respond(`Okay`)
+                task.wait()
+                    .then(() => respond(`Done`))
+                    .catch(reason => respond(reason + ''))
+            } else {
+                respond(`I'm already scanning villagers`)
             }
         }
 
@@ -1089,7 +1141,7 @@ module.exports = class BruhBot {
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => respond(`Done`))
+                    .then(result => result ? respond(`Done`) : respond(`I couldn't fish anything`))
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already fishing`)
@@ -1168,7 +1220,7 @@ module.exports = class BruhBot {
             const task = this.tasks.push(this, followPlayer, {
                 player: sender,
                 range: 5,
-                onNoPlayer: function* (bot, args) {
+                onNoPlayer: function*(bot) {
                     try {
                         const response = yield* bot.ask(`I lost you. Where are you?`, respond, sender, 30000)
                         const location = parseLocationH(response)
@@ -1185,7 +1237,7 @@ module.exports = class BruhBot {
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => { })
+                    .then(() => { })
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already following you`)
@@ -1215,7 +1267,7 @@ module.exports = class BruhBot {
         if (message === 'come') {
             const task = this.tasks.push(this, {
                 /** @type {import('./task').SimpleTaskDef<void, { player: string; }>} */
-                task: function* (bot, args) {
+                task: function*(bot, args) {
                     let location = bot.env.getPlayerPosition(args.player, 10000)
                     if (!location) {
                         try {
@@ -1231,16 +1283,15 @@ module.exports = class BruhBot {
                         }
                     }
                     yield* goto.task(bot, {
-                        destination: location.clone(),
-                        range: 1,
-                        avoidOccupiedDestinations: true,
+                        point: location.clone(),
+                        distance: 1,
                         timeout: 30000,
                     })
                 },
-                id: function (args) {
+                id: function(args) {
                     return `goto-${args.player}`
                 },
-                humanReadableId: function (args) {
+                humanReadableId: function(args) {
                     return `Goto ${args.player}`
                 },
             }, {
@@ -1249,7 +1300,7 @@ module.exports = class BruhBot {
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => respond(`I'm here`))
+                    .then(() => respond(`I'm here`))
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already coming to you`)
@@ -1296,7 +1347,7 @@ module.exports = class BruhBot {
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => respond(`There it is`))
+                    .then(() => respond(`There it is`))
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already on my way`)
@@ -1312,7 +1363,7 @@ module.exports = class BruhBot {
             if (task) {
                 respond(`Okay`)
                 task.wait()
-                    .then(result => respond(`There it is`))
+                    .then(() => respond(`There it is`))
                     .catch(reason => respond(reason + ''))
             } else {
                 respond(`I'm already on my way`)
@@ -1757,7 +1808,7 @@ module.exports = class BruhBot {
 
                 // case hawkeye.Weapons.egg:
                 case hawkeye.Weapons.snowball:
-                // case hawkeye.Weapons.trident:
+                    // case hawkeye.Weapons.trident:
                     ammo = this.bot.inventory.count(found.type, null)
                     break
 
@@ -1913,7 +1964,6 @@ module.exports = class BruhBot {
      * @returns {boolean}
      */
     static isCrossbowCharged(item) {
-        // @ts-ignore
         return (
             item.nbt &&
             (item.nbt.type === 'compound') &&

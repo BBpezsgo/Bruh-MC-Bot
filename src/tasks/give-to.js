@@ -17,9 +17,8 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            destination: target.clone(),
-            range: 2,
-            avoidOccupiedDestinations: true,
+            point: target.clone(),
+            distance: 2,
         })
 
         yield* wrap(bot.bot.lookAt(target.offset(0, 1, 0)))

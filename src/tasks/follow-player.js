@@ -47,9 +47,8 @@ module.exports = {
 
             try {
                 yield* goto.task(bot, {
-                    destination: target,
-                    range: args.range,
-                    avoidOccupiedDestinations: true,
+                    point: target,
+                    distance: args.range,
                 })
                 failStreak = 0
             } catch (error) {

@@ -9,49 +9,49 @@ class ManagedTask {
      * @type {import('./promise').TypedPromise<TResult, TError> | null}
      */
     _promise
-    
+
     /**
      * @readonly
      * @type {((value: TResult) => any) | null}
-     */// @ts-ignore
+     */
     resolve
-    
+
     /**
      * @readonly
      * @type {((reason: TError) => any) | null}
-     */// @ts-ignore
+     */
     reject
-    
+
     /**
      * @private @readonly
      * @type {Priority<TArgs>}
      */
     priority
-    
+
     /**
      * @readonly
      * @type {TaskStatus}
      */
     status
-    
+
     /**
      * @readonly
      * @type {import('./task').CommonArgs<TArgs>}
      */
     args
-    
+
     /**
      * @private @readonly
      * @type {import('./bruh-bot')}
      */
     bot
-    
+
     /**
      * @private @readonly
      * @type {import('./task').TaskDef<TResult, TArgs, TError>}
      */
     def
-    
+
     /**
      * @readonly
      * @type {import('./task').Task<TResult> | null}
@@ -101,7 +101,6 @@ class ManagedTask {
                 this.reject = reject
             })
         }
-        // @ts-ignore
         return this._promise
     }
 
@@ -110,7 +109,7 @@ class ManagedTask {
         this.task = this.def.task(this.bot, this.args)
         // @ts-ignore
         this.status = '_running'
-        
+
         console.log(`[Tasks]: Task "${this.getId()}" started`)
     }
 
@@ -192,8 +191,8 @@ module.exports = class TaskManager {
     _isStopping
 
     constructor() {
-        this._queue = [ ]
-        this._running = [ ]
+        this._queue = []
+        this._running = []
         this._isStopping = false
     }
 
@@ -285,15 +284,6 @@ module.exports = class TaskManager {
     }
 
     /**
-     * @private
-     * @param {ManagedTask} task
-     */
-    startTask(task) {
-        task.start()
-        this._running.push(task)
-    }
-
-    /**
      * @param {string | null} id
      */
     has(id) {
@@ -327,23 +317,27 @@ module.exports = class TaskManager {
                 this._running.push(moreImportantTask)
                 return moreImportantTask
             } else if (i !== -1 && this._running[i].task) {
-                try {
-                    const v = this._running[i].task.next()
-                    if (v.done) {
+                let running = null
+                for (let step = 0; step < 3; step++) {
+                    try {
+                        const v = this._running[i].task.next()
+                        if (v.done) {
+                            const finished = this._running.splice(i, 1)[0]
+                            finished.finish(v.value)
+                            if (finished.resolve) finished.resolve(v.value)
+                            return null
+                        } else {
+                            running = this._running[i]
+                        }
+                    } catch (error) {
                         const finished = this._running.splice(i, 1)[0]
-                        finished.finish(v.value)
-                        if (finished.resolve) finished.resolve(v.value)
+                        finished.fail()
+                        if (finished.reject) finished.reject(error)
+                        console.error(`Task "${finished.getId()}" failed:`, error)
                         return null
-                    } else {
-                        return this._running[i]
                     }
-                } catch (error) {
-                    const finished = this._running.splice(i, 1)[0]
-                    finished.fail()
-                    if (finished.reject) finished.reject(error)
-                    console.error(`Task "${finished.getId()}" failed:`, error)
-                    return null
                 }
+                return running
             } else {
                 return null
             }

@@ -34,9 +34,7 @@ module.exports = {
                 if (!bonemeal) { break }
 
                 yield* goto.task(bot, {
-                    destination: crop.clone(),
-                    range: 3,
-                    avoidOccupiedDestinations: true,
+                    block: crop.clone(),
                 })
                 
                 bonemeal = bot.searchItem('bonemeal')

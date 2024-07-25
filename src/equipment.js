@@ -102,6 +102,16 @@ const equipment = [
         priority: 'maybe',
         item: 'water_bucket',
     },
+    {
+        type: 'single',
+        priority: 'maybe',
+        item: 'bow',
+    },
+    {
+        type: 'single',
+        priority: 'maybe',
+        item: 'arrow',
+    },
 ]
 
 module.exports = equipment

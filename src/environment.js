@@ -21,7 +21,8 @@ const { goals } = require("mineflayer-pathfinder")
 
 /**
  * @typedef {{
- *   uuid: string;
+ *   uuid?: string;
+ *   id: number;
  *   position: Vec3;
  *   trades: ReadonlyArray<{
  *     inputItem1: { name: string; count: number; }
@@ -104,7 +105,6 @@ class ItemRequest {
  * @typedef {`${number}-${number}-${number}`} PositionHash
  */
 
-// @ts-ignore
 module.exports = class Environment {
     /**
      * @private @readonly
@@ -363,9 +363,7 @@ module.exports = class Environment {
         for (const chestPosition of chestPositions) {
             try {
                 yield* goto.task(bot, {
-                    destination: chestPosition.clone(),
-                    range: 2,
-                    avoidOccupiedDestinations: true,
+                    block: chestPosition.clone(),
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -409,6 +407,37 @@ module.exports = class Environment {
             }
         }
         console.log(`[Bot "${bot.bot.username}"]: Chests scanned`)
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot
+     * @returns {import('./task').Task<void>}
+     */
+    *scanVillagers(bot) {
+        console.log(`[Bot "${bot.bot.username}"]: Scanning villagers ...`)
+        const villagers = Object.values(bot.bot.entities).filter(v => v.name === 'villager')
+        console.log(`[Bot "${bot.bot.username}"]: Found ${villagers.length} villagers`)
+        for (const villager of villagers) {
+            try {
+                if (!villager.isValid) { continue }
+                yield* goto.task(bot, {
+                    point: villager.position.clone(),
+                    distance: 2,
+                })
+                if (!villager.isValid) { continue }
+
+                const _villager = yield* wrap(bot.bot.openVillager(villager))
+                while (!_villager.trades) { yield }
+                yield
+                this.addVillager(villager, _villager)
+                _villager.close()
+
+                yield* sleepG(100)
+            } catch (error) {
+                console.warn(`[Bot "${bot.bot.username}"]: Error while scanning villagers`, error)
+            }
+        }
+        console.log(`[Bot "${bot.bot.username}"]: Villagers scanned`)
     }
 
     /**
@@ -503,15 +532,31 @@ module.exports = class Environment {
      * @param {import("mineflayer").Villager} villager
      */
     addVillager(entity, villager) {
-        if (!entity.uuid) { return }
-        this.villagers[entity.uuid] = {
-            position: entity.position.clone(),
-            uuid: entity.uuid,
-            trades: villager.trades.map(v => ({
-                inputItem1: { name: v.inputItem1.name, count: v.inputItem1.count },
-                inputItem2: v.hasItem2 ? { name: v.inputItem2.name, count: v.inputItem2.count } : null,
-                outputItem: { name: v.outputItem.name, count: v.outputItem.count },
-            })),
+        if (entity.uuid) {
+            this.villagers[entity.uuid] = {
+                position: entity.position.clone(),
+                uuid: entity.uuid,
+                id: entity.id,
+                trades: villager.trades.map(v => ({
+                    inputItem1: { name: v.inputItem1.name, count: v.inputItem1.count },
+                    inputItem2: v.hasItem2 ? { name: v.inputItem2.name, count: v.inputItem2.count } : null,
+                    outputItem: { name: v.outputItem.name, count: v.outputItem.count },
+                })),
+            }
+            if (this.villagers[entity.id]) {
+                delete this.villagers[entity.id]
+            }
+        } else {
+            this.villagers[entity.id] = {
+                position: entity.position.clone(),
+                uuid: entity.uuid,
+                id: entity.id,
+                trades: villager.trades.map(v => ({
+                    inputItem1: { name: v.inputItem1.name, count: v.inputItem1.count },
+                    inputItem2: v.hasItem2 ? { name: v.inputItem2.name, count: v.inputItem2.count } : null,
+                    outputItem: { name: v.outputItem.name, count: v.outputItem.count },
+                })),
+            }
         }
     }
 
@@ -591,9 +636,11 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} farmPosition
      * @param {boolean} grown
+     * @param {number} [count]
+     * @param {number} [maxDistance]
      * @returns {Array<Vec3>}
      */
-    getCrops(bot, farmPosition, grown) {
+    getCrops(bot, farmPosition, grown, count = 1, maxDistance = undefined) {
         const cropBlockIds = []
         for (const cropName in MC.cropsByBlockName) {
             const crop = MC.cropsByBlockName[cropName]
@@ -681,6 +728,8 @@ module.exports = class Environment {
                 return grown === isGrown
             },
             point: farmPosition,
+            count: count,
+            maxDistance: maxDistance,
         })
     }
 
@@ -862,28 +911,28 @@ module.exports = class Environment {
      * @returns {boolean}
      */
     /**
-    * @overload
-    * @param {string} bot
-    * @param {Vec3} position
-    * @param {'place'} type
-    * @param {{ item: number; }} args
-    * @returns {boolean}
-    */
-   /**
-    * @overload
-    * @param {string} bot
-    * @param {Vec3} position
-    * @param {'hoe'} type
-    * @param {any} [args]
-    * @returns {boolean}
-    */
-   /**
-    * @param {string} bot
-    * @param {Vec3} position
-    * @param {'dig' | 'place' | 'hoe'} type
-    * @param {any} [args]
-    * @returns {boolean}
-    */
+     * @overload
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'place'} type
+     * @param {{ item: number; }} args
+     * @returns {boolean}
+     */
+    /**
+     * @overload
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'hoe'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */
+    /**
+     * @param {string} bot
+     * @param {Vec3} position
+     * @param {'dig' | 'place' | 'hoe'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */
     allocateBlock(bot, position, type, args) {
         /**
          * @type {PositionHash}
@@ -930,7 +979,6 @@ module.exports = class Environment {
         if (this.allocatedBlocks[hash].type !== waitFor) {
             return false
         }
-        const allocatedBlock = this.allocatedBlocks[hash]
         while (this.allocatedBlocks[hash]) {
             yield* sleepG(100)
         }
@@ -1014,7 +1062,7 @@ module.exports = class Environment {
      */
     lockOthersItems(requestor, item, count) {
         let locked = 0
-        const locks = [ ]
+        const locks = []
         for (const bot of this.bots) {
             if (bot.bot.username === requestor) { continue }
             const lock = bot.tryLockItems(requestor, item, count - locked)

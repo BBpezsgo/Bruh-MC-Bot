@@ -90,9 +90,7 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            destination: bed.position.clone(),
-            range: 2,
-            avoidOccupiedDestinations: true,
+            block: bed.position.clone(),
             timeout: 30000,
         })
 

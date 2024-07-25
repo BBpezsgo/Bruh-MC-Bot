@@ -1,11 +1,10 @@
-const { sleepG, wrap, waitForEvent } = require('../utils/tasks')
+const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
  * @typedef {{
- *   item: string;
- *   count: number;
- *   type: 'buy' | 'sell';
+ *   trade: import('../environment').SavedVillager['trades'][0];
+ *   numberOfTrades: number;
  * }} TradeArgs
  */
 
@@ -16,31 +15,19 @@ const goto = require('./goto')
  */
 
 /**
- * 
- * @param {import('../bruh-bot')} bot 
- * @param {import('../environment').SavedVillager['trades']} trades 
- * @param {TradeArgs} args 
+ * @param {import('../environment').SavedVillager['trades'][0]} a
+ * @param {import('../environment').SavedVillager['trades'][0]} b
  */
-function findTradeIndex(bot, trades, args) {
-    for (let i = 0; i < trades.length; i++) {
-        const trade = trades[i]
-        const tradeKind = (trade.outputItem.name === 'emerald') ? 'sell' : 'buy'
-        if (tradeKind !== args.type) { continue }
-        if (trade.inputItem2) { console.warn(`I don't want to implement it`) }
-        if (tradeKind === 'buy') {
-            if (trade.outputItem.name !== args.item) { continue }
-        } else {
-            if (trade.inputItem1.name !== args.item) { continue }
-        }
-
-        return i
-    }
-
-    return -0
+function tradeEquality(a, b) {
+    return (
+        a.inputItem1?.name == b.inputItem1?.name &&
+        a.inputItem2?.name == b.inputItem2?.name &&
+        a.outputItem?.name == b.outputItem?.name
+    )
 }
 
 /**
- * @type {import('../task').TaskDef<number, Args> & { findTradeIndex: findTradeIndex }}
+ * @type {import('../task').TaskDef<number, Args> & { tradeEquality: tradeEquality }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -52,17 +39,17 @@ module.exports = {
             for (const uuid in bot.env.villagers) {
                 yield
                 const villager = bot.env.villagers[uuid]
-                if (findTradeIndex(bot, villager.trades, args) !== -1) {
-                    let entity = bot.bot.nearestEntity(v => v.uuid === uuid)
+                const tradeIndex = villager.trades.findIndex(v => tradeEquality(v, args.trade))
+                if (tradeIndex !== -1) {
+                    let entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
                     if (entity) {
                         args.villager = entity
                     } else {
                         yield* goto.task(bot, {
-                            destination: villager.position.clone(),
-                            range: 2,
-                            avoidOccupiedDestinations: true,
+                            point: villager.position.clone(),
+                            distance: 2,
                         })
-                        entity = bot.bot.nearestEntity(v => v.uuid === uuid)
+                        entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
                         if (entity) {
                             args.villager = entity
                             break
@@ -77,17 +64,17 @@ module.exports = {
             entities.sort((a, b) => (bot.bot.entity.position.distanceSquared(a.position) - bot.bot.entity.position.distanceSquared(b.position)))
             for (const entity of entities) {
                 yield* goto.task(bot, {
-                    destination: entity.position.clone(),
-                    range: 2,
-                    avoidOccupiedDestinations: true,
+                    point: entity.position.clone(),
+                    distance: 2,
                 })
                 if (!entity.isValid) { continue }
 
                 const villager = yield* wrap(bot.bot.openVillager(args.villager))
-                yield* waitForEvent(villager, 'ready')
+                while (!villager.trades) { yield }
                 yield
 
-                if (findTradeIndex(bot, villager.trades, args) !== -1) {
+                const tradeIndex = villager.trades.findIndex(v => tradeEquality(v, args.trade))
+                if (tradeIndex !== -1) {
                     args.villager = entity
                     villager.close()
                     yield* sleepG(100)
@@ -100,13 +87,12 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            destination: args.villager.position.clone(),
-            range: 2,
-            avoidOccupiedDestinations: true,
+            point: args.villager.position.clone(),
+            distance: 2,
         })
 
         const villager = yield* wrap(bot.bot.openVillager(args.villager))
-        yield* waitForEvent(villager, 'ready')
+        while (!villager.trades) { yield }
         yield
 
         bot.env.addVillager(args.villager, villager)
@@ -114,19 +100,19 @@ module.exports = {
         let traded = 0
 
         try {
-            const tradeIndex = findTradeIndex(bot, villager.trades, args)
+            const tradeIndex = villager.trades.findIndex(v => tradeEquality(v, args.trade))
             if (tradeIndex === -1) {
                 throw `No trade found`
             }
 
             const trade = villager.trades[tradeIndex]
-    
+
             if (trade.tradeDisabled) { throw `This trade is disabled` }
-            while (traded < args.count) {
+            while (traded < args.numberOfTrades) {
                 const have = bot.itemCount(trade.inputItem1.name)
                 if (have < trade.inputItem1.count) { break }
                 yield* wrap(bot.bot.trade(villager, tradeIndex, 1))
-                traded += trade.outputItem.count
+                traded++
             }
         } finally {
             villager.close()
@@ -140,5 +126,5 @@ module.exports = {
     humanReadableId: function(args) {
         return 'Trading'
     },
-    findTradeIndex: findTradeIndex,
+    tradeEquality: tradeEquality,
 }

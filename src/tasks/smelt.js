@@ -17,7 +17,7 @@ function findBestFurnace(bot, recipes, noFuel) {
      */
     let _recipes = []
     let bestFurnace = null
-    recipes ??= [ ]
+    recipes ??= []
 
     for (const recipe of recipes) {
         /**
@@ -146,8 +146,9 @@ function* doCampfire(bot, campfire, recipe, count) {
     }
 
     for (let i = 0; i < count; i++) {
-        // @ts-ignore
-        if (campfire.blockEntity['Items'].length >= 4 || placedCount >= 4) {
+        if (!('Items' in campfire.blockEntity)) { continue }
+        if (!Array.isArray(campfire.blockEntity.Items)) { continue }
+        if (campfire.blockEntity.Items.length >= 4 || placedCount >= 4) {
             console.log(`[Bot: "${bot.bot.username}"]: Campfire is full`)
             break
         }
@@ -165,7 +166,7 @@ function* doCampfire(bot, campfire, recipe, count) {
         inAir: true,
         point: campfire.position.clone(),
         maxDistance: 4,
-        items: [ result.name ],
+        items: [result.name],
     }
 
     console.log(`[Bot: "${bot.bot.username}"]: Wait for ${((recipe.time * 1000) + exceedingWaitTime) / 1000} secs ...`)
@@ -203,7 +204,7 @@ function* doCampfire(bot, campfire, recipe, count) {
  * }}
  */
 module.exports = {
-    task: function* (bot, args) {
+    task: function*(bot, args) {
         const fuels = bot.mc.data2.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
 
         const best = findBestFurnace(bot, args.recipes, args.noFuel)
@@ -220,9 +221,7 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            destination: furnaceBlock.position.clone(),
-            range: 2,
-            avoidOccupiedDestinations: true,
+            block: furnaceBlock.position.clone(),
         })
 
         if (!furnaceBlock) {
@@ -247,7 +246,7 @@ module.exports = {
                         furnace.close()
                         throw `Cancelled`
                     }
-                    const resp = yield* args.onNeedYesNo(`There are ${inputItem.count} of ${inputItem.displayName} waiting in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
+                    const resp = yield* args.onNeedYesNo(`There are ${inputItem.count} ${inputItem.displayName} waiting in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
                     if (resp === null || resp) {
                         yield* wrap(furnace.takeInput())
                     } else {
@@ -264,7 +263,7 @@ module.exports = {
                         furnace.close()
                         throw `Cancelled`
                     }
-                    const resp = yield* args.onNeedYesNo(`There are ${outputItem.count} of ${outputItem.displayName} finished in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
+                    const resp = yield* args.onNeedYesNo(`There are ${outputItem.count} ${outputItem.displayName} finished in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
                     if (resp === null || resp) {
                         yield* wrap(furnace.takeOutput())
                     } else {
@@ -365,14 +364,14 @@ module.exports = {
 
         throw `I can't smelt`
     },
-    id: function (args) {
+    id: function(args) {
         let result = `smelt`
         for (const recipe of args.recipes) {
             result += `-${recipe.type}-${recipe.result}`
         }
         return result
     },
-    humanReadableId: function (args) {
+    humanReadableId: function(args) {
         return `Cooking`
     },
     findBestFurnace: findBestFurnace,

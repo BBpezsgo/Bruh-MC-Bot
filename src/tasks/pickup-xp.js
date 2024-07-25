@@ -6,16 +6,15 @@ const goto = require("./goto")
  * @type {import('../task').TaskDef<void, { maxDistance?: number; point?: Vec3; }>}
  */
 module.exports = {
-    task: function*(bot, args) {        
+    task: function*(bot, args) {
         const nearest = bot.env.getClosestXp(bot, args)
         if ('error' in nearest) {
             throw nearest.error
         }
 
         yield* goto.task(bot, {
-            destination: nearest.result.position.clone(),
-            range: 0,
-            avoidOccupiedDestinations: true,
+            point: nearest.result.position.clone(),
+            distance: .5,
         })
 
         while (nearest.result && nearest.result.isValid) {

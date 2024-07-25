@@ -76,6 +76,8 @@
 			"unequip",
 			"zoglin",
 			"zombified"
-		]
+		],
+		"javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
+		"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false
 	}
 }

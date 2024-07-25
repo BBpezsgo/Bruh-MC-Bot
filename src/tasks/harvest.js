@@ -1,6 +1,6 @@
 const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
-const { backNForthSort, directBlockNeighbors } = require('../utils/other')
+const { backNForthSort, basicRouteSearch, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const plantSeed = require('./plant-seed')
@@ -17,55 +17,51 @@ module.exports = {
         }
 
         let n = 0
-
         /**
          * @type {Array<import('../environment').SavedCrop>}
          */
-        const harvestedCrops = [ ]
+        const harvestedCrops = []
+        const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
+        const replantDuringHarvesting = true
 
         while (true) {
-            yield
-
-            const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
-
-            let cropPositions = bot.env.getCrops(bot, farmPosition, true)
-
+            // yield
+            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 20, 20)
             if (cropPositions.length === 0) { break }
+            // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
+            cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)
 
-            cropPositions = backNForthSort(cropPositions)
-
+            console.log(`[Bot "${bot.bot.username}"] Harvesting ${cropPositions.length} crops ...`)
             for (const cropPosition of cropPositions) {
-                yield
+                // yield
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
-                console.log(`[Bot "${bot.bot.username}"]: Harvesting ${cropBlock.name} ...`)
+                console.log(`[Bot "${bot.bot.username}"] Harvesting ${cropBlock.name} ...`)
 
                 const cropInfo = MC.findCropByAnyBlockName(cropBlock.name)
                 if (!cropInfo) {
-                    console.warn(`[Bot "${bot.bot.username}"]: This aint a crop`)
+                    console.warn(`[Bot "${bot.bot.username}"] This aint a crop`)
                     continue
                 }
 
-                console.log(`[Bot "${bot.bot.username}"]: Goto block ...`)
+                // console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
 
                 yield* goto.task(bot, {
-                    // block: crop.clone(),
-                    destination: cropPosition.clone(),
-                    range: 3,
-                    avoidOccupiedDestinations: true,
+                    block: cropPosition.clone(),
                 })
 
-                console.log(`[Bot "${bot.bot.username}"]: Actually harvesting ...`)
+                // console.log(`[Bot "${bot.bot.username}"] Actually harvesting ...`)
 
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
                         if (!(bot.env.allocateBlock(bot.bot.username, cropPosition, 'dig'))) {
-                            console.log(`[Bot "${bot.bot.username}"]: Crop will be digged by someone else, skipping ...`)
+                            console.log(`[Bot "${bot.bot.username}"] Crop will be digged by someone else, skipping ...`)
                             yield
                             continue
                         }
-                        yield* wrap(bot.bot.dig(cropBlock))
+                        yield* wrap(bot.bot.dig(cropBlock, 'ignore'))
+                        // bot.bot.dig(cropBlock, 'ignore')
                         break
                     }
                     case 'grows_fruit': {
@@ -86,12 +82,10 @@ module.exports = {
                             continue
                         }
                         yield* goto.task(bot, {
-                            destination: fruitBlock.position.clone(),
-                            range: 3,
-                            avoidOccupiedDestinations: true,
+                            block: fruitBlock.position.clone(),
                         })
                         if (!(bot.env.allocateBlock(bot.bot.username, fruitBlock.position, 'dig'))) {
-                            console.log(`[Bot "${bot.bot.username}"]: Crop fruit will be digged by someone else, skipping ...`)
+                            console.log(`[Bot "${bot.bot.username}"] Crop fruit will be digged by someone else, skipping ...`)
                             yield
                             continue
                         }
@@ -100,11 +94,11 @@ module.exports = {
                     }
                     case 'tree': {
                         if (cropInfo.log !== cropBlock.name) {
-                            console.warn(`[Bot "${bot.bot.username}"]: This tree aint right`)
+                            console.warn(`[Bot "${bot.bot.username}"] This tree aint right`)
                             continue
                         }
                         if (cropInfo.size !== 'small') {
-                            console.warn(`[Bot "${bot.bot.username}"]: This tree is too big for me`)
+                            console.warn(`[Bot "${bot.bot.username}"] This tree is too big for me`)
                             continue
                         }
                         yield* dig.task(bot, {
@@ -120,7 +114,7 @@ module.exports = {
                 n++
 
                 let isSaved = false
-                
+
                 for (const crop of bot.env.crops) {
                     if (crop.position.equals(cropPosition)) {
                         crop.block = cropInfo.cropName
@@ -128,15 +122,24 @@ module.exports = {
                         break
                     }
                 }
-                
+
                 if (isSaved) {
-                    console.log(`[Bot "${bot.bot.username}"] Crop already saved`)
+                    // console.log(`[Bot "${bot.bot.username}"] Crop already saved`)
                 } else {
-                    console.log(`[Bot "${bot.bot.username}"] Crop saved`)
+                    // console.log(`[Bot "${bot.bot.username}"] Crop saved`)
                     bot.env.crops.push({
                         position: cropPosition.clone(),
                         block: cropInfo.cropName,
                     })
+                }
+
+                if (!replantDuringHarvesting) {
+                    // console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
+                    harvestedCrops.push({
+                        position: cropPosition.clone(),
+                        block: cropInfo.cropName,
+                    })
+                    continue
                 }
 
                 if (cropInfo.type === 'grows_block') {
@@ -164,14 +167,14 @@ module.exports = {
                         throw `Place on is null`
                     }
 
-                    console.log(`[Bot "${bot.bot.username}"] Replant on ${placeOn.block.name}`)
+                    // console.log(`[Bot "${bot.bot.username}"] Replant on ${placeOn.block.name}`)
 
                     yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed)
 
                     console.log(`[Bot "${bot.bot.username}"] Seed ${cropInfo.seed} replanted`)
                 } catch (error) {
                     console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
-                    harvestedCrops.push({ 
+                    harvestedCrops.push({
                         position: cropPosition.clone(),
                         block: cropInfo.cropName,
                     })
@@ -179,15 +182,15 @@ module.exports = {
                 }
             }
 
-            try {
-                yield* pickupItem.task(bot, {
-                    inAir: true,
-                    maxDistance: 8,
-                    point: farmPosition,
-                })
-            } catch (error) {
-                console.warn(error)
-            }
+            // try {
+            //     yield* pickupItem.task(bot, {
+            //         inAir: true,
+            //         maxDistance: 8,
+            //         point: farmPosition,
+            //     })
+            // } catch (error) {
+            //     console.warn(error)
+            // }
         }
 
         yield* plantSeed.task(bot, {

@@ -178,7 +178,7 @@ module.exports = class MC {
             type: 'simple',
             seed: 'potato',
             grownAge: 7,
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -186,7 +186,7 @@ module.exports = class MC {
             type: 'seeded',
             seed: 'beetroot_seeds',
             grownAge: 3,
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -194,7 +194,7 @@ module.exports = class MC {
             type: 'seeded',
             seed: 'wheat_seeds',
             grownAge: 7,
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -202,7 +202,7 @@ module.exports = class MC {
             type: 'simple',
             seed: 'carrot',
             grownAge: 7,
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -211,7 +211,7 @@ module.exports = class MC {
             seed: 'melon_seeds',
             grownBlock: 'melon',
             attachedCropName: 'attached_melon_stem',
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -220,7 +220,7 @@ module.exports = class MC {
             seed: 'pumpkin_seeds',
             grownBlock: 'pumpkin',
             attachedCropName: 'attached_pumpkin_stem',
-            growsOnBlock: [ 'farmland' ],
+            growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
         },
@@ -263,7 +263,7 @@ module.exports = class MC {
             type: 'simple',
             seed: 'nether_wart',
             grownAge: 3,
-            growsOnBlock: [ 'soul_sand' ],
+            growsOnBlock: ['soul_sand'],
             growsOnSide: 'top',
             canUseBonemeal: false,
         },
@@ -434,7 +434,7 @@ module.exports = class MC {
     constructor(version, jarPath) {
         this.data = getMcData(version)
         this.data2 = new MinecraftData(jarPath)
-    
+
         for (const key in this.data2.compost) {
             if (!this.data.itemsByName[key]) {
                 console.warn(`Unknown item "${key}"`)
@@ -518,10 +518,10 @@ module.exports = class MC {
         let bestTools = []
 
         for (const category_ of toolNames) {
-            const subtools = MC.tools[category_]
+            const subTools = MC.tools[category_]
             for (const level of MC.toolLevels) {
-                const subtool = subtools[level]
-                const item = this.data.itemsByName[subtool]
+                const subTool = subTools[level]
+                const item = this.data.itemsByName[subTool]
 
                 if (blockToBreak.canHarvest(item.id)) {
                     const time = blockToBreak.digTime(item.id, false, false, false, [], [])
@@ -707,7 +707,7 @@ module.exports = class MC {
     /**
      * @param {boolean} includeFoods
      */
-    nontrashItems(includeFoods) {
+    notTrashItems(includeFoods) {
         const result = [
             this.data.itemsByName['wooden_hoe']?.id,
             this.data.itemsByName['stone_hoe']?.id,
@@ -807,7 +807,7 @@ module.exports = class MC {
                 req = d.id
             }
         }
-        
+
         for (const from in this.data2.compacting) {
             const to = this.data2.compacting[from]
             const fromId = this.data.itemsByName[from].id

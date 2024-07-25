@@ -69,10 +69,7 @@ module.exports = {
         
                     console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
-                        // block: current.position.clone(),
-                        destination: current.position.clone(),
-                        range: 3,
-                        avoidOccupiedDestinations: true,
+                        block: current.position.clone(),
                         movements: bot.cutTreeMovements,
                     })
                 
@@ -126,9 +123,8 @@ module.exports = {
                 if (distance < 1.5) {
                     console.log(`[Bot "${bot.bot.username}"] Picking up item ...`)
                     yield* goto.task(bot, {
-                        destination: nearestEntity.position.clone(),
-                        range: .5,
-                        avoidOccupiedDestinations: true,
+                        point: nearestEntity.position.clone(),
+                        distance: 0,
                         movements: bot.cutTreeMovements,
                     })
                     

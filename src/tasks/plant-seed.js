@@ -4,6 +4,7 @@ const { Block } = require('prismarine-block')
 const goto = require('./goto')
 const hoeing = require('./hoeing')
 const MC = require('../mc')
+const { basicRouteSearch } = require('../utils/other')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -27,19 +28,25 @@ function* plant(bot, placeOn, placeVector, seedItem) {
         return
     }
 
-    console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
+    // console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
-        destination: placeOn.position.clone(),
-        range: 3,
-        avoidOccupiedDestinations: true,
+        block: placeOn.position.clone().offset(0, 0.5, 0),
     })
-    
-    console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equipping item`)
-    yield* wrap(bot.bot.equip(seedItem, 'hand'))
+
+    const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
+    if (!holds || holds.type !== seedItem.type) {
+        // console.log(`[Bot "${bot.bot.username}"] Planting seed ... Equipping item`)
+        yield* wrap(bot.bot.equip(seedItem, 'hand'))
+    } else {
+        // console.log(`[Bot "${bot.bot.username}"] Planting seed ... Item already equipped`)
+    }
 
     if (bot.bot.heldItem) {
-        console.log(`[Bot "${bot.bot.username}"] Planting seed ... Place block`)
-        yield* wrap(bot.bot.placeBlock(placeOn, placeVector))
+        // console.log(`[Bot "${bot.bot.username}"] Planting seed ...`)
+        // @ts-ignore
+        yield* wrap(bot.bot._placeBlockWithOptions(placeOn, placeVector, { forceLook: 'ignore' }))
+        // bot.bot._placeBlockWithOptions(placeOn, placeVector, { forceLook: 'ignore' })
+        // yield
     }
 }
 
@@ -59,8 +66,9 @@ module.exports = {
         let plantedCount = 0
 
         if ('harvestedCrops' in args) {
-            for (const savedCrop of args.harvestedCrops) {
-                yield
+            const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, args.harvestedCrops, v => v.position)
+            for (const savedCrop of sortedCropPositions) {
+                // yield
                 const crop = MC.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 console.log(`[Bot "${bot.bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
@@ -99,15 +107,15 @@ module.exports = {
                         placeOn.block.name === 'grass_block' ||
                         placeOn.block.name === 'dirt_path'
                     )) {
-                        try {
-                            yield* hoeing.task(bot, {
-                                block: placeOn.block.position.clone(),
-                                gatherTool: false,
-                            })
-                        } catch (error) {
-                            console.error(error)
-                            continue
-                        }
+                    try {
+                        yield* hoeing.task(bot, {
+                            block: placeOn.block.position.clone(),
+                            gatherTool: false,
+                        })
+                    } catch (error) {
+                        console.error(error)
+                        continue
+                    }
                 }
 
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position, crop, true, false)

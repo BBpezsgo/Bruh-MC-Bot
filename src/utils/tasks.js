@@ -55,7 +55,6 @@ function* wrap(promise) {
     if (error) {
         throw error
     } else {
-        // @ts-ignore
         return resolvedValue
     }
 }
