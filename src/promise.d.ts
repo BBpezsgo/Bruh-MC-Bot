@@ -1,13 +1,5 @@
 export class TypedPromise<TResult, TError = any> extends Promise<TResult> {
     /**
-     * Creates a new Promise.
-     * @param executor A callback used to initialize the promise. This callback is passed two arguments:
-     * a resolve callback used to resolve the promise with a value or the result of another promise,
-     * and a reject callback used to reject the promise with a provided reason or error.
-     */
-    new <T1, T2>(executor: (resolve: (value: T1 | PromiseLike<T1>) => void, reject: (reason?: T2) => void) => void): TypedPromise<T1, T2>
-
-    /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
      * @param onrejected The callback to execute when the Promise is rejected.

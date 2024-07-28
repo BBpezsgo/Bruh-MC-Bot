@@ -1,6 +1,4 @@
-const { sleepG } = require('../utils/tasks')
 const goto = require("./goto")
-const Vec3Dimension = require("../vec3-dimension")
 
 /**
  * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; }>}
@@ -24,7 +22,7 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            point: new Vec3Dimension(nearest.result.position, bot.bot.game.dimension),
+            point: nearest.result.position,
             distance: 0,
         })
 

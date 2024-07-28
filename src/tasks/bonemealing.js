@@ -38,7 +38,7 @@ module.exports = {
                 if (!bonemeal) { break }
 
                 yield* goto.task(bot, {
-                    block: new Vec3Dimension(crop, bot.dimension),
+                    block: crop,
                 })
                 
                 bonemeal = bot.searchItem('bonemeal')

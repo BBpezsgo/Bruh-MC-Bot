@@ -63,14 +63,14 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                block: new Vec3Dimension(above.position, bot.bot.game.dimension),
+                block: above.position,
             })
 
             yield* wrap(bot.bot.dig(above))
         }
 
         yield* goto.task(bot, {
-            point: new Vec3Dimension(target, bot.bot.game.dimension),
+            point: target,
             distance: 2,
         })
 

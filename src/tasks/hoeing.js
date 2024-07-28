@@ -100,7 +100,7 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                block: new Vec3Dimension(args.block, bot.bot.game.dimension),
+                block: args.block,
             })
 
             if (above && MC.replaceableBlocks[above.name] === 'break') {
@@ -147,7 +147,7 @@ module.exports = {
                 point: water.clone(),
                 maxDistance: 6,
                 count: 80,
-            }).filter(filterPosition).map(v => new Vec3Dimension(v, bot.bot.game.dimension))
+            }).filter(filterPosition).map(v => new Vec3Dimension(v, bot.dimension))
             dirts = backNForthSort(dirts)
 
             let shouldContinue = false

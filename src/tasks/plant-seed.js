@@ -31,7 +31,7 @@ function* plant(bot, placeOn, placeVector, seedItem) {
 
     // console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
-        block: new Vec3Dimension(placeOn.position.clone().offset(0, 0.5, 0), bot.bot.game.dimension),
+        block: placeOn.position.clone().offset(0, 0.5, 0),
     })
 
     const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
@@ -67,14 +67,14 @@ module.exports = {
         let plantedCount = 0
 
         if ('harvestedCrops' in args) {
-            const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.bot.game.dimension)
+            const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
             const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))
             for (const savedCrop of sortedCropPositions) {
                 // yield
                 const crop = MC.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 console.log(`[Bot "${bot.bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
-
+                
                 const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
                 const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[seedName].id, null, false)
                 if (!seed) {

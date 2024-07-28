@@ -8,7 +8,7 @@ module.exports = class Memory {
     /**
      * @private @readonly
      * @type {import('./bruh-bot')}
-     */
+     */ // @ts-ignore
     bot
 
     /**

@@ -4,35 +4,46 @@
  * @template [TError = any]
  */
 class ManagedTask {
+
     /**
-     * @private
-     * @type {import('./promise').TypedPromise<TResult, TError> | null}
+     * @exports
+     * @typedef {'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled' | 'aborted'} TaskStatus
      */
-    _promise
+
+    //#region Public
 
     /**
      * @readonly
-     * @type {((value: TResult) => any) | null}
+     * @type {boolean}
      */
-    resolve
+    get isDone() {
+        return (
+            this._status === 'aborted' ||
+            this._status === 'cancelled' ||
+            this._status === 'failed' ||
+            this._status === 'done'
+        )
+    }
 
     /**
      * @readonly
-     * @type {((reason: TError) => any) | null}
+     * @type {string}
      */
-    reject
-
-    /**
-     * @private @readonly
-     * @type {Priority<TArgs>}
-     */
-    priority
+    get id() { return this._def.id(this.args) }
 
     /**
      * @readonly
-     * @type {TaskStatus}
+     * @type {string}
      */
-    status
+    get humanReadableId() { return this._def.humanReadableId(this.args) }
+
+    /**
+     * @readonly
+     * @type {number}
+     */
+    get priority() {
+        return (typeof this._priority === 'number') ? this._priority : this._priority(this.args)
+    }
 
     /**
      * @readonly
@@ -41,108 +52,171 @@ class ManagedTask {
     args
 
     /**
+     * @readonly
+     */
+    get status() { return this._status }
+
+    //#endregion
+
+    //#region Private
+
+    /**
+     * @private
+     * @type {import('./task').Task<TResult> | null}
+     */
+    _task
+
+    /**
+     * @private
+     * @type {import('./task').Task<void> | null}
+     */
+    _cancellingTask
+
+    /**
+     * @type {((value: TResult) => any) | null}
+     */
+    _resolve
+
+    /**
+     * @type {((reason: TError) => any) | null}
+     */
+    _reject
+
+    /**
+     * @private
+     * @type {Promise<TResult> | null}
+     */
+    _promise
+
+    /**
+     * @private @readonly
+     * @type {Priority<TArgs>}
+     */
+    _priority
+
+    /**
+     * @private
+     * @type {TaskStatus}
+     */
+    _status
+
+    /**
      * @private @readonly
      * @type {import('./bruh-bot')}
      */
-    bot
+    _bot
 
     /**
      * @private @readonly
      * @type {import('./task').TaskDef<TResult, TArgs, TError>}
      */
-    def
+    _def
 
-    /**
-     * @readonly
-     * @type {import('./task').Task<TResult> | null}
-     */
-    task
+    //#endregion
 
     /**
      * @param {Priority<TArgs>} priority
-     * @param {TaskStatus} status
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
      * @param {import("./task").TaskDef<TResult, TArgs, TError>} def
-     * @param {import("./task").Task<TResult> | null} task
      */
     constructor(
         priority,
-        status,
         args,
         bot,
-        def,
-        task
+        def
     ) {
-        this.priority = priority
-        this.status = status
+        this._priority = priority
+        this._status = 'queued'
         this.args = args
-        this.bot = bot
-        this.def = def
-        this.task = task
+        this._bot = bot
+        this._def = def
+        this._task = null
+        this._cancellingTask = null
         this._promise = null
-        this.resolve = null
-        this.reject = null
+        this._resolve = null
+        this._reject = null
     }
-
-    getId() { return this.def.id(this.args) }
-    getHumanReadableId() { return this.def.humanReadableId(this.args) }
 
     /**
      * @returns {import('./promise').TypedPromise<TResult, TError>}
      */
     wait() {
         if (!this._promise) {
-            // @ts-ignore
             this._promise = new Promise((resolve, reject) => {
-                // @ts-ignore
-                this.resolve = resolve
-                // @ts-ignore
-                this.reject = reject
+                this._resolve = resolve
+                this._reject = reject
             })
         }
+        // @ts-ignore
         return this._promise
     }
 
-    start() {
-        // @ts-ignore
-        this.task = this.def.task(this.bot, this.args)
-        // @ts-ignore
-        this.status = '_running'
-
-        console.log(`[Tasks]: Task "${this.getId()}" started`)
-    }
-
-    /**
-     * @param {TResult} result
-     */
-    finish(result) {
-        // @ts-ignore
-        this.status = 'done'
-        console.log(`[Tasks]: Task "${this.getId()}" finished with result`, result)
-    }
-
-    fail() {
-        // @ts-ignore
-        this.status = 'done'
-        console.log(`[Tasks]: Task "${this.getId()}" failed`)
-    }
-
     cancel() {
-        // @ts-ignore
-        this.status = 'done'
-        console.log(`[Tasks]: Task "${this.getId()}" canceled`)
+        this._status = 'cancelled'
+        if (!this._task) {
+            return
+        }
+
+        if (this.args.cancel) {
+            if (this._cancellingTask) { return }
+            this._cancellingTask = this.args.cancel()
+        } else {
+            // @ts-ignore
+            this._task.return('cancelled')
+            console.log(`[Tasks]: Task "${this.id}" cancelled`)
+        }
     }
 
-    getPriority() {
-        return (typeof this.priority === 'number') ? this.priority : this.priority(this.args)
+    abort() {
+        this._status = 'aborted'
+        if (!this._task) {
+            return
+        }
+
+        // @ts-ignore
+        this._task.return('aborted')
+        console.log(`[Tasks]: Task "${this.id}" aborted`)
+    }
+
+    tick() {
+        if (this._cancellingTask) {
+            const v = this._cancellingTask.next()
+            if (v.done) {
+                this._status = 'cancelled'
+                console.log(`[Tasks]: Task "${this.id}" cancelled gracefully`)
+                return true
+            } else {
+                this._status = 'cancelling'
+                return false
+            }
+        }
+
+        if (!this._task) {
+            this._task = this._def.task(this._bot, this.args)
+            this._status = 'running'
+            console.log(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" started`)
+        }
+
+        try {
+            const v = this._task.next()
+            if (v.done) {
+                this._status = 'done'
+                console.log(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" finished with result`, v.value)
+                if (this._resolve) { this._resolve(v.value) }
+                return true
+            } else {
+                this._status = 'running'
+                return false
+            }
+        } catch (error) {
+            this._status = 'failed'
+            console.error(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" failed:`, error)
+            if (this._reject) { this._reject(error) }
+            return true
+        }
     }
 }
-
-/**
- * @exports
- * @typedef {'queued' | '_running' | 'done'} TaskStatus
- */
 
 /**
  * @exports
@@ -223,11 +297,9 @@ module.exports = class TaskManager {
 
         const newTask = new ManagedTask(
             priority,
-            'queued',
             args,
             bot,
-            task,
-            null
+            task
         )
 
         this._queue.push(newTask)
@@ -237,8 +309,8 @@ module.exports = class TaskManager {
 
     /**
      * @private
-     * @param {ManagedTask} a
-     * @param {ManagedTask} b
+     * @param {ManagedTask | null} a
+     * @param {ManagedTask | null} b
      * **Returns:**
      * 
      *  Positive - `a` is more important
@@ -251,7 +323,7 @@ module.exports = class TaskManager {
         if (!a && !b) { return 0 }
         if (!b) { return 1 }
         if (!a) { return -1 }
-        return a.getPriority() - b.getPriority()
+        return a.priority - b.priority
     }
 
     /**
@@ -264,7 +336,7 @@ module.exports = class TaskManager {
         let index = -1
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i]
-            const priority = task.getPriority()
+            const priority = task.priority
             if (maxPriority === null || priority > maxPriority) {
                 maxPriority = priority
                 index = i
@@ -290,14 +362,14 @@ module.exports = class TaskManager {
         if (id) {
             for (let i = 0; i < this._queue.length; i++) {
                 const _task = this._queue[i]
-                if (_task.getId() === id) {
+                if (_task.id === id) {
                     // console.log(`Task "${id}" already added`)
                     return true
                 }
             }
             for (let i = 0; i < this._running.length; i++) {
                 const _task = this._running[i]
-                if (_task.getId() === id) {
+                if (_task.id === id) {
                     // console.log(`Task "${id}" already added`)
                     return true
                 }
@@ -313,28 +385,17 @@ module.exports = class TaskManager {
             const j = TaskManager.findImportantTask(this._queue)
             if (j !== -1 && TaskManager.compareTasks(this._running[i], this._queue[j]) < 0) {
                 const moreImportantTask = this._queue.splice(j, 1)[0]
-                moreImportantTask.start()
                 this._running.push(moreImportantTask)
                 return moreImportantTask
-            } else if (i !== -1 && this._running[i].task) {
+            } else if (i !== -1) {
                 let running = null
                 for (let step = 0; step < 3; step++) {
-                    try {
-                        const v = this._running[i].task.next()
-                        if (v.done) {
-                            const finished = this._running.splice(i, 1)[0]
-                            finished.finish(v.value)
-                            if (finished.resolve) finished.resolve(v.value)
-                            return null
-                        } else {
-                            running = this._running[i]
-                        }
-                    } catch (error) {
-                        const finished = this._running.splice(i, 1)[0]
-                        finished.fail()
-                        if (finished.reject) finished.reject(error)
-                        console.error(`Task "${finished.getId()}" failed:`, error)
-                        return null
+                    if (this._running[i].tick()) {
+                        this._running.splice(i, 1)[0]
+                        running = null
+                        break
+                    } else {
+                        running = this._running[i]
                     }
                 }
                 return running
@@ -344,7 +405,6 @@ module.exports = class TaskManager {
         } else if (this._queue.length > 0 && !this._isStopping) {
             const nextTask = TaskManager.takeImportantTask(this._queue)
             if (nextTask) {
-                nextTask.start()
                 this._running.push(nextTask)
                 return nextTask
             } else {
@@ -358,30 +418,26 @@ module.exports = class TaskManager {
     /**
      * @returns {Promise<void>}
      */
-    finish() {
+    cancel() {
         this._isStopping = true
         return new Promise(resolve => {
             const interval = setInterval(() => {
-                for (const task of this._queue) {
-                    task.cancel()
+                for (const runningTask of this._running) {
+                    runningTask.cancel()
                 }
                 this._queue.splice(0, this._queue.length)
                 if (this._running.length === 0) {
                     clearInterval(interval)
                     resolve()
                 }
-            }, 100)
+            }, 10)
         })
     }
 
-    stop() {
-        for (const task of this._queue) {
-            task.cancel()
-        }
+    abort() {
         this._queue.splice(0, this._queue.length)
-        for (const task of this._running) {
-            task.cancel()
-            task.task?.return('cancelled')
+        for (const runningTask of this._running) {
+            runningTask.abort()
         }
     }
 }

@@ -4,7 +4,6 @@ const { Timeout } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -79,7 +78,7 @@ module.exports = {
             }
     
             yield* goto.task(bot, {
-                block: new Vec3Dimension(composter.position, bot.bot.game.dimension),
+                block: composter.position,
             })
     
             composter = bot.bot.blockAt(composter.position)

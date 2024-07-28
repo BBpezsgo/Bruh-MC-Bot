@@ -66,13 +66,13 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            block: new Vec3Dimension(bed.position, bot.bot.game.dimension),
+            block: bed.position,
             timeout: 30000,
         })
 
         yield* wrap(bot.bot.sleep(bed))
 
-        bot.memory.myBed = new Vec3Dimension(bed.position, bot.bot.game.dimension)
+        bot.memory.myBed = new Vec3Dimension(bed.position, bot.dimension)
 
         while (bot.bot.isSleeping) {
             yield* sleepG(500)

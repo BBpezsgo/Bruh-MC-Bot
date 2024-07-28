@@ -2,7 +2,7 @@
   "dependencies": {
     "express": "^4.19.2",
     "json5": "^2.2.3",
-    "minecrafthawkeye": "^1.3.7",
+    "minecrafthawkeye": "^1.3.9",
     "mineflayer": "^4.20.0",
     "mineflayer-armor-manager": "^2.0.1",
     "mineflayer-elytrafly": "^1.4.6",

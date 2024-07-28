@@ -1,5 +1,4 @@
 const { sleepG, wrap } = require('../utils/tasks')
-const Vec3Dimension = require('../vec3-dimension')
 const goto = require('./goto')
 
 /**
@@ -65,7 +64,7 @@ module.exports = {
             entities.sort((a, b) => (bot.bot.entity.position.distanceSquared(a.position) - bot.bot.entity.position.distanceSquared(b.position)))
             for (const entity of entities) {
                 yield* goto.task(bot, {
-                    point: new Vec3Dimension(entity.position, bot.bot.game.dimension),
+                    point: entity.position,
                     distance: 2,
                 })
                 if (!entity.isValid) { continue }
@@ -82,13 +81,13 @@ module.exports = {
                     break
                 }
 
-                bot.env.addVillager(args.villager, villager, bot.bot.game.dimension)
+                bot.env.addVillager(args.villager, villager, bot.dimension)
                 villager.close()
             }
         }
 
         yield* goto.task(bot, {
-            point: new Vec3Dimension(args.villager.position, bot.bot.game.dimension),
+            point: args.villager.position,
             distance: 2,
         })
 
@@ -96,7 +95,7 @@ module.exports = {
         while (!villager.trades) { yield }
         yield
 
-        bot.env.addVillager(args.villager, villager, bot.bot.game.dimension)
+        bot.env.addVillager(args.villager, villager, bot.dimension)
 
         let traded = 0
 

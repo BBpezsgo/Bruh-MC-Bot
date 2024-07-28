@@ -2,7 +2,6 @@ const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const attack = require('./attack')
 const dig = require('./dig')
-const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, { }>}
@@ -34,7 +33,7 @@ module.exports = {
     
                         console.log(`[Bot "${bot.bot.username}"]: Clearing MLG junk: water ...`)
                         yield* goto.task(bot, {
-                            block: new Vec3Dimension(junkBlock.position, bot.dimension),
+                            block: junkBlock.position,
                             reach: 2,
                         })
     

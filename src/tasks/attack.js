@@ -5,7 +5,6 @@ const { Item } = require('prismarine-item')
 const MeleeWeapons = require('../melee-weapons')
 const { goals } = require('mineflayer-pathfinder')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
 
 const distanceToUseRangeWeapons = 12
 
@@ -135,7 +134,7 @@ module.exports = {
                 if (distance > 6) {
                     console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
                     yield* goto.task(bot, {
-                        point: new Vec3Dimension(args.target.position, bot.dimension),
+                        point: args.target.position,
                         distance: 5,
                         timeout: 500,
                         ignoreOthers: true,
@@ -212,7 +211,7 @@ module.exports = {
                     if (!grade || grade.blockInTrayect) {
                         console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
-                            point: new Vec3Dimension(args.target.position, bot.dimension),
+                            point: args.target.position,
                             distance: distance - 2,
                             timeout: 1000,
                             ignoreOthers: true,

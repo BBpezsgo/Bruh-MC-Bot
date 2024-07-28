@@ -70,7 +70,7 @@ module.exports = {
         
                     console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
-                        block: new Vec3Dimension(current.position, bot.bot.game.dimension),
+                        block: current.position,
                         movements: bot.cutTreeMovements,
                     })
                 
@@ -124,7 +124,7 @@ module.exports = {
                 if (distance < 1.5) {
                     console.log(`[Bot "${bot.bot.username}"] Picking up item ...`)
                     yield* goto.task(bot, {
-                        point: new Vec3Dimension(nearestEntity.position, bot.bot.game.dimension),
+                        point: nearestEntity.position,
                         distance: 0,
                         movements: bot.cutTreeMovements,
                     })

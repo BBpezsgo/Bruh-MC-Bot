@@ -40,12 +40,12 @@ module.exports = {
             }
 
             if (target.dimension &&
-                bot.bot.game.dimension !== target.dimension) {
+                bot.dimension !== target.dimension) {
                 yield* goto.task(bot, { dimension: target.dimension })
                 continue
             }
 
-            const distance = bot.bot.entity.position.distanceTo(target.xyz(bot.bot.game.dimension))
+            const distance = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
 
             if (distance <= args.range) {
                 yield* sleepG(1000)

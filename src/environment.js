@@ -308,8 +308,8 @@ module.exports = class Environment {
             }, 10000)
         }
 
-        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player, bot.bot.game.dimension))
-        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock, bot.bot.game.dimension))
+        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player, bot.dimension))
+        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock, bot.dimension))
         bot.bot.on('entityDead', (entity) => this.__entityDead(entity))
         bot.bot.on('entitySpawn', (entity) => this.__entitySpawn(entity))
         this.bots.push(bot)
@@ -366,7 +366,7 @@ module.exports = class Environment {
         for (const chestPosition of chestPositions) {
             try {
                 yield* goto.task(bot, {
-                    block: new Vec3Dimension(chestPosition, bot.bot.game.dimension),
+                    block: chestPosition,
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -383,13 +383,13 @@ module.exports = class Environment {
                  */
                 let found = null
                 for (const _chest of this.chests) {
-                    if (_chest.position.equals(new Vec3Dimension(chestBlock.position, bot.bot.game.dimension))) {
+                    if (_chest.position.equals(new Vec3Dimension(chestBlock.position, bot.dimension))) {
                         found = _chest
                     }
                 }
                 if (!found) {
                     found = {
-                        position: new Vec3Dimension(chestBlock.position, bot.bot.game.dimension),
+                        position: new Vec3Dimension(chestBlock.position, bot.dimension),
                         content: {},
                         myItems: {},
                     }
@@ -424,7 +424,7 @@ module.exports = class Environment {
             try {
                 if (!villager.isValid) { continue }
                 yield* goto.task(bot, {
-                    point: new Vec3Dimension(villager.position, bot.bot.game.dimension),
+                    point: villager.position,
                     distance: 2,
                 })
                 if (!villager.isValid) { continue }
@@ -432,7 +432,7 @@ module.exports = class Environment {
                 const _villager = yield* wrap(bot.bot.openVillager(villager))
                 while (!_villager.trades) { yield }
                 yield
-                this.addVillager(villager, _villager, bot.bot.game.dimension)
+                this.addVillager(villager, _villager, bot.dimension)
                 _villager.close()
 
                 yield* sleepG(100)
@@ -868,7 +868,7 @@ module.exports = class Environment {
         for (const bot of this.bots) {
             const player = bot.bot.players[username]
             if (player && player.entity && player.entity.position) {
-                return new Vec3Dimension(player.entity.position, bot.bot.game.dimension)
+                return new Vec3Dimension(player.entity.position, bot.dimension)
             }
         }
         const saved = this.playerPositions[username]

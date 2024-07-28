@@ -2,6 +2,7 @@ const { Vec3 } = require('vec3')
 const { sleepG, wrap } = require('../utils/tasks')
 const { trajectoryTime } = require('../utils/other')
 const { Weapons } = require('minecrafthawkeye')
+const goto = require('./goto')
 
 /**
  * @type {import('../task').TaskDef<'here' | 'ok', { destination: Vec3; }>}
@@ -18,6 +19,8 @@ module.exports = {
         if (!enderpearl) {
             throw `I have no enderpearl`
         }
+
+        yield* goto.task(bot, { hawkeye: args.destination, weapon: Weapons.ender_pearl })
 
         const grade = bot.bot.hawkEye.getMasterGrade({
             position: args.destination,

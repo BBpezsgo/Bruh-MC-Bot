@@ -36,6 +36,48 @@ class GoalBlockSimple extends goals.Goal {
     }
 }
 
+class GoalHawkeye extends goals.Goal {
+    /**
+     * @param {Vec3} target
+     * @param {import('minecrafthawkeye').Weapons} weapon
+     * @param {(from: Vec3, to: Vec3, weapon: import('minecrafthawkeye').Weapons) => import('minecrafthawkeye').GetMasterGrade | undefined} calculator
+     */
+    constructor(target, weapon, calculator) {
+        super()
+        this.target = target
+        this.weapon = weapon
+        this.calculator = calculator
+    }
+
+    /**
+     * @param {Vec3} node
+     */
+    heuristic(node) {
+        const masterGrade = this.calculator(node, this.target, this.weapon)
+        if (!masterGrade) {
+            return node.distanceTo(this.target)
+        }
+        if (masterGrade.blockInTrayect) {
+            return 10
+        }
+        return 0
+    }
+
+    /**
+     * @param {Vec3} node
+     */
+    isEnd(node) {
+        const masterGrade = this.calculator(node.offset(0.5, 0, 0.5), this.target, this.weapon)
+        if (!masterGrade) {
+            return false
+        }
+        if (masterGrade.blockInTrayect) {
+            return false
+        }
+        return true
+    }
+}
+
 /**
  * @exports @typedef {{
  *   timeout?: number;
@@ -46,7 +88,7 @@ class GoalBlockSimple extends goals.Goal {
 
 /**
  * @exports @typedef {{
- *   point: Readonly<Vec3Dimension>;
+ *   point: Readonly<Vec3Dimension> | Readonly<Vec3>;
  *   distance?: number;
  *   ignoreOthers?: boolean;
  * }} GotoArgs
@@ -60,14 +102,14 @@ class GoalBlockSimple extends goals.Goal {
 
 /**
  * @exports @typedef {{
- *   block: Readonly<Vec3Dimension>;
+ *   block: Readonly<Vec3Dimension> | Readonly<Vec3>;
  *   reach?: number;
  * }} LookAtArgs
  */
 
 /**
  * @exports @typedef {{
- *   place: Readonly<Vec3Dimension>;
+ *   place: Readonly<Vec3Dimension> | Readonly<Vec3>;
  *   LOS?: boolean;
  *   facing?: 'north' | 'east' | 'south' | 'west' | 'up' | 'down';
  *   faces?: Readonly<[Vec3, Vec3, Vec3, Vec3, Vec3, Vec3]>;
@@ -83,7 +125,14 @@ class GoalBlockSimple extends goals.Goal {
  */
 
 /**
- * @type {import('../task').TaskDef<void | 'here', (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs) & GeneralArgs, Error>}
+ * @exports @typedef {{
+ *   hawkeye: Vec3;
+ *   weapon: import('minecrafthawkeye').Weapons;
+ * }} HawkeyeArgs
+ */
+
+/**
+ * @type {import('../task').TaskDef<void | 'here', (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs, Error>}
  */
 module.exports = {
     /**
@@ -95,7 +144,18 @@ module.exports = {
          */
         let goal = null
 
-        if ('dimension' in args) {
+        if ('hawkeye' in args) {
+            goal = new GoalHawkeye(args.hawkeye, args.weapon, (from, to, weapon) => {
+                const savedBotPosition = bot.bot.entity.position
+                bot.bot.entity.position = from
+                const masterGrade = bot.bot.hawkEye.getMasterGrade({
+                    position: to,
+                    isValid: false,
+                }, new Vec3(0, 0, 0), weapon)
+                bot.bot.entity.position = savedBotPosition
+                return masterGrade
+            })
+        } else if ('dimension' in args) {
             let remainingTravels = 3
             while (true) {
                 remainingTravels--
@@ -104,7 +164,7 @@ module.exports = {
                 try {
                     switch (args.dimension) {
                         case 'the_end':
-                            switch (bot.bot.game.dimension) {
+                            switch (bot.dimension) {
                                 case 'the_nether': {
                                     const portal = bot.bot.findBlock({
                                         matching: bot.mc.data.blocksByName['nether_portal'].id,
@@ -116,13 +176,13 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'overworld' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
                                     break
                                 }
                                 case 'overworld': {
@@ -136,13 +196,13 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'the_end' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'the_end' && !timeout.done()) { yield }
                                     break
                                 }
                                 case 'the_end': {
@@ -151,7 +211,7 @@ module.exports = {
                             }
                             break
                         case 'the_nether':
-                            switch (bot.bot.game.dimension) {
+                            switch (bot.dimension) {
                                 case 'the_nether': {
                                     return 'here'
                                 }
@@ -166,13 +226,13 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'the_nether' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'the_nether' && !timeout.done()) { yield }
                                     break
                                 }
                                 case 'the_end': {
@@ -186,19 +246,19 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'overworld' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
                                     break
                                 }
                             }
                             break
                         case 'overworld':
-                            switch (bot.bot.game.dimension) {
+                            switch (bot.dimension) {
                                 case 'the_nether': {
                                     const portal = bot.bot.findBlock({
                                         matching: bot.mc.data.blocksByName['nether_portal'].id,
@@ -210,13 +270,13 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'overworld' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
                                     break
                                 }
                                 case 'overworld': {
@@ -233,13 +293,13 @@ module.exports = {
                                     bot.mc.setRestrictedMovements(movements)
                                     movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
                                     yield* this.task(bot, {
-                                        point: new Vec3Dimension(portal.position, bot.bot.game.dimension),
+                                        point: portal.position,
                                         distance: 0,
                                         movements: movements,
                                     })
                                     const timeout = new Timeout(10000)
                                     // @ts-ignore
-                                    while (bot.bot.game.dimension !== 'overworld' && !timeout.done()) { yield }
+                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
                                     break
                                 }
                             }
@@ -250,7 +310,7 @@ module.exports = {
                 }
             }
         } else if ('point' in args) {
-            if (args.point.dimension) {
+            if ('dimension' in args.point) {
                 yield* this.task(bot, { dimension: args.point.dimension })
             }
 
@@ -267,7 +327,11 @@ module.exports = {
                             if (bot.env.isDestinationOccupied(bot.bot.username, currentDestination)) {
                                 continue
                             }
-                            args.point = new Vec3Dimension(currentDestination, args.point.dimension)
+                            if ('dimension' in args.point) {
+                                args.point = new Vec3Dimension(currentDestination, args.point.dimension)
+                            } else {
+                                args.point = currentDestination
+                            }
                             found = true
                             break
                         }
@@ -276,7 +340,7 @@ module.exports = {
             }
             goal = new goals.GoalNear(args.point.x, args.point.y, args.point.z, args.distance ?? 2)
         } else if ('block' in args) {
-            if (args.block.dimension) {
+            if ('dimension' in args.block) {
                 yield* this.task(bot, { dimension: args.block.dimension })
             }
 
@@ -288,7 +352,7 @@ module.exports = {
             //     reach: args.reach ? args.reach : 3,
             // })
         } else if ('place' in args) {
-            if (args.place.dimension) {
+            if ('dimension' in args.place) {
                 yield* this.task(bot, { dimension: args.place.dimension })
             }
 

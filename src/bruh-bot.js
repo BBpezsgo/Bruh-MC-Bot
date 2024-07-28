@@ -32,7 +32,6 @@ const plantSeed = require('./tasks/plant-seed')
 const giveTo = require('./tasks/give-to')
 const equipment = require('./equipment')
 const Debug = require('./debug')
-const Vec3Dimension = require('./vec3-dimension')
 
 const priorities = Object.freeze({
     critical: 300,
@@ -233,7 +232,7 @@ module.exports = class BruhBot {
      * @readonly
      * @type {import('mineflayer').Dimension}
      */
-    get dimension() { return this.bot.game.dimension }
+    get dimension() { return this.dimension }
 
     /**
      * @type {((soundName: string | number) => void) | null}
@@ -453,7 +452,7 @@ module.exports = class BruhBot {
                 }
             }
 
-            if (runningTask && runningTask.getPriority() >= priorities.critical) {
+            if (runningTask && runningTask.priority >= priorities.critical) {
                 return
             }
 
@@ -486,7 +485,9 @@ module.exports = class BruhBot {
             })
 
             if (hostile) {
-                if (!this.defendMyselfGoal || this.defendMyselfGoal.status === 'done' || !this.tasks.has(this.defendMyselfGoal.getId())) {
+                if (!this.defendMyselfGoal ||
+                    this.defendMyselfGoal.isDone ||
+                    !this.tasks.has(this.defendMyselfGoal.id)) {
                     this.defendMyselfGoal = this.tasks.push(this, attack, {
                         target: hostile,
                         useBow: true,
@@ -548,7 +549,7 @@ module.exports = class BruhBot {
                             return
                         }
                         yield* goto.task(bot, {
-                            point: new Vec3Dimension(entity.position, bot.bot.game.dimension),
+                            point: entity.position,
                             distance: 1,
                         })
                         yield* taskUtils.sleepG(1000)
@@ -591,7 +592,7 @@ module.exports = class BruhBot {
                     /** @type {Array<import('./environment').SavedCrop>} */
                     const crops = []
                     for (const crop of this.env.crops) {
-                        const blockAt = this.bot.blockAt(crop.position.xyz(this.bot.game.dimension))
+                        const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
                         if (!blockAt) { continue }
                         if (blockAt.name === 'air') { crops.push(crop) }
                     }
@@ -701,7 +702,7 @@ module.exports = class BruhBot {
 
             if (this.tasks.isIdle || (
                 runningTask &&
-                runningTask.getId().startsWith('follow') &&
+                runningTask.id.startsWith('follow') &&
                 !this.bot.pathfinder.goal
             )
             ) {
@@ -1295,12 +1296,12 @@ module.exports = class BruhBot {
                 for (let i = 0; i < this.tasks.running.length; i++) {
                     const task = this.tasks.running[i]
                     if (builder) { builder += ' ; ' }
-                    builder += `${task.getHumanReadableId()} with priority ${task.getPriority()}`
+                    builder += `${task.humanReadableId} with priority ${task.priority}`
                 }
                 for (let i = 0; i < this.tasks.queue.length; i++) {
                     const task = this.tasks.queue[i]
                     if (builder) { builder += ' ; ' }
-                    builder += `(in queue) ${task.getHumanReadableId()} with priority ${task.getPriority()}`
+                    builder += `(in queue) ${task.humanReadableId} with priority ${task.priority}`
                 }
                 respond(builder)
             }
@@ -1358,7 +1359,7 @@ module.exports = class BruhBot {
             }
 
             if (target.dimension &&
-                this.bot.game.dimension !== target.dimension) {
+                this.dimension !== target.dimension) {
                 throw `We are in a different dimension`
             }
 
@@ -1418,9 +1419,10 @@ module.exports = class BruhBot {
             }
         }
 
-        if (message === 'stop') {
+        if (message === 'stop' ||
+            message === 'abort') {
             respond(`Okay`)
-            this.tasks.stop()
+            this.tasks.abort()
         }
 
         if (message === 'leave') {
@@ -1430,7 +1432,7 @@ module.exports = class BruhBot {
             } else {
                 respond(`I will leave before finishing these ${this.tasks.running.length} tasks`)
             }
-            this.tasks.finish()
+            this.tasks.cancel()
                 .then(() => this.bot.quit(`${sender} asked me to leave`))
         }
 

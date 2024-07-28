@@ -10,8 +10,8 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 function getChest(bot, fullChests) {
     for (const myChest of bot.memory.myChests) {
-        if (myChest.dimension !== bot.bot.game.dimension) { continue }
-        const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.bot.game.dimension), true)
+        if (myChest.dimension !== bot.dimension) { continue }
+        const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.dimension), true)
         if (myChestBlock && myChestBlock.type === bot.mc.data.blocksByName['chest'].id) {
             return myChestBlock
         }
@@ -75,7 +75,7 @@ module.exports = {
         
                 if (chestBlock) {
                     yield* goto.task(bot, {
-                        block: new Vec3Dimension(chestPosition, bot.bot.game.dimension),
+                        block: chestPosition,
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
@@ -93,7 +93,7 @@ module.exports = {
                     }
                     
                     if (isNewChest) {
-                        bot.memory.myChests.push(new Vec3Dimension(chestBlock.position, bot.bot.game.dimension))
+                        bot.memory.myChests.push(new Vec3Dimension(chestBlock.position, bot.dimension))
                     }
                 }
         
@@ -111,7 +111,7 @@ module.exports = {
                         fullChests.push(chestBlock.position.clone())
                         break
                     } else {
-                        yield* bot.env.chestDeposit(bot, chest, new Vec3Dimension(chestBlock.position, bot.bot.game.dimension), itemToDeposit.item, count)
+                        yield* bot.env.chestDeposit(bot, chest, new Vec3Dimension(chestBlock.position, bot.dimension), itemToDeposit.item, count)
                     }
                 }
             } finally {
