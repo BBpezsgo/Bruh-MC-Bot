@@ -5,7 +5,7 @@ const { sleepG, wrap } = require('../utils/tasks')
  * @type {import('../task').TaskDef<'ok' | 'none', { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         const shield = bot.searchItem('shield')
         if (!shield) {
             throw `I have no shield`
@@ -43,10 +43,10 @@ module.exports = {
 
         return 'ok'
     },
-    id: function(args) {
+    id: function() {
         return 'block-explosion'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Blocking some explosion`
     }
 }

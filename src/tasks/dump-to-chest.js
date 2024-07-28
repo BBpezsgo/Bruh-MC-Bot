@@ -1,6 +1,7 @@
 const { Vec3 } = require('vec3')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -9,7 +10,8 @@ const goto = require('./goto')
  */
 function getChest(bot, fullChests) {
     for (const myChest of bot.memory.myChests) {
-        const myChestBlock = bot.bot.blockAt(myChest, true)
+        if (myChest.dimension !== bot.bot.game.dimension) { continue }
+        const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.bot.game.dimension), true)
         if (myChestBlock && myChestBlock.type === bot.mc.data.blocksByName['chest'].id) {
             return myChestBlock
         }
@@ -73,7 +75,7 @@ module.exports = {
         
                 if (chestBlock) {
                     yield* goto.task(bot, {
-                        block: chestPosition.clone(),
+                        block: new Vec3Dimension(chestPosition, bot.bot.game.dimension),
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
@@ -91,7 +93,7 @@ module.exports = {
                     }
                     
                     if (isNewChest) {
-                        bot.memory.myChests.push(chestBlock.position.clone())
+                        bot.memory.myChests.push(new Vec3Dimension(chestBlock.position, bot.bot.game.dimension))
                     }
                 }
         
@@ -109,7 +111,7 @@ module.exports = {
                         fullChests.push(chestBlock.position.clone())
                         break
                     } else {
-                        yield* bot.env.chestDeposit(bot, chest, chestBlock.position.clone(), itemToDeposit.item, count)
+                        yield* bot.env.chestDeposit(bot, chest, new Vec3Dimension(chestBlock.position, bot.bot.game.dimension), itemToDeposit.item, count)
                     }
                 }
             } finally {
@@ -119,10 +121,10 @@ module.exports = {
             }
         }
     },
-    id: function(args) {
+    id: function() {
         return `dump`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Dump items`
     },
 }

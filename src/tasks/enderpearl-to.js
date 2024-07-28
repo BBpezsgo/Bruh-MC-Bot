@@ -59,7 +59,7 @@ module.exports = {
     id: function(args) {
         return `tp-${Math.round(args.destination.x)}-${Math.round(args.destination.y)}-${Math.round(args.destination.z)}`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Teleporting`
     },
 }

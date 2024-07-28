@@ -2,6 +2,7 @@ const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
 const MC = require('../mc')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, { item: number; clearGrass: boolean; }>}
@@ -50,9 +51,9 @@ module.exports = {
 
         let above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
         while (above && MC.replaceableBlocks[above.name] === 'break') {
-            if (!bot.env.allocateBlock(bot.bot.username, above.position, 'dig')) {
+            if (!bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
                 console.log(`[Bot "${bot.bot.username}"]: Block will be digged by someone else, waiting ...`)
-                yield* bot.env.waitUntilBlockIs(above.position, 'dig')
+                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
                 above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
                 continue
             }
@@ -62,14 +63,14 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                block: above.position.clone(),
+                block: new Vec3Dimension(above.position, bot.bot.game.dimension),
             })
 
             yield* wrap(bot.bot.dig(above))
         }
 
         yield* goto.task(bot, {
-            point: target.clone(),
+            point: new Vec3Dimension(target, bot.bot.game.dimension),
             distance: 2,
         })
 

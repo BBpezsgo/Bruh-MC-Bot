@@ -5,6 +5,7 @@ const goto = require('./goto')
 const hoeing = require('./hoeing')
 const MC = require('../mc')
 const { basicRouteSearch } = require('../utils/other')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -23,14 +24,14 @@ function* plant(bot, placeOn, placeVector, seedItem) {
         throw `Can't plant seed: block above is "${above.name}"`
     }
 
-    if (!bot.env.allocateBlock(bot.bot.username, above.position.clone(), 'place', { item: seedItem.type })) {
+    if (!bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(above.position, bot.dimension), 'place', { item: seedItem.type })) {
         console.log(`[Bot "${bot.bot.username}"] Seed will be planted by someone else, skipping ...`)
         return
     }
 
     // console.log(`[Bot "${bot.bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
-        block: placeOn.position.clone().offset(0, 0.5, 0),
+        block: new Vec3Dimension(placeOn.position.clone().offset(0, 0.5, 0), bot.bot.game.dimension),
     })
 
     const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
@@ -66,7 +67,8 @@ module.exports = {
         let plantedCount = 0
 
         if ('harvestedCrops' in args) {
-            const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, args.harvestedCrops, v => v.position)
+            const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.bot.game.dimension)
+            const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))
             for (const savedCrop of sortedCropPositions) {
                 // yield
                 const crop = MC.cropsByBlockName[savedCrop.block]
@@ -80,7 +82,7 @@ module.exports = {
                     continue
                 }
 
-                const at = bot.bot.blockAt(savedCrop.position)
+                const at = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
 
                 if (at && MC.replaceableBlocks[at.name] !== 'yes') {
                     console.warn(`[Bot "${bot.bot.username}"] There is something else there`)
@@ -91,7 +93,7 @@ module.exports = {
                     console.warn(`[Bot "${bot.bot.username}"] This tree is too big to me`)
                 }
 
-                let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position, crop, true, false)
+                let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn) {
                     console.warn(`[Bot "${bot.bot.username}"] Can't replant "${seed.name}": couldn't find a good spot`)
@@ -109,7 +111,7 @@ module.exports = {
                     )) {
                     try {
                         yield* hoeing.task(bot, {
-                            block: placeOn.block.position.clone(),
+                            block: new Vec3Dimension(placeOn.block.position, bot.dimension),
                             gatherTool: false,
                         })
                     } catch (error) {
@@ -118,7 +120,7 @@ module.exports = {
                     }
                 }
 
-                placeOn = bot.env.getPlantableBlock(bot, savedCrop.position, crop, true, false)
+                placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn.isExactBlock) {
                     console.warn(`[Bot "${bot.bot.username}"] Can't replant ${seed.name}: couldn't find a good spot`)
@@ -160,10 +162,10 @@ module.exports = {
 
         return plantedCount
     },
-    id: function(args) {
+    id: function() {
         return `plant-seed`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Planting seeds`
     },
     plant: plant,

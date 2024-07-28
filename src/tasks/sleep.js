@@ -1,6 +1,7 @@
 const { Block } = require('prismarine-block')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -21,68 +22,43 @@ function can(bot) {
 }
 
 /**
- * @param {import('../bruh-bot')} bot
- * @returns {Block | null}
- */
-function findMyBed(bot) {
-    if (!bot.memory.myBed) {
-        return null
-    }
-
-    const block = bot.bot.blockAt(bot.memory.myBed)
-
-    if (!block) {
-        return null
-    }
-
-    if (!bot.bot.isABed(block)) {
-        return null
-    }
-
-    if (bot.bot.parseBedMetadata(block)?.occupied) {
-        return null
-    }
-
-    return block
-}
-
-/**
- * @param {import('../bruh-bot')} bot
- * @param {number} maxDistance
- * @returns {Block | null}
- */
-function findNewBed(bot, maxDistance) {
-    return bot.bot.findBlock({
-        maxDistance: maxDistance,
-        matching: (/** @type {Block} */ block) => {
-            if (!bot.bot.isABed(block)) {
-                return false
-            }
-
-            const _bed = bot.bot.parseBedMetadata(block)
-
-            if (_bed.occupied) {
-                return false
-            }
-
-            if (block.getProperties()['part'] !== 'head') {
-                return false
-            }
-
-            return true
-        },
-    })
-}
-
-/**
  * @type {import('../task').TaskDef<void, { }> & { can: can }}
  */
 module.exports = {
-    task: function*(bot, args) {
-        let bed = findMyBed(bot)
+    task: function*(bot) {
+        /**
+         * @type {Block}
+         */
+        let bed = null
+        
+        if (bot.memory.myBed) {
+            yield* goto.task(bot, { dimension: bot.memory.myBed.dimension })
+            bed = bot.bot.blockAt(bot.memory.myBed.xyz(bot.dimension))
+        }
 
-        if (!bed) {
-            bed = findNewBed(bot, 32)
+        if (!bed ||
+            !bot.bot.isABed(bed) ||
+            bot.bot.parseBedMetadata(bed)?.occupied) {
+            bed = bot.bot.findBlock({
+                maxDistance: 32,
+                matching: (/** @type {Block} */ block) => {
+                    if (!bot.bot.isABed(block)) {
+                        return false
+                    }
+        
+                    const _bed = bot.bot.parseBedMetadata(block)
+        
+                    if (_bed.occupied) {
+                        return false
+                    }
+        
+                    if (block.getProperties()['part'] !== 'head') {
+                        return false
+                    }
+        
+                    return true
+                },
+            })
         }
 
         if (!bed) {
@@ -90,22 +66,22 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            block: bed.position.clone(),
+            block: new Vec3Dimension(bed.position, bot.bot.game.dimension),
             timeout: 30000,
         })
 
         yield* wrap(bot.bot.sleep(bed))
 
-        bot.memory.myBed = bed.position.clone()
+        bot.memory.myBed = new Vec3Dimension(bed.position, bot.bot.game.dimension)
 
         while (bot.bot.isSleeping) {
             yield* sleepG(500)
         }
     },
-    id: function(args) {
+    id: function() {
         return 'sleep'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Sleeping`
     },
     can: can,

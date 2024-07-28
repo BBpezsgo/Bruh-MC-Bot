@@ -1,17 +1,19 @@
 const { wrap, sleepG } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @typedef {{
  *   type: 'water'
- *   position: Vec3
+ *   position: Vec3Dimension
  * } | {
  *   type: 'block'
  *   blockName: string
- *   position: Vec3
+ *   position: Vec3Dimension
  * } | {
  *   type: 'boat'
  *   id: number
+ *   dimension: import('mineflayer').Dimension
  * }} MlgJunkBlock
  */
 
@@ -19,7 +21,7 @@ const { Vec3 } = require('vec3')
  * @type {import('../task').TaskDef<'ok' | 'failed', { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         let didMLG = false
     
         const neighbor = bot.bot.nearestEntity()
@@ -100,13 +102,13 @@ module.exports = {
                         console.log(`[Bot "${bot.bot.username}"]: MLG: Junk water saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'water',
-                            position: junkBlock.position.clone(),
+                            position: new Vec3Dimension(junkBlock.position, bot.dimension),
                         })
                     } else {
                         console.log(`[Bot "${bot.bot.username}"]: MLG: Possible junk water saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'water',
-                            position: reference.position.offset(0, 1, 0),
+                            position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
                         })
                     }
                 } else if (bot.mc.data2.mlg.boats.includes(bot.bot.heldItem.name)) {
@@ -121,6 +123,7 @@ module.exports = {
                         bot.memory.mlgJunkBlocks.push({
                             type: 'boat',
                             id: junkBoat.id,
+                            dimension: bot.dimension,
                         })
                     }
                 } else {
@@ -136,7 +139,7 @@ module.exports = {
                         bot.memory.mlgJunkBlocks.push({
                             type: 'block',
                             blockName: junkBlock.name,
-                            position: junkBlock.position.clone(),
+                            position: new Vec3Dimension(junkBlock.position, bot.dimension),
                         })
                     } else {
                         console.warn(`[Bot "${bot.bot.username}"]: MLG: No junk block saved`)
@@ -157,10 +160,10 @@ module.exports = {
 
         return 'ok'
     },
-    id: function(args) {
+    id: function() {
         return `mlg`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `MLG`
     },
 }

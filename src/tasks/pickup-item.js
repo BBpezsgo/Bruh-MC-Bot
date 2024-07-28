@@ -1,35 +1,33 @@
-const { Vec3 } = require("vec3")
 const { sleepG } = require('../utils/tasks')
 const goto = require("./goto")
+const Vec3Dimension = require("../vec3-dimension")
 
 /**
- * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: Vec3; minLifetime?: number; items?: ReadonlyArray<string>; }>}
+ * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; }>}
  */
 module.exports = {
     task: function*(bot, args) {
         const nearest = bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
-    
+
         if ('error' in nearest) {
             throw nearest.error
         }
-    
+
         const item = nearest.result.getDroppedItem()
 
         if (!item) {
             throw `This aint an item`
         }
-        
+
         if (bot.isInventoryFull(item.type)) {
             throw `Inventory is full`
         }
-    
+
         yield* goto.task(bot, {
-            point: nearest.result.position.clone(),
+            point: new Vec3Dimension(nearest.result.position, bot.bot.game.dimension),
             distance: 0,
         })
-    
-        yield* sleepG(60)
-    
+
         // if (item &&
         //     this.harvestedSaplings && (
         //         item.name === 'oak_sapling' ||
@@ -52,7 +50,7 @@ module.exports = {
     id: function(args) {
         return `pickup-item-${(args.point ? `${Math.round(args.point.x)}-${Math.round(args.point.y)}-${Math.round(args.point.z)}` : 'null')}-${args.inAir}-${args.maxDistance}-${args.minLifetime}`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Picking up items`
     },
 }

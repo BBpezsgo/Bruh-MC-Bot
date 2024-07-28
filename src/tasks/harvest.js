@@ -1,4 +1,3 @@
-const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
 const { backNForthSort, basicRouteSearch, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
@@ -6,9 +5,10 @@ const pickupItem = require('./pickup-item')
 const plantSeed = require('./plant-seed')
 const MC = require('../mc')
 const dig = require('./dig')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
- * @type {import('../task').TaskDef<number, { farmPosition?: Vec3; }>}
+ * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension; }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -16,12 +16,16 @@ module.exports = {
             throw `Can't harvest in quiet mode`
         }
 
+        if (args.farmPosition) {
+            yield* goto.task(bot, { dimension: args.farmPosition.dimension })
+        }
+
         let n = 0
         /**
          * @type {Array<import('../environment').SavedCrop>}
          */
         const harvestedCrops = []
-        const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
+        const farmPosition = args.farmPosition?.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
         const replantDuringHarvesting = true
 
         while (true) {
@@ -47,7 +51,7 @@ module.exports = {
                 // console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
 
                 yield* goto.task(bot, {
-                    block: cropPosition.clone(),
+                    block: new Vec3Dimension(cropPosition, bot.bot.game.dimension),
                 })
 
                 // console.log(`[Bot "${bot.bot.username}"] Actually harvesting ...`)
@@ -55,7 +59,7 @@ module.exports = {
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
-                        if (!(bot.env.allocateBlock(bot.bot.username, cropPosition, 'dig'))) {
+                        if (!(bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'dig'))) {
                             console.log(`[Bot "${bot.bot.username}"] Crop will be digged by someone else, skipping ...`)
                             yield
                             continue
@@ -82,9 +86,9 @@ module.exports = {
                             continue
                         }
                         yield* goto.task(bot, {
-                            block: fruitBlock.position.clone(),
+                            block: new Vec3Dimension(fruitBlock.position, bot.bot.game.dimension),
                         })
-                        if (!(bot.env.allocateBlock(bot.bot.username, fruitBlock.position, 'dig'))) {
+                        if (!(bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(fruitBlock.position, bot.dimension), 'dig'))) {
                             console.log(`[Bot "${bot.bot.username}"] Crop fruit will be digged by someone else, skipping ...`)
                             yield
                             continue
@@ -128,7 +132,7 @@ module.exports = {
                 } else {
                     // console.log(`[Bot "${bot.bot.username}"] Crop saved`)
                     bot.env.crops.push({
-                        position: cropPosition.clone(),
+                        position: new Vec3Dimension(cropPosition, bot.bot.game.dimension),
                         block: cropInfo.cropName,
                     })
                 }
@@ -136,7 +140,7 @@ module.exports = {
                 if (!replantDuringHarvesting) {
                     // console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
                     harvestedCrops.push({
-                        position: cropPosition.clone(),
+                        position: new Vec3Dimension(cropPosition, bot.bot.game.dimension),
                         block: cropInfo.cropName,
                     })
                     continue
@@ -175,7 +179,7 @@ module.exports = {
                 } catch (error) {
                     console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
                     harvestedCrops.push({
-                        position: cropPosition.clone(),
+                        position: new Vec3Dimension(cropPosition, bot.bot.game.dimension),
                         block: cropInfo.cropName,
                     })
                     console.warn(error)

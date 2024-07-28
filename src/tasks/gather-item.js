@@ -1,11 +1,11 @@
 const { wrap, sleepG } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const goto = require('./goto')
-const { Vec3 } = require('vec3')
 const { Recipe } = require('prismarine-recipe')
 const { Chest } = require('mineflayer')
 const pickupItem = require('./pickup-item')
 const trade = require('./trade')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @typedef {PermissionArgs & {
@@ -33,7 +33,7 @@ const trade = require('./trade')
  *   count: number;
  * } & ({
  *   type: 'chest';
- *   chest: Vec3;
+ *   chest: Vec3Dimension;
  * } | {
  *   type: 'craft';
  *   recipe: Recipe;
@@ -43,7 +43,7 @@ const trade = require('./trade')
  *   type: 'inventory';
  * })) | {
  *   type: 'goto';
- *   destination: Vec3;
+ *   destination: Vec3Dimension;
  *   distance: number;
  * } | {
  *   type: 'request';
@@ -235,10 +235,10 @@ function* plan(bot, item, count, permissions, context) {
         yield
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
-        const inChestsWithMyItems = inChests.filter(v => v.myCount > 0)
+        const inChestsWithMyItems = inChests.filter(v => v.myCount > 0 && v.position.dimension === bot.bot.game.dimension)
         inChestsWithMyItems.sort((a, b) => {
-            const aDist = bot.bot.entity.position.distanceSquared(a.position)
-            const bDist = bot.bot.entity.position.distanceSquared(b.position)
+            const aDist = bot.bot.entity.position.distanceSquared(a.position.xyz(bot.bot.game.dimension))
+            const bDist = bot.bot.entity.position.distanceSquared(b.position.xyz(bot.bot.game.dimension))
             return aDist - bDist
         })
         for (const inChestWithMyItems of inChestsWithMyItems) {
@@ -359,7 +359,7 @@ function* plan(bot, item, count, permissions, context) {
             } else {
                 result.push({
                     type: 'goto',
-                    destination: tableInWorld.position.clone(),
+                    destination: new Vec3Dimension(tableInWorld.position, bot.bot.game.dimension),
                     distance: 2,
                 })
             }
@@ -382,7 +382,7 @@ function* plan(bot, item, count, permissions, context) {
     if (planResult(result, item) >= count) { return result }
 
     {
-        const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position) - bot.bot.entity.position.distanceSquared(b.position))
+        const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position.xyz(bot.dimension)) - bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension)))
         for (const villager of sortedVillagers) {
             yield
             const entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
@@ -453,7 +453,7 @@ function* plan(bot, item, count, permissions, context) {
  */
 function* evaluatePlan(bot, plan) {
     /**
-     * @type {{ chestPosition: Vec3; chest: Chest; } | null}
+     * @type {{ chestPosition: Vec3Dimension; chest: Chest; } | null}
      */
     let openedChest = null
 
@@ -483,7 +483,7 @@ function* evaluatePlan(bot, plan) {
                     yield* goto.task(bot, {
                         block: step.chest.clone(),
                     })
-                    const chestBlock = bot.bot.blockAt(step.chest)
+                    const chestBlock = bot.bot.blockAt(step.chest.xyz(bot.dimension))
                     if (!chestBlock || chestBlock.name !== 'chest') {
                         throw `Chest disappeared`
                     }
@@ -494,11 +494,11 @@ function* evaluatePlan(bot, plan) {
                     if (!openedChest) {
                         const chest = yield* wrap(bot.bot.openChest(chestBlock))
                         openedChest = {
-                            chestPosition: chestBlock.position.clone(),
+                            chestPosition: new Vec3Dimension(chestBlock.position, bot.bot.game.dimension),
                             chest: chest,
                         }
                     }
-                    const took = yield* bot.env.chestDeposit(bot, openedChest.chest, openedChest.chestPosition, step.item, -step.count)
+                    const took = yield* bot.env.chestDeposit(bot, openedChest.chest, new Vec3Dimension(openedChest.chestPosition, bot.bot.game.dimension), step.item, -step.count)
                     if (took < step.count) {
                         throw `Item disappeared from chest`
                     }
@@ -531,7 +531,7 @@ function* evaluatePlan(bot, plan) {
                             throw `There is no crafting table`
                         }
                         yield* goto.task(bot, {
-                            block: tableBlock.position.clone(),
+                            block: new Vec3Dimension(tableBlock.position, bot.bot.game.dimension),
                         })
                         yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
                     } else {

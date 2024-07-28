@@ -4,6 +4,7 @@ const { Timeout } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const { Block } = require('prismarine-block')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -164,7 +165,7 @@ function* doCampfire(bot, campfire, recipe, count) {
     const maximumTime = new Timeout((recipe.time * 1000) + exceedingWaitTime)
     const itemFilter = {
         inAir: true,
-        point: campfire.position.clone(),
+        point: campfire.position,
         maxDistance: 4,
         items: [result.name],
     }
@@ -221,7 +222,7 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            block: furnaceBlock.position.clone(),
+            block: new Vec3Dimension(furnaceBlock.position, bot.bot.game.dimension),
         })
 
         if (!furnaceBlock) {
@@ -371,7 +372,7 @@ module.exports = {
         }
         return result
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Cooking`
     },
     findBestFurnace: findBestFurnace,

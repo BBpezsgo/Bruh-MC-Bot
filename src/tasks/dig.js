@@ -3,6 +3,7 @@ const getMcData = require('minecraft-data')
 const { wrap, sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<number, { block: Block; alsoTheNeighbors: boolean; }>}
@@ -26,7 +27,7 @@ module.exports = {
             yield
 
             try {
-                if (bot.env.allocateBlock(bot.bot.username, current.position, 'dig')) {
+                if (bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
                     console.log(`[Bot "${bot.bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
                 
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
@@ -69,7 +70,7 @@ module.exports = {
         
                     console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
-                        block: current.position.clone(),
+                        block: new Vec3Dimension(current.position, bot.bot.game.dimension),
                         movements: bot.cutTreeMovements,
                     })
                 
@@ -123,7 +124,7 @@ module.exports = {
                 if (distance < 1.5) {
                     console.log(`[Bot "${bot.bot.username}"] Picking up item ...`)
                     yield* goto.task(bot, {
-                        point: nearestEntity.position.clone(),
+                        point: new Vec3Dimension(nearestEntity.position, bot.bot.game.dimension),
                         distance: 0,
                         movements: bot.cutTreeMovements,
                     })
@@ -145,7 +146,7 @@ module.exports = {
     id: function(args) {
         return `dig-${args.block.position.x}-${args.block.position.y}-${args.block.position.z}`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Digging`
     },
 }

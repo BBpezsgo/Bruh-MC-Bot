@@ -4,7 +4,7 @@ const { sleepG, wrap } = require('../utils/tasks')
  * @type {import('../task').TaskDef<'ok' | 'full', { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         if (bot.quietMode) {
             throw `Can't eat in quiet mode`
         }
@@ -37,10 +37,10 @@ module.exports = {
     
         return 'ok'
     },
-    id: function(args) {
+    id: function() {
         return 'eat'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Eating`
     },
 }

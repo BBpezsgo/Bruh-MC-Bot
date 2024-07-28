@@ -10,10 +10,11 @@ const MC = require("./mc")
 const goto = require("./tasks/goto")
 const { Chest } = require("mineflayer")
 const { goals } = require("mineflayer-pathfinder")
+const Vec3Dimension = require("./vec3-dimension")
 
 /**
  * @typedef {{
- *   position: Vec3;
+ *   position: Vec3Dimension;
  *   content: Record<string, number>;
  *   myItems: Record<string, number>;
  * }} SavedChest
@@ -23,7 +24,7 @@ const { goals } = require("mineflayer-pathfinder")
  * @typedef {{
  *   uuid?: string;
  *   id: number;
- *   position: Vec3;
+ *   position: Vec3Dimension;
  *   trades: ReadonlyArray<{
  *     inputItem1: { name: string; count: number; }
  *     outputItem: { name: string; count: number; }
@@ -34,7 +35,7 @@ const { goals } = require("mineflayer-pathfinder")
 
 /**
  * @typedef {{
- *   position: Vec3;
+ *   position: Vec3Dimension;
  *   block: string;
  * }} SavedCrop
  */
@@ -51,6 +52,10 @@ const { goals } = require("mineflayer-pathfinder")
  * } | {
  *   type: 'hoe';
  * })} AllocatedBlock
+ */
+
+/**
+ * @typedef {`${number}-${number}-${number}-${import('mineflayer').Dimension}`} PositionHash
  */
 
 class ItemRequest {
@@ -101,10 +106,6 @@ class ItemRequest {
     }
 }
 
-/**
- * @typedef {`${number}-${number}-${number}`} PositionHash
- */
-
 module.exports = class Environment {
     /**
      * @private @readonly
@@ -120,7 +121,7 @@ module.exports = class Environment {
 
     /**
      * @private @readonly
-     * @type {Record<string, { time: number; position: Vec3; }>}
+     * @type {Record<string, { time: number; position: Vec3Dimension; }>}
      */
     playerPositions
 
@@ -203,18 +204,20 @@ module.exports = class Environment {
     /**
      * @private
      * @param {import('mineflayer').Player} player
+     * @param {import("mineflayer").Dimension} dimension
      */
-    __playerUpdated(player) {
+    __playerUpdated(player, dimension) {
         if (!player.entity?.position) { return }
-        this.setPlayerPosition(player.username, player.entity.position)
+        this.setPlayerPosition(player.username, new Vec3Dimension(player.entity.position, dimension))
     }
 
     /**
      * @private
      * @param {Block | null} oldBlock
      * @param {Block} newBlock
+     * @param {import("mineflayer").Dimension} dimension
      */
-    __blockUpdate(oldBlock, newBlock) {
+    __blockUpdate(oldBlock, newBlock, dimension) {
         const isPlace = (!oldBlock || oldBlock.name === 'air')
         const isBreak = (!newBlock || newBlock.name === 'air')
         if (isPlace && isBreak) { return }
@@ -222,7 +225,7 @@ module.exports = class Environment {
         /**
          * @type {PositionHash}
          */
-        const hash = `${newBlock.position.x}-${newBlock.position.y}-${newBlock.position.z}`
+        const hash = `${newBlock.position.x}-${newBlock.position.y}-${newBlock.position.z}-${dimension}`
         if (this.allocatedBlocks[hash]) {
             delete this.allocatedBlocks[hash]
         }
@@ -239,7 +242,7 @@ module.exports = class Environment {
                 }
                 if (!isSaved) {
                     this.crops.push({
-                        position: newBlock.position.clone(),
+                        position: new Vec3Dimension(newBlock.position, dimension),
                         block: newBlock.name,
                     })
                 }
@@ -258,7 +261,7 @@ module.exports = class Environment {
                 }
                 if (!isSaved) {
                     this.crops.push({
-                        position: oldBlock.position.clone(),
+                        position: new Vec3Dimension(oldBlock.position, dimension),
                         block: oldBlock.name,
                     })
                 }
@@ -305,8 +308,8 @@ module.exports = class Environment {
             }, 10000)
         }
 
-        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player))
-        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock))
+        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player, bot.bot.game.dimension))
+        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock, bot.bot.game.dimension))
         bot.bot.on('entityDead', (entity) => this.__entityDead(entity))
         bot.bot.on('entitySpawn', (entity) => this.__entitySpawn(entity))
         this.bots.push(bot)
@@ -363,7 +366,7 @@ module.exports = class Environment {
         for (const chestPosition of chestPositions) {
             try {
                 yield* goto.task(bot, {
-                    block: chestPosition.clone(),
+                    block: new Vec3Dimension(chestPosition, bot.bot.game.dimension),
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -380,13 +383,13 @@ module.exports = class Environment {
                  */
                 let found = null
                 for (const _chest of this.chests) {
-                    if (chestBlock.position.equals(_chest.position)) {
+                    if (_chest.position.equals(new Vec3Dimension(chestBlock.position, bot.bot.game.dimension))) {
                         found = _chest
                     }
                 }
                 if (!found) {
                     found = {
-                        position: chestBlock.position.clone(),
+                        position: new Vec3Dimension(chestBlock.position, bot.bot.game.dimension),
                         content: {},
                         myItems: {},
                     }
@@ -421,7 +424,7 @@ module.exports = class Environment {
             try {
                 if (!villager.isValid) { continue }
                 yield* goto.task(bot, {
-                    point: villager.position.clone(),
+                    point: new Vec3Dimension(villager.position, bot.bot.game.dimension),
                     distance: 2,
                 })
                 if (!villager.isValid) { continue }
@@ -429,7 +432,7 @@ module.exports = class Environment {
                 const _villager = yield* wrap(bot.bot.openVillager(villager))
                 while (!_villager.trades) { yield }
                 yield
-                this.addVillager(villager, _villager)
+                this.addVillager(villager, _villager, bot.bot.game.dimension)
                 _villager.close()
 
                 yield* sleepG(100)
@@ -443,7 +446,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {Chest} chest
-     * @param {Vec3} chestPosition
+     * @param {Vec3Dimension} chestPosition
      * @param {string} item
      * @param {number} count
      */
@@ -454,7 +457,8 @@ module.exports = class Environment {
         let saved = null
 
         for (const _chest of this.chests) {
-            if (_chest.position.equals(chestPosition)) {
+            if (_chest.position.equals(chestPosition) &&
+                _chest.position.dimension === chestPosition.dimension) {
                 saved = _chest
                 break
             }
@@ -462,7 +466,7 @@ module.exports = class Environment {
 
         if (!saved) {
             saved = {
-                position: chestPosition.clone(),
+                position: chestPosition,
                 content: {},
                 myItems: {},
             }
@@ -499,7 +503,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {Item | number | string} item
-     * @returns {Array<{ position: Vec3; count: number; myCount: number; }>}
+     * @returns {Array<{ position: Vec3Dimension; count: number; myCount: number; }>}
      */
     searchForItem(bot, item) {
         if (typeof item === 'number') {
@@ -508,7 +512,7 @@ module.exports = class Environment {
             item = item.name
         }
         /**
-         * @type {Array<{ position: Vec3; count: number; myCount: number; }>}
+         * @type {Array<{ position: Vec3Dimension; count: number; myCount: number; }>}
          */
         const result = []
         for (const chest of this.chests) {
@@ -530,11 +534,12 @@ module.exports = class Environment {
     /**
      * @param {import("prismarine-entity").Entity} entity
      * @param {import("mineflayer").Villager} villager
+     * @param {import("mineflayer").Dimension} dimension
      */
-    addVillager(entity, villager) {
+    addVillager(entity, villager, dimension) {
         if (entity.uuid) {
             this.villagers[entity.uuid] = {
-                position: entity.position.clone(),
+                position: new Vec3Dimension(entity.position, dimension),
                 uuid: entity.uuid,
                 id: entity.id,
                 trades: villager.trades.map(v => ({
@@ -548,7 +553,7 @@ module.exports = class Environment {
             }
         } else {
             this.villagers[entity.id] = {
-                position: entity.position.clone(),
+                position: new Vec3Dimension(entity.position, dimension),
                 uuid: entity.uuid,
                 id: entity.id,
                 trades: villager.trades.map(v => ({
@@ -857,13 +862,13 @@ module.exports = class Environment {
     /**
      * @param {string} username
      * @param {number} [maxAge]
-     * @returns {Vec3 | null}
+     * @returns {Vec3Dimension | null}
      */
     getPlayerPosition(username, maxAge) {
         for (const bot of this.bots) {
             const player = bot.bot.players[username]
             if (player && player.entity && player.entity.position) {
-                return player.entity.position
+                return new Vec3Dimension(player.entity.position, bot.bot.game.dimension)
             }
         }
         const saved = this.playerPositions[username]
@@ -881,7 +886,7 @@ module.exports = class Environment {
 
     /**
      * @param {string} username
-     * @param {Vec3} position
+     * @param {Vec3Dimension} position
      */
     setPlayerPosition(username, position) {
         if (!position) {
@@ -891,7 +896,7 @@ module.exports = class Environment {
         if (!this.playerPositions[username]) {
             this.playerPositions[username] = {
                 time: Date.now(),
-                position: position.clone(),
+                position: position,
             }
         } else {
             const pos = this.playerPositions[username]
@@ -899,13 +904,14 @@ module.exports = class Environment {
             pos.position.x = position.x
             pos.position.y = position.y
             pos.position.z = position.z
+            pos.position.dimension = position.dimension
         }
     }
 
     /**
      * @overload
      * @param {string} bot
-     * @param {Vec3} position
+     * @param {Vec3Dimension} position
      * @param {'dig'} type
      * @param {any} [args]
      * @returns {boolean}
@@ -913,7 +919,7 @@ module.exports = class Environment {
     /**
      * @overload
      * @param {string} bot
-     * @param {Vec3} position
+     * @param {Vec3Dimension} position
      * @param {'place'} type
      * @param {{ item: number; }} args
      * @returns {boolean}
@@ -921,14 +927,14 @@ module.exports = class Environment {
     /**
      * @overload
      * @param {string} bot
-     * @param {Vec3} position
+     * @param {Vec3Dimension} position
      * @param {'hoe'} type
      * @param {any} [args]
      * @returns {boolean}
      */
     /**
      * @param {string} bot
-     * @param {Vec3} position
+     * @param {Vec3Dimension} position
      * @param {'dig' | 'place' | 'hoe'} type
      * @param {any} [args]
      * @returns {boolean}
@@ -937,7 +943,7 @@ module.exports = class Environment {
         /**
          * @type {PositionHash}
          */
-        const hash = `${position.x}-${position.y}-${position.z}`
+        const hash = `${position.x}-${position.y}-${position.z}-${position.dimension}`
         if (this.allocatedBlocks[hash] &&
             this.allocatedBlocks[hash].bot !== bot) {
             return false
@@ -952,19 +958,19 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {Vec3} blockPosition
+     * @param {Vec3Dimension} blockPosition
      * @returns {AllocatedBlock | null}
      */
     getAllocatedBlock(blockPosition) {
         /**
          * @type {PositionHash}
          */
-        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}`
+        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}-${blockPosition.dimension}`
         return this.allocatedBlocks[hash] ?? null
     }
 
     /**
-     * @param {Vec3} blockPosition
+     * @param {Vec3Dimension} blockPosition
      * @param {AllocatedBlock['type']} waitFor
      * @returns {import("./task").Task<boolean>}
      */
@@ -972,7 +978,7 @@ module.exports = class Environment {
         /**
          * @type {PositionHash}
          */
-        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}`
+        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}-${blockPosition.dimension}`
         if (!this.allocatedBlocks[hash]) {
             return false
         }
@@ -984,7 +990,8 @@ module.exports = class Environment {
         }
         let blockAt = null
         for (const bot of this.bots) {
-            blockAt = bot.bot.blockAt(blockPosition)
+            if (bot.dimension !== blockPosition.dimension)  { continue }
+            blockAt = bot.bot.blockAt(blockPosition.xyz(bot.dimension))
             if (blockAt) { break }
         }
         if (!blockAt) {

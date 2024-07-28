@@ -1,6 +1,7 @@
 const { Vec3 } = require("vec3")
 const { sleepG } = require('../utils/tasks')
 const goto = require("./goto")
+const Vec3Dimension = require("../vec3-dimension")
 
 /**
  * @type {import('../task').TaskDef<void, { maxDistance?: number; point?: Vec3; }>}
@@ -13,7 +14,7 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            point: nearest.result.position.clone(),
+            point: new Vec3Dimension(nearest.result.position, bot.bot.game.dimension),
             distance: .5,
         })
 
@@ -24,7 +25,7 @@ module.exports = {
     id: function(args) {
         return `pickup-xp-${(args.point ? `${Math.round(args.point.x)}-${Math.round(args.point.y)}-${Math.round(args.point.z)}` : 'null')}-${args.maxDistance}`
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Picking up XP orbs`
     },
 }

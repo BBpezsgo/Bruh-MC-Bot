@@ -2,12 +2,13 @@ const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const attack = require('./attack')
 const dig = require('./dig')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         console.log(`[Bot "${bot.bot.username}"]: Clearing MLG junk ...`, bot.memory.mlgJunkBlocks)
         for (let i = bot.memory.mlgJunkBlocks.length - 1; i >= 0; i--) {
             yield
@@ -23,7 +24,7 @@ module.exports = {
                             bot.mc.data.blocksByName['water'].id
                         ],
                         maxDistance: 2,
-                        point: junk.position,
+                        point: junk.position.xyz(bot.dimension),
                     })) {
                         notFirst = true
                         if (junkBlock.name !== 'water') {
@@ -33,7 +34,7 @@ module.exports = {
     
                         console.log(`[Bot "${bot.bot.username}"]: Clearing MLG junk: water ...`)
                         yield* goto.task(bot, {
-                            block: junkBlock.position.clone(),
+                            block: new Vec3Dimension(junkBlock.position, bot.dimension),
                             reach: 2,
                         })
     
@@ -60,7 +61,7 @@ module.exports = {
                             bot.mc.data.blocksByName[junk.blockName].id
                         ],
                         maxDistance: 2,
-                        point: junk.position,
+                        point: junk.position.xyz(bot.dimension),
                     })
 
                     if (!junkBlock) {
@@ -97,7 +98,7 @@ module.exports = {
 
         return 'ok'
     },
-    id: function(args) {
+    id: function() {
         return `clear-mlg-junk`
     },
     humanReadableId: function() {

@@ -31,6 +31,8 @@ const blockExplosion = require('./tasks/block-explosion')
 const plantSeed = require('./tasks/plant-seed')
 const giveTo = require('./tasks/give-to')
 const equipment = require('./equipment')
+const Debug = require('./debug')
+const Vec3Dimension = require('./vec3-dimension')
 
 const priorities = Object.freeze({
     critical: 300,
@@ -146,11 +148,6 @@ module.exports = class BruhBot {
      * @readonly
      * @type {MineFlayerPathfinder.Movements}
      */
-    gentleMovements
-    /**
-     * @readonly
-     * @type {MineFlayerPathfinder.Movements}
-     */
     cutTreeMovements
 
     /**
@@ -233,6 +230,12 @@ module.exports = class BruhBot {
     defendMyselfGoal
 
     /**
+     * @readonly
+     * @type {import('mineflayer').Dimension}
+     */
+    get dimension() { return this.bot.game.dimension }
+
+    /**
      * @type {((soundName: string | number) => void) | null}
      */
     onHeard
@@ -257,6 +260,12 @@ module.exports = class BruhBot {
      * @type {Array<ItemLock>}
      */
     lockedItems
+
+    /**
+     * @readonly
+     * @type {import('./debug')}
+     */
+    debug
 
     /**
      * @param {Readonly<BotConfig>} config
@@ -300,8 +309,9 @@ module.exports = class BruhBot {
 
         this.permissiveMovements = null
         this.restrictedMovements = null
-        this.gentleMovements = null
         this.cutTreeMovements = null
+
+        this.debug = new Debug(this)
 
         this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply + '')))
         this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply + '')))
@@ -339,15 +349,13 @@ module.exports = class BruhBot {
             // @ts-ignore
             this.restrictedMovements = new MineFlayerPathfinder.Movements(this.bot)
             // @ts-ignore
-            this.gentleMovements = new MineFlayerPathfinder.Movements(this.bot)
-            // @ts-ignore
             this.cutTreeMovements = new MineFlayerPathfinder.Movements(this.bot)
 
-            BruhBot.setPermissiveMovements(this.permissiveMovements, this.mc)
-            BruhBot.setRestrictedMovements(this.restrictedMovements, this.mc)
-            BruhBot.setGentleMovements(this.gentleMovements, this.mc)
-            BruhBot.setRestrictedMovements(this.cutTreeMovements, this.mc)
+            this.mc.setPermissiveMovements(this.permissiveMovements)
+            this.mc.setRestrictedMovements(this.restrictedMovements)
+            this.mc.setRestrictedMovements(this.cutTreeMovements)
             this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.data.blocksByName['oak_leaves'].id)
+            this.bot.pathfinder.enablePathShortcut = true
 
             console.log(`[Bot "${this.bot.username}"] Ready`)
         })
@@ -361,7 +369,30 @@ module.exports = class BruhBot {
             }
         })
 
+        /**
+         * @type {MineFlayerPathfinder.PartiallyComputedPath}
+         */
+        let _path = null
+
+        this.bot.on('path_update', (path) => {
+            _path = path
+        })
+
+        this.bot.on('path_reset', () => {
+            _path = null
+        })
+
+        this.bot.on('path_stop', () => {
+            _path = null
+        })
+
         this.bot.on('physicsTick', () => {
+            if (_path) {
+                for (let i = 0; i < _path.path.length; i++) {
+                    this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
+                }
+            }
+
             for (let i = this.lockedItems.length - 1; i >= 0; i--) {
                 if (this.lockedItems[i].isUnlocked) {
                     this.lockedItems.splice(i, 1)
@@ -379,7 +410,7 @@ module.exports = class BruhBot {
 
                 this.permissiveMovements.sneak = shouldBeQuiet
                 this.restrictedMovements.sneak = shouldBeQuiet
-                this.gentleMovements.sneak = shouldBeQuiet
+                this.cutTreeMovements.sneak = shouldBeQuiet
                 this.quietMode = shouldBeQuiet
             }
 
@@ -517,7 +548,7 @@ module.exports = class BruhBot {
                             return
                         }
                         yield* goto.task(bot, {
-                            point: entity.position.clone(),
+                            point: new Vec3Dimension(entity.position, bot.bot.game.dimension),
                             distance: 1,
                         })
                         yield* taskUtils.sleepG(1000)
@@ -560,7 +591,7 @@ module.exports = class BruhBot {
                     /** @type {Array<import('./environment').SavedCrop>} */
                     const crops = []
                     for (const crop of this.env.crops) {
-                        const blockAt = this.bot.blockAt(crop.position)
+                        const blockAt = this.bot.blockAt(crop.position.xyz(this.bot.game.dimension))
                         if (!blockAt) { continue }
                         if (blockAt.name === 'air') { crops.push(crop) }
                     }
@@ -716,6 +747,11 @@ module.exports = class BruhBot {
 
             if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"disconnect.timeout"}}}') {
                 console.error(`[Bot "${this.bot.username}"] Kicked because I was AFK`)
+                return
+            }
+
+            if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"multiplayer.disconnect.kicked"}}}') {
+                console.error(`[Bot "${this.bot.username}"] Someone kicked me`)
                 return
             }
 
@@ -1023,6 +1059,13 @@ module.exports = class BruhBot {
             }
         }
 
+        if (message === 'test') {
+            this.tasks.push(this, goto, {
+                dimension: 'overworld'
+            })
+            return
+        }
+
         if (message.startsWith('get')) {
             const itemName = message.replace('get', '').trimStart()
             let item = this.mc.data.itemsByName[itemName.toLowerCase()]
@@ -1219,13 +1262,13 @@ module.exports = class BruhBot {
         if (message === 'follow') {
             const task = this.tasks.push(this, followPlayer, {
                 player: sender,
-                range: 5,
+                range: 2,
                 onNoPlayer: function*(bot) {
                     try {
                         const response = yield* bot.ask(`I lost you. Where are you?`, respond, sender, 30000)
                         const location = parseLocationH(response)
                         if (location) {
-                            respond(`${location.x} ${location.y} ${location.z} I got it`)
+                            respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                         }
                         return location
                     } catch (error) {
@@ -1277,13 +1320,13 @@ module.exports = class BruhBot {
 
                         }
                         if (location) {
-                            respond(`${location.x} ${location.y} ${location.z} I got it`)
+                            respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                         } else {
                             throw `I can't find you`
                         }
                     }
                     yield* goto.task(bot, {
-                        point: location.clone(),
+                        point: location,
                         distance: 1,
                         timeout: 30000,
                     })
@@ -1314,8 +1357,13 @@ module.exports = class BruhBot {
                 throw `Can't find ${sender}`
             }
 
+            if (target.dimension &&
+                this.bot.game.dimension !== target.dimension) {
+                throw `We are in a different dimension`
+            }
+
             const task = this.tasks.push(this, enderpearlTo, {
-                destination: target.offset(0, 0.1, 0),
+                destination: target.xyz(this.dimension).offset(0, 0.1, 0),
                 onStatusMessage: respond,
             }, priorities.user)
             if (task) {
@@ -1446,129 +1494,6 @@ module.exports = class BruhBot {
         this._isLeftHandActive = false
         this._isRightHandActive = false
         this.bot.deactivateItem()
-    }
-
-    /**
-     * @param {MineFlayerPathfinder.Movements} movements
-     * @param {MC} mc
-     */
-    static setPermissiveMovements(movements, mc) {
-        movements.canDig = true
-        movements.digCost = 40
-        movements.placeCost = 30
-        movements.entityCost = 10
-        movements.allowParkour = true
-        movements.allowSprinting = true
-        movements.allowEntityDetection = true
-
-        for (const entityId in mc.data.entities) {
-            if (mc.data.entities[entityId].type === 'hostile') {
-                movements.entitiesToAvoid.add(mc.data.entities[entityId].name)
-            }
-        }
-
-        /** @type {Array<string>} */
-        const blocksCantBreak = [
-            'furnace',
-            'blast_furnace',
-            'smoker',
-            'campfire',
-            'soul_campfire',
-            'brewing_stand',
-            'beacon',
-            'conduit',
-            'bee_nest',
-            'beehive',
-            'suspicious_sand',
-            'suspicious_gravel',
-            'decorated_pot',
-            'bookshelf',
-            'barrel',
-            'ender_chest',
-            'respawn_anchor',
-            'infested_stone',
-            'infested_cobblestone',
-            'infested_stone_bricks',
-            'infested_mossy_stone_bricks',
-            'infested_cracked_stone_bricks',
-            'infested_chiseled_stone_bricks',
-            'infested_deepslate',
-            'end_portal_frame',
-            'spawner',
-            'composter',
-        ]
-
-        for (const blockCantBreak of blocksCantBreak) {
-            if (mc.data.blocksByName[blockCantBreak]) {
-                movements.blocksCantBreak.add(mc.data.blocksByName[blockCantBreak].id)
-            } else {
-                console.warn(`Unknown block \"${blockCantBreak}\"`)
-            }
-        }
-
-        /** @type {Array<string>} */
-        const blocksToAvoid = [
-            'campfire',
-            'composter',
-            'sculk_sensor',
-            'sweet_berry_bush',
-        ]
-
-        for (const blockToAvoid of blocksToAvoid) {
-            if (mc.data.blocksByName[blockToAvoid]) {
-                movements.blocksToAvoid.add(mc.data.blocksByName[blockToAvoid].id)
-            } else {
-                console.warn(`Unknown block \"${blockToAvoid}\"`)
-            }
-        }
-
-        movements.exclusionAreasStep.push((block) => {
-            if (block.name === 'composter') return 50
-            return 0
-        })
-
-        movements.climbables.add(mc.data.blocksByName['vine'].id)
-        // movements.replaceables.add(mc.data.blocksByName['short_grass'].id)
-        movements.replaceables.add(mc.data.blocksByName['tall_grass'].id)
-        movements.canOpenDoors = false
-    }
-
-    /**
-     * @param {MineFlayerPathfinder.Movements} movements
-     * @param {MC} mc
-     */
-    static setRestrictedMovements(movements, mc) {
-        BruhBot.setPermissiveMovements(movements, mc)
-        movements.canDig = false
-        movements.allow1by1towers = false
-        movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
-        movements.placeCost = 500
-    }
-
-    /**
-     * @param {MineFlayerPathfinder.Movements} movements
-     * @param {MC} mc
-     */
-    static setGentleMovements(movements, mc) {
-        BruhBot.setPermissiveMovements(movements, mc)
-        movements.canDig = false
-        movements.allow1by1towers = false
-        movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
-        movements.placeCost = 500
-        movements.allowParkour = false
-
-        /** @type {Array<string>} */
-        const blocksToAvoid = [
-            'water',
-        ]
-
-        for (const blockToAvoid of blocksToAvoid) {
-            if (mc.data.blocksByName[blockToAvoid]) {
-                movements.blocksToAvoid.add(mc.data.blocksByName[blockToAvoid].id)
-            } else {
-                console.warn(`Unknown block \"${blockToAvoid}\"`)
-            }
-        }
     }
 
     /**

@@ -1,5 +1,6 @@
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {ReadonlyArray<import('prismarine-item').Item>} before
@@ -33,11 +34,12 @@ function itemsDelta(before, after) {
 }
 
 /**
- * @param {ReadonlyArray<Vec3>} blocks
- * @returns {Array<Vec3>}
+ * @template {{ x: number; y: number; z: number; }} TPoint
+ * @param {ReadonlyArray<Readonly<TPoint>>} blocks
+ * @returns {Array<TPoint>}
  */
 function backNForthSort(blocks) {
-    /** @type {Record<number, Array<Vec3>>} */
+    /** @type {Record<number, Array<TPoint>>} */
     const rows = { }
 
     for (const block of blocks) {
@@ -323,7 +325,7 @@ class Interval {
 
 /**
  * @param {string} text
- * @returns {null | Vec3}
+ * @returns {null | Vec3Dimension}
  */
 function parseLocationH(text) {
     text = text.trim().toLowerCase()
@@ -340,7 +342,25 @@ function parseLocationH(text) {
     if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
         return null
     }
-    return new Vec3(x, y, z)
+    const rawDimension = match[4]
+    /**
+     * @type {import('mineflayer').Dimension}
+     */
+    let dimension
+    switch (rawDimension.toLowerCase()) {
+        case 'overworld':
+            dimension = 'overworld'
+            break
+        case 'end':
+            dimension = 'the_end'
+            break
+        case 'nether':
+            dimension = 'the_nether'
+            break
+        default:
+            return null
+    }
+    return new Vec3Dimension({ x, y, z }, dimension)
 }
 
 /**

@@ -1,12 +1,13 @@
 const { Block } = require('prismarine-block')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<boolean, { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         let n = 0
         let splashHeard = 0
         /**
@@ -40,7 +41,7 @@ module.exports = {
             }
     
             yield* goto.task(bot, {
-                point: water.position.clone(),
+                point: new Vec3Dimension(water.position, bot.bot.game.dimension),
                 distance: 1,
             })
     
@@ -76,10 +77,10 @@ module.exports = {
             bot.bot.activateItem(false)
         }
     },
-    id: function(args) {
+    id: function() {
         return 'fish'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Fishing`
     },
 }

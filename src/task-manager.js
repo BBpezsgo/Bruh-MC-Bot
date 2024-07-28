@@ -1,6 +1,6 @@
 /**
  * @template [TResult = any]
- * @template {{}} [TArgs = any]
+ * @template {{}} [TArgs = {}]
  * @template [TError = any]
  */
 class ManagedTask {
@@ -162,23 +162,23 @@ class ManagedTask {
 
 module.exports = class TaskManager {
     /**
-     * @readonly @type {ReadonlyArray<ManagedTask<any, any, any>>}
+     * @readonly @type {ReadonlyArray<ManagedTask>}
      */
     get queue() { return this._queue }
     /**
-     * @readonly @type {ReadonlyArray<ManagedTask<any, any, any>>}
+     * @readonly @type {ReadonlyArray<ManagedTask>}
      */
     get running() { return this._running }
 
     /**
      * @private @readonly
-     * @type {Array<ManagedTask<any, any>>}
+     * @type {Array<ManagedTask>}
      */
     _queue
 
     /**
      * @private @readonly
-     * @type {Array<ManagedTask<any, any>>}
+     * @type {Array<ManagedTask>}
      */
     _running
 
@@ -197,7 +197,7 @@ module.exports = class TaskManager {
     }
 
     /**
-     * @template TArgs
+     * @template {{}} TArgs
      * @template TResult
      * @template TError
      * @param {import('./bruh-bot')} bot

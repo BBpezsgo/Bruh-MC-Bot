@@ -18,11 +18,11 @@ module.exports = {
         }
 
         yield* goto.task(bot, {
-            point: target.clone(),
+            point: target,
             distance: 2,
         })
 
-        yield* wrap(bot.bot.lookAt(target.offset(0, 1, 0)))
+        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0)))
         
         let tossedSomething = false
 

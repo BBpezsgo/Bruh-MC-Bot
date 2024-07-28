@@ -821,4 +821,101 @@ module.exports = class MC {
 
         return false
     }
+
+    /**
+     * @param {import('mineflayer-pathfinder').Movements} movements
+     */
+    setPermissiveMovements(movements) {
+        movements.canDig = true
+        movements.digCost = 40
+        movements.placeCost = 30
+        movements.entityCost = 10
+        movements.allowParkour = true
+        movements.allowSprinting = true
+        movements.allowEntityDetection = true
+        movements.canOpenDoors = false
+
+        // movements.exclusionAreasStep.push((block) => {
+        //     if (block.name === 'composter') return 50
+        //     return 0
+        // })
+
+        Object.values(this.data.entities)
+            .filter(v => v.type === 'hostile')
+            .map(v => v.name)
+            .forEach(v => movements.entitiesToAvoid.add(v));
+
+        ([
+            'furnace',
+            'blast_furnace',
+            'smoker',
+            'campfire',
+            'soul_campfire',
+            'brewing_stand',
+            'beacon',
+            'conduit',
+            'bee_nest',
+            'beehive',
+            'suspicious_sand',
+            'suspicious_gravel',
+            'decorated_pot',
+            'bookshelf',
+            'barrel',
+            'ender_chest',
+            'respawn_anchor',
+            'infested_stone',
+            'infested_cobblestone',
+            'infested_stone_bricks',
+            'infested_mossy_stone_bricks',
+            'infested_cracked_stone_bricks',
+            'infested_chiseled_stone_bricks',
+            'infested_deepslate',
+            'end_portal_frame',
+            'spawner',
+            'composter',
+        ]
+            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .forEach(v => movements.blocksCantBreak.add(v)));
+
+        ([
+            'campfire',
+            'composter',
+            'sculk_sensor',
+            'sweet_berry_bush',
+            'end_portal',
+            'nether_portal',
+        ]
+            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .forEach(v => movements.blocksToAvoid.add(v)));
+
+        ([
+            'vine',
+            'scaffolding',
+            'ladder',
+            'twisting_vines',
+            'twisting_vines_plant',
+            'weeping_vines',
+            'weeping_vines_plant',
+        ]
+            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .forEach(v => movements.climbables.add(v)));
+
+        ([
+            'short_grass',
+            'tall_grass',
+        ]
+            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .forEach(v => movements.replaceables.add(v)));
+    }
+
+    /**
+     * @param {import('mineflayer-pathfinder').Movements} movements
+     */
+    setRestrictedMovements(movements) {
+        this.setPermissiveMovements(movements)
+        movements.canDig = false
+        movements.allow1by1towers = false
+        movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
+        movements.placeCost = 500
+    }
 }

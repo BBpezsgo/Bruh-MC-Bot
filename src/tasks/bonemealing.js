@@ -1,10 +1,10 @@
 const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
-const { Vec3 } = require('vec3')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
- * @type {import('../task').TaskDef<number, { farmPosition?: Vec3 }>}
+ * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -18,7 +18,11 @@ module.exports = {
         while (bonemeal) {
             yield
 
-            const farmPosition = args.farmPosition ?? bot.bot.entity.position.clone()
+            if (args.farmPosition) {
+                yield* goto.task(bot, { dimension: args.farmPosition.dimension })
+            }
+
+            const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
             let crops = bot.env.getCrops(bot, farmPosition, false)
 
@@ -34,7 +38,7 @@ module.exports = {
                 if (!bonemeal) { break }
 
                 yield* goto.task(bot, {
-                    block: crop.clone(),
+                    block: new Vec3Dimension(crop, bot.dimension),
                 })
                 
                 bonemeal = bot.searchItem('bonemeal')
@@ -52,10 +56,10 @@ module.exports = {
 
         return n
     },
-    id: function(args) {
+    id: function() {
         return 'bonemealing'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Bonemealing`
     }
 }

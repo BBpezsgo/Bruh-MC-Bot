@@ -4,6 +4,7 @@ const { Timeout } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -55,7 +56,7 @@ const getItem = function(bot, includeNono) {
  * @type {import('../task').TaskDef<number, { }>}
  */
 module.exports = {
-    task: function*(bot, args) {
+    task: function*(bot) {
         if (bot.quietMode) {
             throw `Can't compost in quiet mode`
         }
@@ -78,7 +79,7 @@ module.exports = {
             }
     
             yield* goto.task(bot, {
-                block: composter.position.clone(),
+                block: new Vec3Dimension(composter.position, bot.bot.game.dimension),
             })
     
             composter = bot.bot.blockAt(composter.position)
@@ -106,10 +107,10 @@ module.exports = {
     
         return composted
     },
-    id: function(args) {
+    id: function() {
         return 'compost'
     },
-    humanReadableId: function(args) {
+    humanReadableId: function() {
         return `Compost`
     },
 }

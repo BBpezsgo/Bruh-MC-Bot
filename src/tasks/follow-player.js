@@ -1,12 +1,12 @@
-const { Vec3 } = require('vec3')
 const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, {
  *   player: string;
  *   range: number;
- *   onNoPlayer?: import('../task').SimpleTaskDef<Vec3 | null, null>;
+ *   onNoPlayer?: import('../task').SimpleTaskDef<Vec3Dimension | null, null>;
  * }, Error>}
  */
 module.exports = {
@@ -39,7 +39,13 @@ module.exports = {
                 }
             }
 
-            const distance = bot.bot.entity.position.distanceTo(target)
+            if (target.dimension &&
+                bot.bot.game.dimension !== target.dimension) {
+                yield* goto.task(bot, { dimension: target.dimension })
+                continue
+            }
+
+            const distance = bot.bot.entity.position.distanceTo(target.xyz(bot.bot.game.dimension))
 
             if (distance <= args.range) {
                 yield* sleepG(1000)

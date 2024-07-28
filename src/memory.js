@@ -1,7 +1,7 @@
-const { Vec3 } = require('vec3')
 const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
+const Vec3Dimension = require('./vec3-dimension')
 
 // @ts-ignore
 module.exports = class Memory {
@@ -18,13 +18,13 @@ module.exports = class Memory {
     filePath
 
     /**
-     * @type {Vec3 | null}
+     * @type {Vec3Dimension | null}
      */
     myBed
 
     /**
      * @readonly
-     * @type {Array<Vec3>}
+     * @type {Array<Vec3Dimension>}
      */
     myChests
 

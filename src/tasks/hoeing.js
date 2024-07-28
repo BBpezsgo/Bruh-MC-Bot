@@ -4,16 +4,17 @@ const { backNForthSort } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const MC = require('../mc')
 const goto = require('./goto')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<number, {
  *   gatherTool: boolean;
  * } & ({
- *   water: Vec3;
+ *   water: Vec3Dimension;
  * } | {
  *   nearPlayer: string;
  * } | {
- *   block: Vec3;
+ *   block: Vec3Dimension;
  * })>}
  */
 module.exports = {
@@ -62,7 +63,8 @@ module.exports = {
         let water = null
 
         if ('water' in args) {
-            water = args.water
+            yield* goto.task(bot, { dimension: args.water.dimension })
+            water = args.water.xyz(bot.dimension)
         } else if ('nearPlayer' in args) {
             const target = bot.env.getPlayerPosition(args.nearPlayer)
             if (!target) {
@@ -71,22 +73,24 @@ module.exports = {
         
             water = bot.bot.findBlock({
                 matching: [ bot.mc.data.blocksByName['water'].id ],
-                point: target.clone(),
+                point: target.xyz(bot.dimension),
                 maxDistance: 4,
             })?.position.clone()
             if (!water) {
                 throw `There is no water`
             }
         } else if ('block' in args) {
-            const dirt = bot.bot.blockAt(args.block)
+            yield* goto.task(bot, { dimension: args.block.dimension })
 
-            let above = bot.bot.blockAt(args.block.offset(0, 1, 0))
+            const dirt = bot.bot.blockAt(args.block.xyz(bot.dimension))
+
+            let above = bot.bot.blockAt(args.block.offset(0, 1, 0).xyz(bot.dimension))
 
             while (above && MC.replaceableBlocks[above.name] === 'break') {
-                if (!bot.env.allocateBlock(bot.bot.username, above.position, 'dig')) {
+                if (!bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
                     console.log(`[Bot "${bot.bot.username}"]: Block will be digged by someone else, waiting ...`)
-                    yield* bot.env.waitUntilBlockIs(above.position, 'dig')
-                    above = bot.bot.blockAt(args.block.offset(0, 1, 0))
+                    yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
+                    above = bot.bot.blockAt(args.block.offset(0, 1, 0).xyz(bot.dimension))
                     continue
                 }
             }
@@ -96,7 +100,7 @@ module.exports = {
             }
 
             yield* goto.task(bot, {
-                block: args.block.clone(),
+                block: new Vec3Dimension(args.block, bot.bot.game.dimension),
             })
 
             if (above && MC.replaceableBlocks[above.name] === 'break') {
@@ -143,14 +147,12 @@ module.exports = {
                 point: water.clone(),
                 maxDistance: 6,
                 count: 80,
-            })
-
-            dirts = dirts.filter(filterPosition)
+            }).filter(filterPosition).map(v => new Vec3Dimension(v, bot.bot.game.dimension))
             dirts = backNForthSort(dirts)
 
             let shouldContinue = false
             for (const dirt of dirts) {
-                const above = bot.bot.blockAt(dirt.offset(0, 1, 0))
+                const above = bot.bot.blockAt(dirt.xyz(bot.dimension).offset(0, 1, 0))
                 if (!MC.replaceableBlocks[above?.name ?? '']) {
                     continue
                 }
@@ -166,7 +168,7 @@ module.exports = {
                 yield* equipHoe()
 
                 yield* sleepG(100)
-                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt)))
+                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension))))
                 n++
                 yield* sleepG(100)
                 shouldContinue = true
@@ -179,7 +181,7 @@ module.exports = {
 
         return n
     },
-    id: function(args) {
+    id: function() {
         return `hoe`
     },
     humanReadableId: function(args) {
