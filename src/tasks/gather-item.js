@@ -581,7 +581,6 @@ function* evaluatePlan(bot, plan) {
             openedChest = null
         }
     }
-
 }
 
 /**

@@ -224,7 +224,7 @@ module.exports = class BruhBot {
     _isRightHandActive
 
     /**
-     * @type {TaskManager.AsManaged<import('./tasks/attack')> | null}
+     * @type {import('./managed-task').AsManaged<import('./tasks/attack')> | null}
      */
     defendMyselfGoal
 
@@ -232,7 +232,7 @@ module.exports = class BruhBot {
      * @readonly
      * @type {import('mineflayer').Dimension}
      */
-    get dimension() { return this.dimension }
+    get dimension() { return this.bot.game.dimension }
 
     /**
      * @type {((soundName: string | number) => void) | null}
@@ -312,8 +312,30 @@ module.exports = class BruhBot {
 
         this.debug = new Debug(this)
 
-        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => this.bot.chat(reply + '')))
-        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => this.bot.whisper(sender, reply + '')))
+        const stringifyMessage = function(/** @type {any} */ message) {
+            if (typeof message === 'string') {
+                return message
+            } else if (typeof message === 'number' ||
+                typeof message === 'bigint') {
+                return message.toString()
+            } else if (typeof message === 'object') {
+                if (message instanceof Error) {
+                    if (message.name === 'NoPath') {
+                        return `I can't get there`
+                    }
+                    return message.message
+                }
+            }
+            return message + ''
+        }
+
+        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => {
+            this.bot.chat(stringifyMessage(reply))
+        }))
+
+        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => {
+            this.bot.whisper(sender, stringifyMessage(reply))
+        }))
 
         this.bot.on('target_aiming_at_you', (entity) => {
             this.aimingEntities.push(entity)
@@ -591,7 +613,7 @@ module.exports = class BruhBot {
                 } else {
                     /** @type {Array<import('./environment').SavedCrop>} */
                     const crops = []
-                    for (const crop of this.env.crops) {
+                    for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension)) {
                         const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
                         if (!blockAt) { continue }
                         if (blockAt.name === 'air') { crops.push(crop) }
@@ -1047,7 +1069,7 @@ module.exports = class BruhBot {
      * 
      * @param {string} sender
      * @param {string} message
-     * @param {(reply: string) => void} respond
+     * @param {(reply: any) => void} respond
      */
     handleChat(sender, message, respond) {
         message = message.trim()
@@ -1089,7 +1111,7 @@ module.exports = class BruhBot {
             }, priorities.user)
                 .wait()
                 .then(() => respond(`Done`))
-                .catch(respond)
+                .catch(error => error === 'Cancelled' || respond(error))
             return
         }
 
@@ -1134,7 +1156,7 @@ module.exports = class BruhBot {
             }, priorities.user)
                 .wait()
                 .then(() => respond(`Done`))
-                .catch(respond)
+                .catch(error => error === 'Cancelled' || respond(error))
             return
         }
 
@@ -1152,7 +1174,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => respond(`Done`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already scanning chests`)
             }
@@ -1172,7 +1194,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => respond(`Done`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already scanning villagers`)
             }
@@ -1186,7 +1208,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(result => result ? respond(`Done`) : respond(`I couldn't fish anything`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already fishing`)
             }
@@ -1282,26 +1304,21 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => { })
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already following you`)
             }
         }
 
         if (message === 'wyd') {
-            if (this.tasks.running.length === 0) {
+            if (this.tasks.tasks.length === 0) {
                 respond(`Nothing`)
             } else {
                 let builder = ''
-                for (let i = 0; i < this.tasks.running.length; i++) {
-                    const task = this.tasks.running[i]
+                for (let i = 0; i < this.tasks.tasks.length; i++) {
+                    const task = this.tasks.tasks[i]
                     if (builder) { builder += ' ; ' }
                     builder += `${task.humanReadableId} with priority ${task.priority}`
-                }
-                for (let i = 0; i < this.tasks.queue.length; i++) {
-                    const task = this.tasks.queue[i]
-                    if (builder) { builder += ' ; ' }
-                    builder += `(in queue) ${task.humanReadableId} with priority ${task.priority}`
                 }
                 respond(builder)
             }
@@ -1345,7 +1362,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => respond(`I'm here`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already coming to you`)
             }
@@ -1382,7 +1399,7 @@ module.exports = class BruhBot {
                             respond(`I missed by ${Math.round(error)} blocks`)
                         }
                     })
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already teleporting to you`)
             }
@@ -1397,7 +1414,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => respond(`There it is`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already on my way`)
             }
@@ -1413,7 +1430,7 @@ module.exports = class BruhBot {
                 respond(`Okay`)
                 task.wait()
                     .then(() => respond(`There it is`))
-                    .catch(reason => respond(reason + ''))
+                    .catch(error => error === 'Cancelled' || respond(error))
             } else {
                 respond(`I'm already on my way`)
             }
@@ -1426,11 +1443,11 @@ module.exports = class BruhBot {
         }
 
         if (message === 'leave') {
-            if (this.tasks.running.length === 0) {
-            } else if (this.tasks.running.length === 1) {
+            if (this.tasks.tasks.length === 0) {
+            } else if (this.tasks.tasks.length === 1) {
                 respond(`I will leave before finishing this one task`)
             } else {
-                respond(`I will leave before finishing these ${this.tasks.running.length} tasks`)
+                respond(`I will leave before finishing these ${this.tasks.tasks.length} tasks`)
             }
             this.tasks.cancel()
                 .then(() => this.bot.quit(`${sender} asked me to leave`))

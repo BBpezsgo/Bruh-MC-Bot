@@ -25,7 +25,7 @@ function can(bot) {
  * @type {import('../task').TaskDef<void, { }> & { can: can }}
  */
 module.exports = {
-    task: function*(bot) {
+    task: function*(bot, args) {
         /**
          * @type {Block}
          */
@@ -74,7 +74,17 @@ module.exports = {
 
         bot.memory.myBed = new Vec3Dimension(bed.position, bot.dimension)
 
+        let shouldWakeUp = false
+
+        args.cancel = function*() {
+            shouldWakeUp = true
+        }
+
         while (bot.bot.isSleeping) {
+            if (shouldWakeUp) {
+                yield* wrap(bot.bot.wake())
+                break
+            }
             yield* sleepG(500)
         }
     },

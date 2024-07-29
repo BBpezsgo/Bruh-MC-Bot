@@ -16,6 +16,11 @@ module.exports = {
 
             switch (junk.type) {
                 case 'water': {
+                    if (junk.position.dimension !== bot.dimension) {
+                        bot.memory.mlgJunkBlocks.push(junk)
+                        break
+                    }
+
                     let junkBlock = null
                     let notFirst = false
                     while (junkBlock = bot.bot.findBlock({
@@ -55,6 +60,11 @@ module.exports = {
                     break
                 }
                 case 'block': {
+                    if (junk.position.dimension !== bot.dimension) {
+                        bot.memory.mlgJunkBlocks.push(junk)
+                        break
+                    }
+
                     const junkBlock = bot.bot.findBlock({
                         matching: [
                             bot.mc.data.blocksByName[junk.blockName].id
@@ -77,8 +87,9 @@ module.exports = {
                 case 'boat': {
                     const junkBoat = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === junk.id)
                     if (!junkBoat) {
+                        bot.memory.mlgJunkBlocks.push(junk)
                         console.warn(`[Bot "${bot.bot.username}"]: Junk boat not found`)
-                        continue
+                        break
                     }
 
                     yield* attack.task(bot, {

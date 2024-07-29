@@ -12,8 +12,13 @@ const Vec3Dimension = require('../vec3-dimension')
 module.exports = {
     task: function* (bot, args) {
         let failStreak = 0
+        let isFollowing = true
 
-        while (true) {
+        args.cancel = function*() {
+            isFollowing = false
+        }
+
+        while (isFollowing) {
             yield
 
             let target = bot.env.getPlayerPosition(args.player, 10000)

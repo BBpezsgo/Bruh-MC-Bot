@@ -6,15 +6,20 @@ const goto = require('./goto')
  * @type {import('../task').TaskDef<boolean, { }>}
  */
 module.exports = {
-    task: function*(bot) {
+    task: function*(bot, args) {
         let n = 0
         let splashHeard = 0
         /**
          * @type {import('prismarine-entity').Entity | null}
          */
         let bobber = null
-    
-        while (true) {
+        let isFishing = true
+
+        args.cancel = function*() {
+            isFishing = false
+        }
+
+        while (isFishing) {
             yield
     
             const fishingRod = bot.searchItem('fishing_rod')
@@ -65,11 +70,14 @@ module.exports = {
                 bot.onHeard = null
             }
     
-            while ((!splashHeard || performance.now() - splashHeard < 500) && bobber && bobber.isValid) {
+            while ((!splashHeard || performance.now() - splashHeard < 500) &&
+                   bobber &&
+                   bobber.isValid &&
+                   isFishing) {
                 yield* sleepG(100)
             }
     
-            if (!bot.holds('fishing_rod')) {
+            if (isFishing && !bot.holds('fishing_rod')) {
                 throw `I have no fishing rod`
             }
     
