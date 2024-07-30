@@ -1,11 +1,14 @@
+import { OptionsMasterGrade, Projectil } from 'minecrafthawkeye'
 import { bot } from 'mineflayer'
 import { Pathfinder } from 'mineflayer-pathfinder'
 import { Block } from 'prismarine-block'
+import { Entity } from 'prismarine-entity'
 import * as viewer from 'prismarine-viewer'
 
 declare module 'mineflayer' {
     interface Bot {
         // readonly viewer: viewer.ViewerAPI
+		readonly hawkEye: import('minecrafthawkeye').HawkEye
 		readonly pathfinder: Pathfinder
         // readonly webInventory: {
         //     options: Options
@@ -32,5 +35,9 @@ declare module 'mineflayer' {
 				'no_scaffolding_blocks' | 'place_error' | 'stuck'
 		) => void;
 		path_stop: () => void;
+
+		auto_shot_stopped: (target: Entity | OptionsMasterGrade) => void;
+		incoming_projectil: (projectile: Projectil, trajectory: Array<Vec3>) => void;
+		target_aiming_at_you: (entity: Entity, trajectory: Array<Vec3>) => void;
 	}
 }

@@ -13,7 +13,7 @@ const MinecraftData = require('./mc-data')
  */
 
 /**
- * @typedef {SimpleCrop | SeededCrop | BlockCrop | FruitCrop | Tree} AnyCrop
+ * @typedef {SimpleCrop | SeededCrop | BlockCrop | FruitCrop | Tree | SpreadingCrop} AnyCrop
  */
 
 /**
@@ -21,6 +21,7 @@ const MinecraftData = require('./mc-data')
  *   growsOnBlock: 'solid' | ReadonlyArray<string>;
  *   growsOnSide: 'top' | 'bottom' | 'side';
  *   canUseBonemeal: boolean;
+ *   lightLevel?: { min?: number; max?: number; };
  * }} GeneralCrop
  */
 
@@ -64,6 +65,13 @@ const MinecraftData = require('./mc-data')
  *   size: 'small' | 'can-be-large' | 'always-large';
  *   branches: 'never' | 'sometimes' | 'always';
  * }} Tree
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'spread';
+ *   seed: string;
+ * }} SpreadingCrop
  */
 
 /**
@@ -181,6 +189,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'beetroots': {
             type: 'seeded',
@@ -189,6 +198,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'wheat': {
             type: 'seeded',
@@ -197,6 +207,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'carrots': {
             type: 'simple',
@@ -205,6 +216,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'melon_stem': {
             type: 'grows_block',
@@ -214,6 +226,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'pumpkin_stem': {
             type: 'grows_block',
@@ -223,6 +236,7 @@ module.exports = class MC {
             growsOnBlock: ['farmland'],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         // 'pitcher_crop': {
         //     type: 'seeded',
@@ -245,6 +259,7 @@ module.exports = class MC {
             ],
             growsOnSide: 'top',
             canUseBonemeal: true,
+            lightLevel: { min: 9 },
         },
         'cocoa': {
             type: 'simple',
@@ -290,6 +305,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'spruce_sapling': {
             type: 'tree',
@@ -300,6 +316,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'birch_sapling': {
             type: 'tree',
@@ -310,6 +327,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'jungle_sapling': {
             type: 'tree',
@@ -320,6 +338,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'acacia_sapling': {
             type: 'tree',
@@ -330,6 +349,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'dark_oak_sapling': {
             type: 'tree',
@@ -340,6 +360,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'mangrove_propagule': {
             type: 'tree',
@@ -353,6 +374,7 @@ module.exports = class MC {
                 'clay',
             ],
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'cherry_sapling': {
             type: 'tree',
@@ -363,6 +385,7 @@ module.exports = class MC {
             canUseBonemeal: true,
             growsOnBlock: MC.soilBlocks,
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'azalea': {
             type: 'tree',
@@ -376,6 +399,7 @@ module.exports = class MC {
                 'clay',
             ],
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
         },
         'flowering_azalea': {
             type: 'tree',
@@ -389,6 +413,27 @@ module.exports = class MC {
                 'clay',
             ],
             growsOnSide: 'top',
+            lightLevel: { min: 9 },
+        },
+        'brown_mushroom': {
+            type: 'spread',
+            seed: 'brown_mushroom',
+            canUseBonemeal: false,
+            growsOnBlock: [
+                ...MC.soilBlocks,
+            ],
+            growsOnSide: 'top',
+            lightLevel: { max: 12 },
+        },
+        'red_mushroom': {
+            type: 'spread',
+            seed: 'red_mushroom',
+            canUseBonemeal: false,
+            growsOnBlock: [
+                ...MC.soilBlocks,
+            ],
+            growsOnSide: 'top',
+            lightLevel: { max: 12 },
         },
     }
 
@@ -396,7 +441,7 @@ module.exports = class MC {
      * @param {string} blockName
      * @returns {(AnyCrop & { cropName: string }) | null}
      */
-    static findCropByAnyBlockName(blockName) {
+    static resolveCrop(blockName) {
         for (const cropBlockName in MC.cropsByBlockName) {
             const crop = MC.cropsByBlockName[cropBlockName]
             if (cropBlockName === blockName) {

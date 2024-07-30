@@ -8,7 +8,7 @@ const goto = require('./tasks/goto')
 const MC = require('./mc')
 const { Item } = require('prismarine-item')
 const meleeWeapons = require('./melee-weapons')
-const { Interval, parseLocationH, canEntityAttack, entityRangeOfSight, entityAttackDistance } = require('./utils/other')
+const { Interval, parseLocationH, canEntityAttack, entityRangeOfSight, entityAttackDistance, requestPosition } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const hawkeye = require('minecrafthawkeye')
@@ -337,8 +337,13 @@ module.exports = class BruhBot {
             this.bot.whisper(sender, stringifyMessage(reply))
         }))
 
-        this.bot.on('target_aiming_at_you', (entity) => {
+        this.bot.on('target_aiming_at_you', (entity, trajectory) => {
             this.aimingEntities.push(entity)
+            this.debug.drawLines(trajectory, [1, 0, 0])
+        })
+
+        this.bot.on('incoming_projectil', (projectile, trajectory) => {
+            this.debug.drawLines(trajectory, [.5, .5, .5])
         })
 
         this.bot.on('soundEffectHeard', (soundName) => {
@@ -413,6 +418,7 @@ module.exports = class BruhBot {
                     this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
                 }
             }
+            this.debug.tick()
 
             for (let i = this.lockedItems.length - 1; i >= 0; i--) {
                 if (this.lockedItems[i].isUnlocked) {
@@ -603,17 +609,17 @@ module.exports = class BruhBot {
                     const harvestTask = this.tasks.push(this, harvest, {}, priorities.unnecessary)
                     /*if (harvestTask) {
                         harvestTask.wait()
-                            .then(() => {
+                      .then(() => {
                                 const goal = this.tasks.push(this, compost, null, priorities.unnecessary)
                             })
                             .catch(() => {
                                 
                             })
                     }*/
-                } else {
+                } else {      
                     /** @type {Array<import('./environment').SavedCrop>} */
                     const crops = []
-                    for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension)) {
+                    for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
                         const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
                         if (!blockAt) { continue }
                         if (blockAt.name === 'air') { crops.push(crop) }
@@ -1082,13 +1088,6 @@ module.exports = class BruhBot {
             }
         }
 
-        if (message === 'test') {
-            this.tasks.push(this, goto, {
-                dimension: 'overworld'
-            })
-            return
-        }
-
         if (message.startsWith('get')) {
             const itemName = message.replace('get', '').trimStart()
             let item = this.mc.data.itemsByName[itemName.toLowerCase()]
@@ -1437,6 +1436,14 @@ module.exports = class BruhBot {
         }
 
         if (message === 'stop' ||
+            message === 'cancel') {
+            respond(`Okay`)
+            this.tasks.cancel()
+                .then(() => respond(`I stopped`))
+                .catch(error => respond(error))
+        }
+
+        if (message === 'stop now' ||
             message === 'abort') {
             respond(`Okay`)
             this.tasks.abort()

@@ -3,7 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require("./serializing")
 const { wrap, sleepG } = require("./utils/tasks")
-const { filterHostiles, directBlockNeighbors: directBlockNeighbors } = require("./utils/other")
+const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require("./utils/other")
 const { Block } = require("prismarine-block")
 const { Item } = require("prismarine-item")
 const MC = require("./mc")
@@ -608,6 +608,23 @@ module.exports = class Environment {
             point: plantPosition,
             maxDistance: exactPosition ? 1 : 10,
             useExtraInfo: (/** @type {Block} */ block) => {
+                if (plant.type === 'spread' && (
+                    plant.seed === 'brown_mushroom' ||
+                    plant.seed === 'red_mushroom')) {
+                    let n = 0
+                    for (let x = -4; x <= 4; x++) {
+                        for (let y = -1; y <= 1; y++) {
+                            for (let z = -4; z <= 4; z++) {
+                                const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                                if (!other || other.name !== plant.seed) { continue }
+                                n++
+                            }
+                        }
+                    }
+                    if (n >= 5 - 1) {
+                        return false
+                    }
+                }
                 const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
                 for (const neighbor of neighbors) {
                     const neighborBlock = bot.bot.blockAt(neighbor)
@@ -665,16 +682,23 @@ module.exports = class Environment {
                     break
             }
         }
+
+        /**
+         * @type {Array<Vec3>}
+         */
+        const bruh = []
+
         return bot.bot.findBlocks({
             matching: cropBlockIds,
             useExtraInfo: (/** @type {Block} */ block) => {
                 /** @type {boolean} */
                 let isGrown = false
-                const cropInfo = MC.findCropByAnyBlockName(block.name)
+                const cropInfo = MC.resolveCrop(block.name)
                 if (!cropInfo) {
                     console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
                     return false
                 }
+
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
@@ -725,9 +749,56 @@ module.exports = class Environment {
                         }
                         break
                     }
+                    case 'spread': {
+                        isGrown = true
+                        break
+                    }
                     default: {
                         return false
                     }
+                }
+
+                if (cropInfo.cropName === 'brown_mushroom' ||
+                    cropInfo.cropName === 'red_mushroom') {
+                    let nearby = 0
+                    let neighbors = 0
+                    if (false) {
+                        for (let x = -4; x <= 4; x++) {
+                            for (let y = -1; y <= 1; y++) {
+                                for (let z = -4; z <= 4; z++) {
+                                    const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                                    if (!other || other.name !== cropInfo.cropName) { continue }
+                                    if (bruh.find(v => v.equals(other.position))) { continue }
+                                    nearby++
+                                    if (isDirectNeighbor(block.position, other.position)) {
+                                        neighbors++
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        for (let x = -1; x <= 1; x++) {
+                            for (let y = -1; y <= 1; y++) {
+                                for (let z = -1; z <= 1; z++) {
+                                    const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                                    if (!other || other.name !== cropInfo.cropName) { continue }
+                                    if (bruh.find(v => v.equals(other.position))) { continue }
+                                    if (isDirectNeighbor(block.position, other.position)) {
+                                        neighbors++
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    isGrown = !!neighbors || nearby >= 5
+                    bruh.push(block.position.clone())
+                }
+
+                if (isGrown) {
+                    bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [0, 1, 0])
+                } else {
+                    bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [1, 0, 0])
                 }
 
                 return grown === isGrown
@@ -990,7 +1061,7 @@ module.exports = class Environment {
         }
         let blockAt = null
         for (const bot of this.bots) {
-            if (bot.dimension !== blockPosition.dimension)  { continue }
+            if (bot.dimension !== blockPosition.dimension) { continue }
             blockAt = bot.bot.blockAt(blockPosition.xyz(bot.dimension))
             if (blockAt) { break }
         }

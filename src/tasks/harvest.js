@@ -41,7 +41,7 @@ module.exports = {
                 if (!cropBlock) { continue }
                 console.log(`[Bot "${bot.bot.username}"] Harvesting ${cropBlock.name} ...`)
 
-                const cropInfo = MC.findCropByAnyBlockName(cropBlock.name)
+                const cropInfo = MC.resolveCrop(cropBlock.name)
                 if (!cropInfo) {
                     console.warn(`[Bot "${bot.bot.username}"] This aint a crop`)
                     continue
@@ -49,9 +49,14 @@ module.exports = {
 
                 // console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
 
-                yield* goto.task(bot, {
-                    block: cropPosition,
-                })
+                try {
+                    yield* goto.task(bot, {
+                        block: cropPosition,
+                    })
+                } catch (error) {
+                    console.error(error)
+                    continue
+                }
 
                 // console.log(`[Bot "${bot.bot.username}"] Actually harvesting ...`)
 
@@ -110,6 +115,13 @@ module.exports = {
                         })
                         break
                     }
+                    case 'spread': {
+                        yield* dig.task(bot, {
+                            block: cropBlock,
+                            alsoTheNeighbors: false,
+                        })
+                        break
+                    }
                     default:
                         debugger
                         continue
@@ -154,6 +166,10 @@ module.exports = {
                 }
 
                 if (cropInfo.type === 'tree') {
+                    continue
+                }
+
+                if (cropInfo.type === 'spread') {
                     continue
                 }
 

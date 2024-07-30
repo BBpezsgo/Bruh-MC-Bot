@@ -75,25 +75,6 @@ module.exports = class TaskManager {
 
     /**
      * @private
-     * @param {ManagedTask | null} a
-     * @param {ManagedTask | null} b
-     * **Returns:**
-     * 
-     *  Positive - `a` is more important
-     * 
-     *  Negative - `b` is more important
-     * 
-     *  Zero - idk
-     */
-    static compareTasks(a, b) {
-        if (!a && !b) { return 0 }
-        if (!b) { return 1 }
-        if (!a) { return -1 }
-        return a.priority - b.priority
-    }
-
-    /**
-     * @private
      * @param {ReadonlyArray<ManagedTask>} tasks
      * @returns {number}
      */
@@ -109,16 +90,6 @@ module.exports = class TaskManager {
             }
         }
         return index
-    }
-
-    /**
-     * @private
-     * @param {Array<ManagedTask>} tasks
-     * @returns {ManagedTask | null}
-     */
-    static takeImportantTask(tasks) {
-        const index = TaskManager.findImportantTask(tasks)
-        return tasks.splice(index, 1)[0]
     }
 
     /**
@@ -168,6 +139,7 @@ module.exports = class TaskManager {
                     task.cancel()
                 }
                 if (this._tasks.length === 0) {
+                    this._isStopping = false
                     clearInterval(interval)
                     resolve()
                 }

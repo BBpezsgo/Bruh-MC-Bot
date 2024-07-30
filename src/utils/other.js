@@ -1,6 +1,7 @@
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
+const { rotationToVector } = require('./math')
 
 /**
  * @param {ReadonlyArray<import('prismarine-item').Item>} before
@@ -24,7 +25,7 @@ function itemsDelta(before, after) {
     /**
      * @type {Array<{ name: string; delta: number; }>}
      */
-    const res = [ ]
+    const res = []
 
     map.forEach((value, key) => {
         res.push({ name: key, delta: value })
@@ -40,11 +41,11 @@ function itemsDelta(before, after) {
  */
 function backNForthSort(blocks) {
     /** @type {Record<number, Array<TPoint>>} */
-    const rows = { }
+    const rows = {}
 
     for (const block of blocks) {
         if (!rows[block.x]) {
-            rows[block.x] ??= [ ]
+            rows[block.x] ??= []
         }
         rows[block.x].push(block)
     }
@@ -109,31 +110,31 @@ function basicRouteSearch(start, points, mapper) {
 function entityAttackDistance(entity) {
     const reachDistance = 2
     return {
-        'evoker':           reachDistance,
-        'creeper':          3,
-        'skeleton':         15,
-        'cave_spider':      reachDistance,
-        'endermite':        reachDistance,
-        'hoglin':           reachDistance,
-        'magma_cube':       reachDistance,
-        'slime':            reachDistance,
-        'wither_skeleton':  reachDistance,
-        'witch':            8,
-        'spider':           reachDistance,
-        'stray':            15,
-        'ravager':          reachDistance,
-        'husk':             reachDistance,
-        'zombie_villager':  reachDistance,
-        'zombie':           reachDistance,
-        'piglin':           reachDistance,
-        'piglin_brute':     reachDistance,
-        'pillager':         8,
-        'silverfish':       reachDistance,
-        'zoglin':           reachDistance,
-        'vindicator':       reachDistance,
-        'enderman':         reachDistance,
+        'evoker': reachDistance,
+        'creeper': 3,
+        'skeleton': 15,
+        'cave_spider': reachDistance,
+        'endermite': reachDistance,
+        'hoglin': reachDistance,
+        'magma_cube': reachDistance,
+        'slime': reachDistance,
+        'wither_skeleton': reachDistance,
+        'witch': 8,
+        'spider': reachDistance,
+        'stray': 15,
+        'ravager': reachDistance,
+        'husk': reachDistance,
+        'zombie_villager': reachDistance,
+        'zombie': reachDistance,
+        'piglin': reachDistance,
+        'piglin_brute': reachDistance,
+        'pillager': 8,
+        'silverfish': reachDistance,
+        'zoglin': reachDistance,
+        'vindicator': reachDistance,
+        'enderman': reachDistance,
         'zombified_piglin': reachDistance,
-        'ghast':            64,
+        'ghast': 64,
     }[entity.name ?? '']
 }
 
@@ -143,29 +144,29 @@ function entityAttackDistance(entity) {
  */
 function entityRangeOfSight(entity) {
     return {
-        'evoker':           12,
-        'creeper':          15,
-        'silverfish':       16, // ?
-        'zoglin':           16, // ?
-        'vindicator':       16, // ?
-        'skeleton':         16,
-        'cave_spider':      16,
-        'endermite':        16,
-        'hoglin':           16,
-        'magma_cube':       16,
-        'slime':            16,
-        'wither_skeleton':  16,
-        'witch':            16,
-        'spider':           16,
-        'stray':            16,
-        'ravager':          32,
-        'husk':             35,
-        'zombie_villager':  35,
-        'zombie':           35,
-        'piglin':           16,
-        'piglin_brute':     16,
-        'pillager':         64,
-        'ghast':            64,
+        'evoker': 12,
+        'creeper': 15,
+        'silverfish': 16, // ?
+        'zoglin': 16, // ?
+        'vindicator': 16, // ?
+        'skeleton': 16,
+        'cave_spider': 16,
+        'endermite': 16,
+        'hoglin': 16,
+        'magma_cube': 16,
+        'slime': 16,
+        'wither_skeleton': 16,
+        'witch': 16,
+        'spider': 16,
+        'stray': 16,
+        'ravager': 32,
+        'husk': 35,
+        'zombie_villager': 35,
+        'zombie': 35,
+        'piglin': 16,
+        'piglin_brute': 16,
+        'pillager': 64,
+        'ghast': 64,
     }[entity.name ?? '']
 }
 
@@ -216,22 +217,22 @@ function filterHostiles(entity, point) {
     }
 
     const hostileAttackDistance = {
-        'evoker':           12,
-        'creeper':          15,
-        'skeleton':         16,
-        'cave_spider':      16,
-        'endermite':        16,
-        'hoglin':           16,
-        'magma_cube':       16,
-        'slime':            16,
-        'wither_skeleton':  16,
-        'witch':            16,
-        'spider':           16,
-        'stray':            16,
-        'ravager':          32,
-        'husk':             35,
-        'zombie_villager':  35,
-        'zombie':           35,
+        'evoker': 12,
+        'creeper': 15,
+        'skeleton': 16,
+        'cave_spider': 16,
+        'endermite': 16,
+        'hoglin': 16,
+        'magma_cube': 16,
+        'slime': 16,
+        'wither_skeleton': 16,
+        'witch': 16,
+        'spider': 16,
+        'stray': 16,
+        'ravager': 32,
+        'husk': 35,
+        'zombie_villager': 35,
+        'zombie': 35,
 
         'piglin': null,
         'piglin_brute': null,
@@ -378,10 +379,10 @@ function directBlockNeighbors(origin, ...sides) {
             new Vec3(origin.x, origin.y - 1, origin.z),
             new Vec3(origin.x, origin.y, origin.z + 1),
             new Vec3(origin.x, origin.y, origin.z - 1),
-        ]   
+        ]
     } else {
         /** @type {Array<Vec3>} */
-        const result = [ ]
+        const result = []
         const _top = new Vec3(origin.x, origin.y + 1, origin.z)
         const _bottom = new Vec3(origin.x, origin.y - 1, origin.z)
         const _side1 = new Vec3(origin.x + 1, origin.y, origin.z)
@@ -417,13 +418,25 @@ function directBlockNeighbors(origin, ...sides) {
                     }
                     break
                 }
-            
+
                 default:
                     break
             }
         }
         return result
     }
+}
+
+/**
+ * @param {{ x: number; y: number; z: number; }} origin
+ * @param {{ x: number; y: number; z: number; }} point
+ */
+function isDirectNeighbor(origin, point) {
+    return (
+        Math.pow(origin.x - point.x, 2) +
+        Math.pow(origin.y - point.y, 2) +
+        Math.pow(origin.z - point.z, 2)
+    ) === 1
 }
 
 module.exports = {
@@ -439,4 +452,5 @@ module.exports = {
     Interval,
     parseLocationH,
     directBlockNeighbors,
+    isDirectNeighbor,
 }

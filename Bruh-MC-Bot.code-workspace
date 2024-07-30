@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../mineflayer-pathfinder"
+		},
+		{
+			"path": "../minecraftHawkEye"
 		}
 	],
 	"settings": {

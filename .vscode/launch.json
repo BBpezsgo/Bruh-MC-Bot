@@ -2,11 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "bun",
+            "name": "Node",
+            "program": "${workspaceFolder}/src/index.js",
+            "type": "node",
             "request": "launch",
+            "skipFiles": [ "<node_internals>/**" ]
+        },
+        {
             "name": "Bun",
             "program": "./src/index.js",
-            "args": ["run"],
+            "type": "bun",
+            "request": "launch",
+            "args": [ "run" ],
             "stopOnEntry": false,
             "internalConsoleOptions": "openOnSessionStart",
             "runtime": "bun",

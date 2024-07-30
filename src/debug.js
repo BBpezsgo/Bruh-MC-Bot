@@ -1,5 +1,7 @@
 const { Vec3 } = require('vec3')
 
+const lineMinDistance = 0.8
+
 module.exports = class Debug {
     /**
      * @typedef {[number, number, number]} Color
@@ -9,27 +11,20 @@ module.exports = class Debug {
      * @private @readonly
      * @type {import('./bruh-bot')}
      */
-    bot
+    _bot
 
     /**
      * @private @readonly
-     * @type {Array<import('./task').Task<void>>}
+     * @type {Array<{ position: Vec3; color: Color; }>}
      */
-    drawers
-
-    /**
-     * @private
-     * @type {number}
-     */
-    counter
+    _pointQueue
 
     /**
      * @param {import('./bruh-bot')} bot
      */
     constructor(bot) {
-        this.bot = bot
-        this.drawers = []
-        this.counter = 0
+        this._bot = bot
+        this._pointQueue = []
     }
 
     /**
@@ -37,8 +32,40 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawPoint(position, color) {
-        this.bot.bot.chat(`/particle dust ${color[0]} ${color[1]} ${color[2]} 1 ${position.x} ${position.y} ${position.z} 0 0 0 0 1`)
-        this.counter++
+        this._pointQueue.push({
+            position: position,
+            color: color,
+        })
+        if (this._pointQueue.length > 80) {
+            this._pointQueue.shift()
+        }
+    }
+
+    /**
+     * @param {Vec3} position
+     * @param {Vec3} size
+     * @param {Color} color
+     */
+    drawBox(position, size, color) {
+        const step = 0.5
+        for (let x = 0; x <= size.x; x += step) {
+            this.drawPoint(position.offset(x, 0, 0), color)
+            this.drawPoint(position.offset(x, size.y, 0), color)
+            this.drawPoint(position.offset(x, 0, size.y), color)
+            this.drawPoint(position.offset(x, size.y, size.y), color)
+        }
+        for (let y = step; y < size.y; y += step) {
+            this.drawPoint(position.offset(0, y, 0), color)
+            this.drawPoint(position.offset(size.x, y, 0), color)
+            this.drawPoint(position.offset(0, y, size.z), color)
+            this.drawPoint(position.offset(size.x, y, size.z), color)
+        }
+        for (let z = step; z < size.z; z += step) {
+            this.drawPoint(position.offset(0, 0, z), color)
+            this.drawPoint(position.offset(size.x, 0, z), color)
+            this.drawPoint(position.offset(0, size.y, z), color)
+            this.drawPoint(position.offset(size.x, size.y, z), color)
+        }
     }
 
     /**
@@ -50,25 +77,26 @@ module.exports = class Debug {
         const offset = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z)
         const length = Math.sqrt((offset.x * offset.x) + (offset.y * offset.y) + (offset.z * offset.z))
         offset.normalize()
-        for (let i = 0; i <= length; i += 0.5) {
+        for (let i = 0; i <= length; i += lineMinDistance) {
             this.drawPoint(a.offset(offset.x * i, offset.y * i, offset.z * i), color)
         }
     }
 
-    // tick() {
-    //     for (let i = 0; i < 5; i++) {
-    //         if (this.drawers.length === 0) { break }
-    //         const first = this.drawers[0]
-    //         const isDone = first.next().done
-    //         if (!isDone) { continue }
-    //         this.drawers.shift()
-    //     }
-    // }
-    // 
-    // /**
-    //  * @param {import("./task").Task<void>} drawer
-    //  */
-    // push(drawer) {
-    //     this.drawers.push(drawer)
-    // }
+    /**
+     * @param {ReadonlyArray<Vec3>} points
+     * @param {Color} color
+     */
+    drawLines(points, color) {
+        for (let i = 1; i < points.length; i++) {
+            this.drawLine(points[i - 1], points[i], color)
+        }
+    }
+
+    tick() {
+        const n = Math.min(10, this._pointQueue.length)
+        for (let i = 0; i < n; i++) {
+            const point = this._pointQueue.shift()
+            this._bot.bot.chat(`/particle dust ${point.color[0]} ${point.color[1]} ${point.color[2]} 1 ${point.position.x} ${point.position.y} ${point.position.z} 0 0 0 0 1`)
+        }
+    }
 }
