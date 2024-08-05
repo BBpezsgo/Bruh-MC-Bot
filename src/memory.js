@@ -23,6 +23,11 @@ module.exports = class Memory {
     myBed
 
     /**
+     * @type {Record<number, Array<number>>}
+     */
+    hurtBy
+
+    /**
      * @readonly
      * @type {Array<Vec3Dimension>}
      */
@@ -49,16 +54,17 @@ module.exports = class Memory {
         this.filePath = filePath
 
         this.myBed = null
-        this.myChests = [ ]
-        this.mlgJunkBlocks = [ ]
-        this.myArrows = [ ]
-        
+        this.myChests = []
+        this.mlgJunkBlocks = []
+        this.myArrows = []
+        this.hurtBy = {}
+
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Memory]: File not found at "${this.filePath}"`)
             return
         }
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
-        
+
         this.myBed = data.myBed ?? this.myBed
         this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks

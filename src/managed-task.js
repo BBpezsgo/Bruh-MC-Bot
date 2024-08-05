@@ -78,7 +78,7 @@ class ManagedTask {
     _resolve
 
     /**
-     * @type {((reason: TError | 'Cancelled') => any) | null}
+     * @type {((reason: TError | 'cancelled') => any) | null}
      */
     _reject
 
@@ -139,7 +139,7 @@ class ManagedTask {
     }
 
     /**
-     * @returns {import('./promise').TypedPromise<TResult, TError | 'Cancelled'>}
+     * @returns {import('./promise').TypedPromise<TResult, TError | 'cancelled'>}
      */
     wait() {
         if (!this._promise) {
@@ -154,26 +154,19 @@ class ManagedTask {
 
     cancel() {
         this._status = 'cancelling'
-        if (!this._task) {
-            return
-        }
+        if (!this._task) { return }
+        if (this._cancellingTask) { return }
 
         if (this.args.cancel) {
-            if (this._cancellingTask) { return }
             this._cancellingTask = this.args.cancel()
         } else {
             this._status = 'cancelled'
-            // @ts-ignore
-            this._task.return('cancelled')
-            console.log(`[Tasks]: Task "${this.id}" cancelled`)
         }
     }
 
     abort() {
         this._status = 'aborted'
-        if (!this._task) {
-            return
-        }
+        if (!this._task) { return }
 
         // @ts-ignore
         this._task.return('aborted')
@@ -194,7 +187,7 @@ class ManagedTask {
                     }
                     this._status = 'cancelled'
                     console.log(`[Tasks]: Task "${this.id}" cancelled gracefully`)
-                    if (this._reject) { this._reject('Cancelled') }
+                    if (this._reject) { this._reject('cancelled') }
                     return true
                 } else {
                     this._status = 'cancelling'
@@ -206,6 +199,12 @@ class ManagedTask {
                 if (this._reject) { this._reject(error) }
                 return true
             }
+        }
+
+        if (this._status === 'cancelled') {
+            console.log(`[Tasks]: Task "${this.id}" cancelled`)
+            if (this._reject) { this._reject('cancelled') }
+            return true
         }
 
         if (!this._task) {

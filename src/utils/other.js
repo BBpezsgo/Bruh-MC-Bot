@@ -1,6 +1,7 @@
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
+const NBT = require('prismarine-nbt')
 const { rotationToVector } = require('./math')
 
 /**
@@ -365,6 +366,32 @@ function parseLocationH(text) {
 }
 
 /**
+ * @param {string} text
+ * @returns {null | boolean}
+ */
+function parseYesNoH(text) {
+    text = text.trim().toLowerCase()
+    switch (text) {
+        case 'y':
+        case 'yes':
+        case 'ye':
+        case 'yah':
+        case 'yeah': {
+            return true
+        }
+        case 'n':
+        case 'no':
+        case 'nope':
+        // cspell: disable-next-line
+        case 'nuhuh':
+        case 'nuh uh': {
+            return false
+        }
+    }
+    return null
+}
+
+/**
  * @param {Vec3} [origin]
  * @param {ReadonlyArray<'top' | 'bottom' | 'side'>} sides
  * @returns {Array<Vec3>}
@@ -439,6 +466,58 @@ function isDirectNeighbor(origin, point) {
     ) === 1
 }
 
+/**
+ * @param {NBT.Tags[NBT.TagType] | null} nbt
+ * @returns {any}
+ */
+function NBT2JSON(nbt) {
+    if (!nbt) { return nbt }
+    switch (nbt.type) {
+        case NBT.TagType.Byte:
+        case NBT.TagType.Double:
+        case NBT.TagType.Float:
+        case NBT.TagType.Int:
+        case NBT.TagType.Short:
+            return nbt.value
+        case NBT.TagType.IntArray:
+        case NBT.TagType.ByteArray:
+        case NBT.TagType.ShortArray:
+            return nbt.value
+        case NBT.TagType.String:
+            return nbt.value
+        case NBT.TagType.Compound: {
+            /** @type {any} */
+            const result = {}
+            for (const key in nbt.value) {
+                result[key] = NBT2JSON(nbt.value[key])
+            }
+            return result
+        }
+        case NBT.TagType.List: {
+            return nbt.value.value.map(v => ({
+                type: nbt.value.type,
+                value: v,
+            })).map(NBT2JSON)
+        }
+        case NBT.TagType.Long:
+            if (nbt.value[0]) {
+                return Infinity
+            } else {
+                return nbt.value[1]
+            }
+        case NBT.TagType.LongArray:
+            return nbt.value.map(v => {
+                if (v[0]) {
+                    return Infinity
+                } else {
+                    return v[1]
+                }
+            })
+        default:
+            return undefined
+    }
+}
+
 module.exports = {
     itemsDelta,
     backNForthSort,
@@ -451,6 +530,8 @@ module.exports = {
     Timeout,
     Interval,
     parseLocationH,
+    parseYesNoH,
     directBlockNeighbors,
     isDirectNeighbor,
+    NBT2JSON,
 }

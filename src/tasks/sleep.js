@@ -68,6 +68,7 @@ module.exports = {
         yield* goto.task(bot, {
             block: bed.position,
             timeout: 30000,
+            reach: 3,
         })
 
         yield* wrap(bot.bot.sleep(bed))

@@ -3,6 +3,7 @@ import { bot } from 'mineflayer'
 import { Pathfinder } from 'mineflayer-pathfinder'
 import { Block } from 'prismarine-block'
 import { Entity } from 'prismarine-entity'
+import { Item } from 'prismarine-item'
 import * as viewer from 'prismarine-viewer'
 
 declare module 'mineflayer' {

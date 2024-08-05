@@ -129,19 +129,21 @@ module.exports = class TaskManager {
     }
 
     /**
-     * @returns {Promise<void>}
+     * @returns {Promise<boolean>}
      */
     cancel() {
         this._isStopping = true
         return new Promise(resolve => {
+            let didSomething = false
             const interval = setInterval(() => {
                 for (const task of this._tasks) {
                     task.cancel()
+                    didSomething = true
                 }
                 if (this._tasks.length === 0) {
                     this._isStopping = false
                     clearInterval(interval)
-                    resolve()
+                    resolve(didSomething)
                 }
             }, 10)
         })

@@ -244,14 +244,14 @@ module.exports = {
                 if (inputItem) {
                     if (!args.onNeedYesNo) {
                         furnace.close()
-                        throw `Cancelled`
+                        throw `cancelled`
                     }
                     const resp = yield* args.onNeedYesNo(`There are ${inputItem.count} ${inputItem.displayName} waiting in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
                     if (resp === null || resp) {
                         yield* wrap(furnace.takeInput())
                     } else {
                         furnace.close()
-                        throw `Cancelled`
+                        throw `cancelled`
                     }
                 }
             }
@@ -261,14 +261,14 @@ module.exports = {
                 if (outputItem) {
                     if (!args.onNeedYesNo) {
                         furnace.close()
-                        throw `Cancelled`
+                        throw `cancelled`
                     }
                     const resp = yield* args.onNeedYesNo(`There are ${outputItem.count} ${outputItem.displayName} finished in a ${furnaceBlock.displayName} but there is no fuel. Should I take it out?`, 10000)
                     if (resp === null || resp) {
                         yield* wrap(furnace.takeOutput())
                     } else {
                         furnace.close()
-                        throw `Cancelled`
+                        throw `cancelled`
                     }
                 }
             }

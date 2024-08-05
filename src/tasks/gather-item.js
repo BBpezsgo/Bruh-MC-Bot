@@ -6,6 +6,7 @@ const { Chest } = require('mineflayer')
 const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
+const bundle = require('../utils/bundle')
 
 /**
  * @typedef {PermissionArgs & {
@@ -51,6 +52,10 @@ const Vec3Dimension = require('../vec3-dimension')
  * } | {
  *   type: 'trade';
  *   trade: import('../environment').SavedVillager['trades'][0];
+ *   count: number;
+ * } | {
+ *   type: 'bundle-out';
+ *   item: string;
  *   count: number;
  * }} PlanStep
  */
@@ -106,6 +111,10 @@ function planCost(plan) {
                     }
                     break
                 }
+                case 'bundle-out': {
+                    cost.other += 1
+                    break
+                }
                 case 'smelt': {
                     cost.other += 2
                     break
@@ -153,6 +162,10 @@ function planResult(plan, item) {
                 }
                 continue
             }
+            if (step.type === 'bundle-out' &&
+                step.item === item) {
+                count += step.count
+            }
             if (step.type === 'trade') {
                 if (step.trade.outputItem.name === item) {
                     count += step.count * step.trade.outputItem.count
@@ -182,57 +195,45 @@ function planResult(plan, item) {
 }
 
 /**
- * @param {import('../bruh-bot')} bot
- * @param {string} item
- * @param {number} count
- * @param {PermissionArgs} permissions
- * @param {PlanningContext} context
- * @returns {import('../task').Task<Plan>}
+ * @type {ReadonlyArray<(
+ *   bot: import('../bruh-bot'),
+ *   item: string,
+ *   count: number,
+ *   permissions : PermissionArgs,
+ *   context: PlanningContext,
+ *   planSoFar: Plan
+ * ) => (import('../task').Task<(PlanStep | Plan) | Array<PlanStep | Plan>> | null)>}
  */
-function* plan(bot, item, count, permissions, context) {
-    const cachedPlan = context.cachedPlans[`${item}-${count}`]
-    if (context.cachedPlans[`${item}-${count}`]) {
-        return cachedPlan
-    }
+const planners = [
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
+        if (!permissions.canUseInventory) { return null }
 
-    const _depthPrefix = ' '.repeat(context.depth)
-    if (context.recursiveItems.includes(item)) {
-        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
-        return []
-    }
-    if (context.depth > 10) {
-        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Too plan for item "${item}", skipping`)
-        return []
-    }
-
-    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
-
-    /**
-     * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
-     */
-    const result = []
-
-    if (permissions.canUseInventory) {
         yield
+
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check inventory ...`)
+
         const inInventory = bot.itemCount(item)
-        if (inInventory > 0) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Has ${inInventory}`)
-            const needFromInventory = Math.min(inInventory, count)
-            result.push({
-                type: 'inventory',
-                item: item,
-                count: needFromInventory,
-            })
-        } else {
+        if (inInventory === 0) {
             if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
+            return null
         }
-    }
 
-    if (planResult(result, item) >= count) { return result }
+        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Has ${inInventory}`)
+        const needFromInventory = Math.min(inInventory, count)
+        return {
+            type: 'inventory',
+            item: item,
+            count: needFromInventory,
+        }
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
 
-    if (permissions.canUseChests) {
+        if (!permissions.canUseChests) { return null }
+
         yield
+
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
         const inChestsWithMyItems = inChests.filter(v => v.myCount > 0 && v.position.dimension === bot.dimension)
@@ -241,40 +242,40 @@ function* plan(bot, item, count, permissions, context) {
             const bDist = bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension))
             return aDist - bDist
         })
+
         for (const inChestWithMyItems of inChestsWithMyItems) {
             yield
             const needFromChest = Math.min(inChestWithMyItems.myCount, count)
             if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Found ${inChestWithMyItems.myCount} in a chest`)
-            result.push({
+
+            return {
                 type: 'chest',
                 chest: inChestWithMyItems.position,
                 item: item,
                 count: needFromChest,
-            })
-
-            if (planResult(result, item) >= count) { return result }
+            }
         }
-        if (inChestsWithMyItems.length === 0) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
-        }
-    }
 
-    if (planResult(result, item) >= count) { return result }
+        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
+        return null
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
 
-    {
-        const need = count - planResult(result, item)
+        const need = count
         const locked = bot.env.lockOthersItems(bot.bot.username, item, need)
-        if (locked.length > 0) {
-            result.push({
-                type: 'request',
-                locks: locked,
-            })
+        if (locked.length === 0) { return null }
+
+        return {
+            type: 'request',
+            locks: locked,
         }
-    }
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
 
-    if (planResult(result, item) >= count) { return result }
+        if (!permissions.canCraft) { return null }
 
-    if (permissions.canCraft) {
         yield
         const recipes = bot.bot.recipesAll(bot.mc.data.itemsByName[item].id, null, true)
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
@@ -332,9 +333,18 @@ function* plan(bot, item, count, permissions, context) {
             }
         }
 
-        if (bestRecipe &&
-            bestRecipe.recipe.requiresTable &&
-            planResult(result, 'crafting_table') <= 0) {
+        if (!bestRecipe) {
+            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   No recipe found`)
+            return null
+        }
+
+        /**
+         * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
+         */
+        const result = []
+
+        if (bestRecipe.recipe.requiresTable &&
+            planResult(planSoFar, 'crafting_table') <= 0) {
             if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Plan for crafting table ...`)
             yield
             const tableInWorld = bot.bot.findBlock({
@@ -365,23 +375,21 @@ function* plan(bot, item, count, permissions, context) {
             }
         }
 
-        if (bestRecipe) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Recipe found`)
-            result.push(bestRecipe.plan.flat())
-            result.push({
-                type: 'craft',
-                item: bot.mc.data.items[bestRecipe.recipe.result.id].name,
-                count: Math.ceil(count / bestRecipe.recipe.result.count),
-                recipe: bestRecipe.recipe,
-            })
-        } else {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   No recipe found`)
-        }
-    }
+        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Recipe found`)
 
-    if (planResult(result, item) >= count) { return result }
+        result.push(bestRecipe.plan.flat())
+        result.push({
+            type: 'craft',
+            item: bot.mc.data.items[bestRecipe.recipe.result.id].name,
+            count: Math.ceil(count / bestRecipe.recipe.result.count),
+            recipe: bestRecipe.recipe,
+        })
 
-    {
+        return result
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
+
         const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position.xyz(bot.dimension)) - bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension)))
         for (const villager of sortedVillagers) {
             yield
@@ -389,9 +397,8 @@ function* plan(bot, item, count, permissions, context) {
             if (!entity || !entity.isValid) { continue }
             for (const trade of villager.trades) {
                 if (trade.outputItem.name !== item) { continue }
-                const need = count - planResult(result, item)
-                if (need <= 0) { break }
-                const tradeCount = Math.ceil(need / trade.outputItem.count)
+                if (count <= 0) { break }
+                const tradeCount = Math.ceil(count / trade.outputItem.count)
 
                 const pricePlan1 = trade.inputItem1 ? yield* plan(bot, trade.inputItem1.name, trade.inputItem1.count * tradeCount, permissions, {
                     cachedPlans: context.cachedPlans,
@@ -414,19 +421,24 @@ function* plan(bot, item, count, permissions, context) {
                 }) : null
 
                 const price1Result = trade.inputItem1 ? planResult([
-                    ...result,
+                    ...planSoFar,
                     ...(pricePlan1 ?? []),
                     ...(pricePlan2 ?? []),
                 ], trade.inputItem1.name) : null
 
                 const price2Result = trade.inputItem2 ? planResult([
-                    ...result,
+                    ...planSoFar,
                     ...(pricePlan1 ?? []),
                     ...(pricePlan2 ?? []),
                 ], trade.inputItem2.name) : null
 
                 if (trade.inputItem1 && price1Result < trade.inputItem1.count) { continue }
                 if (trade.inputItem2 && price2Result < trade.inputItem2.count) { continue }
+
+                /**
+                 * @type {Array<PlanStep | Plan>}
+                 */
+                const result = []
 
                 if (pricePlan1) result.push(...pricePlan1)
                 if (pricePlan2) result.push(...pricePlan2)
@@ -436,12 +448,71 @@ function* plan(bot, item, count, permissions, context) {
                     trade: trade,
                     count: tradeCount,
                 })
-                break
+
+                return result
             }
         }
+
+        return null
+    },
+]
+
+/**
+ * @param {import('../bruh-bot')} bot
+ * @param {string} item
+ * @param {number} count
+ * @param {PermissionArgs} permissions
+ * @param {PlanningContext} context
+ * @returns {import('../task').Task<Plan>}
+ */
+function* plan(bot, item, count, permissions, context) {
+    const cachedPlan = context.cachedPlans[`${item}-${count}`]
+    if (context.cachedPlans[`${item}-${count}`]) {
+        return cachedPlan
     }
 
-    if (planResult(result, item) >= count) { return result }
+    const _depthPrefix = ' '.repeat(context.depth)
+    if (context.recursiveItems.includes(item)) {
+        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
+        return []
+    }
+    if (context.depth > 10) {
+        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Too plan for item "${item}", skipping`)
+        return []
+    }
+
+    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
+
+    /**
+     * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
+     */
+    const result = []
+
+    while (true) {
+        const alreadyGot = planResult(result, item)
+        const need = count - alreadyGot
+        if (need <= 0) { break }
+        /**
+         * @type {ReadonlyArray<PlanStep> | null}
+         */
+        let bestPlan = null
+        let bestPlanCost = Infinity
+        for (const planner of planners) {
+            const _plan = yield* planner(bot, item, need, permissions, context, result)
+            if (!_plan) { continue }
+            const _planCost = normalizePlanCost(planCost([_plan].flat(3)))
+            if (_planCost < bestPlanCost) {
+                bestPlan = [_plan].flat(3)
+                bestPlanCost = _planCost
+
+                if (bestPlanCost <= 0) {
+                    break
+                }
+            }
+        }
+        if (!bestPlan) { break }
+        result.push(bestPlan)
+    }
 
     return result
 }
