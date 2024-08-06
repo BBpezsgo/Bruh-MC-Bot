@@ -227,9 +227,15 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @type {Array<import('prismarine-entity').Entity>}
+     * @type {Record<number, { time: number; entity: import('prismarine-entity').Entity; }>}
      */
     aimingEntities
+
+    /**
+     * @private
+     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: hawkeye.Projectil; }>}
+     */
+    incomingProjectiles
 
     /**
      * @private
@@ -323,7 +329,8 @@ module.exports = class BruhBot {
         this.defendMyselfGoal = null
         this.onHeard = null
         this.mc = null
-        this.aimingEntities = []
+        this.aimingEntities = {}
+        this.incomingProjectiles = {}
         this.lockedItems = []
 
         this.ensureEquipmentInterval = new Interval(60000)
@@ -371,13 +378,30 @@ module.exports = class BruhBot {
         }))
 
         this.bot.on('target_aiming_at_you', (entity, trajectory) => {
-            this.aimingEntities.push(entity)
-            this.debug.drawLines(trajectory, [1, 0, 0])
+            if (!this.aimingEntities[entity.id]) {
+                this.aimingEntities[entity.id] = {
+                    time: performance.now(),
+                    entity: entity,
+                }
+            } else {
+                this.aimingEntities[entity.id].time = performance.now()
+                this.aimingEntities[entity.id].entity = entity
+            }
         })
 
         // cspell: disable-next-line
         this.bot.on('incoming_projectil', (projectile, trajectory) => {
-            this.debug.drawLines(trajectory, [.5, .5, .5])
+            if (!this.incomingProjectiles[projectile.entity.id]) {
+                this.incomingProjectiles[projectile.entity.id] = {
+                    time: performance.now(),
+                    projectile: projectile,
+                    trajectory: trajectory,
+                }
+            } else {
+                this.incomingProjectiles[projectile.entity.id].time = performance.now()
+                this.incomingProjectiles[projectile.entity.id].projectile = projectile
+                this.incomingProjectiles[projectile.entity.id].trajectory = trajectory
+            }
         })
 
         this.bot.on('soundEffectHeard', (soundName) => {
@@ -412,6 +436,8 @@ module.exports = class BruhBot {
             this.bot.loadPlugin(MineFlayerElytra)
 
             this.bot.pathfinder.enablePathShortcut = true
+            this.bot.hawkEye.startRadar()
+
             console.log(`[Bot "${this.bot.username}"] Plugins loaded`)
         })
 
@@ -526,9 +552,71 @@ module.exports = class BruhBot {
                     return
                 }
 
-                if (this.aimingEntities[0]) {
-                    const entity = this.aimingEntities[0]
-                    console.log(`[Bot "${this.bot.username}"] ${entity.displayName ?? entity.name ?? 'Someone'} aiming at me`)
+                const now = performance.now()
+
+                for (const id in this.aimingEntities) {
+                    const hazard = this.aimingEntities[id]
+                    if (now - hazard.time > 100) {
+                        delete this.aimingEntities[id]
+                        continue
+                    }
+                    console.log(`[Bot "${this.bot.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
+                    this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
+
+                    const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
+
+                    const entityDirection = mathUtils.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
+
+                    const angle = mathUtils.vectorAngle({
+                        x: directionToSelf.x,
+                        y: directionToSelf.z,
+                    }, {
+                        x: entityDirection.x,
+                        y: entityDirection.z,
+                    })
+
+                    console.log(angle)
+    
+                    if (angle < 0) {
+                        this.tasks.push(this, goto, {
+                            point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
+                            distance: 0,
+                            searchRadius: 3,
+                            timeout: 500,
+                        }, priorities.critical - 2)
+                    } else {
+                        this.tasks.push(this, goto, {
+                            point: this.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
+                            distance: 0,
+                            searchRadius: 3,
+                            timeout: 500,
+                        }, priorities.critical - 2)
+                    }    
+                    break
+                }
+
+                for (const id in this.incomingProjectiles) {
+                    const hazard = this.incomingProjectiles[id]
+                    if (now - hazard.time > 100) {
+                        delete this.incomingProjectiles[id]
+                        continue
+                    }
+
+                    const projectileDirection = hazard.projectile.entity.velocity.clone().normalize()
+                    const directionToSelf = this.bot.entity.position.clone().subtract(hazard.projectile.entity.position).normalize()
+                    const dot = projectileDirection.dot(directionToSelf)
+                    if (dot <= 0) { continue }
+
+                    console.log(`[Bot "${this.bot.username}"] Incoming projectile`)
+                    this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+
+                    this.tasks.push(this, goto, {
+                        point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
+                        distance: 0,
+                        searchRadius: 3,
+                        timeout: 500,
+                    }, priorities.critical - 1)
+                    break
                 }
             }
 
@@ -614,7 +702,7 @@ module.exports = class BruhBot {
                                 const player = this.bot.players[entity.username]
                                 // cspell: disable-next-line
                                 if (player.gamemode === 1 ||
-                                // cspell: disable-next-line
+                                    // cspell: disable-next-line
                                     player.gamemode === 3) {
                                     canAttack = false
                                 }
@@ -779,7 +867,6 @@ module.exports = class BruhBot {
             }
             */
 
-            /*
             if (this.ensureEquipmentInterval.is()) {
                 let foodPointsInInventory = 0
                 for (const item of this.bot.inventory.items()) {
@@ -840,7 +927,6 @@ module.exports = class BruhBot {
                     }
                 }
             }
-            */
 
             if (this.tasks.isIdle || (
                 runningTask &&

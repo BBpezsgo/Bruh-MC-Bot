@@ -5,6 +5,7 @@ const plantSeed = require('./plant-seed')
 const MC = require('../mc')
 const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
+const pickupItem = require('./pickup-item')
 
 /**
  * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension; }>}
@@ -24,12 +25,16 @@ module.exports = {
          * @type {Array<import('../environment').SavedCrop>}
          */
         const harvestedCrops = []
+        /**
+         * @type {Array<import('vec3').Vec3>}
+         */
+        const harvestedPoints = []
         const farmPosition = args.farmPosition?.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
         const replantDuringHarvesting = true
 
         while (true) {
             // yield
-            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 20, 20)
+            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 80, 20)
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
             cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)
@@ -148,6 +153,8 @@ module.exports = {
                     })
                 }
 
+                harvestedPoints.push(cropPosition)
+
                 if (!replantDuringHarvesting) {
                     // console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
                     harvestedCrops.push({
@@ -215,6 +222,41 @@ module.exports = {
         yield* plantSeed.task(bot, {
             harvestedCrops: harvestedCrops,
         })
+
+        /**
+         * @type {Array<import('prismarine-entity').Entity>}
+         */
+        const items = []
+        for (const point of harvestedPoints) {
+            const item = Object.values(bot.bot.entities).find(e => {
+                if (e.name !== 'item') { return false }
+                const d = e.position.distanceTo(point)
+                if (d > 3) { return false }
+                if (items.find(other => other.id === e.id)) { return false }
+                return true
+            })
+            if (!item) { continue }
+            items.push(item)
+        }
+
+        console.log(`[Bot ${bot.bot.username}] Picking up ${items.length} items`)
+
+        for (let i = 0; i < 2 && items.length > 0; i++) {
+            const sortedItems = basicRouteSearch(bot.bot.entity.position, items, v => v.position)
+    
+            for (const item of sortedItems) {
+                if (!item?.isValid) { continue }
+                try {
+                    yield* pickupItem.task(bot, { item: item })
+                    const j = items.findIndex(v => v.id === item.id)
+                    if (j !== -1) {
+                        items.splice(j)
+                    }
+                } catch (error) {
+                    console.warn(`[Bot ${bot.bot.username}]`, error)
+                }
+            }
+        }
 
         return n
     },

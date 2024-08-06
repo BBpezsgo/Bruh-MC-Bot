@@ -170,7 +170,7 @@ class ManagedTask {
 
         // @ts-ignore
         this._task.return('aborted')
-        console.log(`[Tasks]: Task "${this.id}" aborted`)
+        console.log(`[Tasks] Task "${this.id}" aborted`)
     }
 
     tick() {
@@ -186,7 +186,7 @@ class ManagedTask {
                         }
                     }
                     this._status = 'cancelled'
-                    console.log(`[Tasks]: Task "${this.id}" cancelled gracefully`)
+                    console.log(`[Tasks] Task "${this.id}" cancelled gracefully`)
                     if (this._reject) { this._reject('cancelled') }
                     return true
                 } else {
@@ -195,14 +195,14 @@ class ManagedTask {
                 }
             } catch (error) {
                 this._status = 'failed'
-                console.error(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" failed:`, error)
+                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
                 if (this._reject) { this._reject(error) }
                 return true
             }
         }
 
         if (this._status === 'cancelled') {
-            console.log(`[Tasks]: Task "${this.id}" cancelled`)
+            console.log(`[Tasks] Task "${this.id}" cancelled`)
             if (this._reject) { this._reject('cancelled') }
             return true
         }
@@ -210,14 +210,14 @@ class ManagedTask {
         if (!this._task) {
             this._task = this._def.task(this._bot, this.args)
             this._status = 'running'
-            console.log(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" started`)
+            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" started`)
         }
 
         try {
             const v = this._task.next()
             if (v.done) {
                 this._status = 'done'
-                console.log(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" finished with result`, v.value)
+                console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
                 if (this._resolve) { this._resolve(v.value) }
                 return true
             } else {
@@ -226,7 +226,7 @@ class ManagedTask {
             }
         } catch (error) {
             this._status = 'failed'
-            console.error(`[Bot "${this._bot.bot.username}"]: Task "${this.id}" failed:`, error)
+            console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
             if (this._reject) { this._reject(error) }
             return true
         }

@@ -52,7 +52,7 @@ module.exports = {
         let above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
         while (above && MC.replaceableBlocks[above.name] === 'break') {
             if (!bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
-                console.log(`[Bot "${bot.bot.username}"]: Block will be digged by someone else, waiting ...`)
+                console.log(`[Bot "${bot.bot.username}"] Block will be digged by someone else, waiting ...`)
                 yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
                 above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
                 continue

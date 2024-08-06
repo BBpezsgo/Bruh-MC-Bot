@@ -115,7 +115,7 @@ module.exports = {
                             gatherTool: false,
                         })
                     } catch (error) {
-                        console.error(error)
+                        console.error(`[Bot "${bot.bot.username}"]`, error)
                         continue
                     }
                 }

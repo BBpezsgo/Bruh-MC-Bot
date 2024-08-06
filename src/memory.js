@@ -60,7 +60,7 @@ module.exports = class Memory {
         this.hurtBy = {}
 
         if (!fs.existsSync(this.filePath)) {
-            console.log(`[Memory]: File not found at "${this.filePath}"`)
+            console.log(`[Memory] File not found at "${this.filePath}"`)
             return
         }
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
@@ -69,7 +69,7 @@ module.exports = class Memory {
         this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
-        console.log(`[Memory]: Loaded`)
+        console.log(`[Memory] Loaded`)
     }
 
     save() {

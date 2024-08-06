@@ -88,8 +88,9 @@ module.exports = {
      * @param {import('minecraft-data').IndexedData} registry 
      * @param {number} bundleSlot
      * @param {string} item
+     * @returns {Promise<Item | null>}
      */
-    takeOutUntil: async function(bot, registry, bundleSlot, item) {
+    takeOutItem: async function(bot, registry, bundleSlot, item) {
         if (INVALID_ITEMS.includes(item)) { throw new Error(`Can't put ${item} into a bundle`) }
 
         let bundleItem = bot.inventory.slots[bundleSlot]
@@ -102,23 +103,23 @@ module.exports = {
         if (!bundleItemsBefore.find(v => v.name === item)) { throw new Error(`There is not ${item} in the bundle`) }
 
         const takenOut = []
+        let result = null
 
         while (item) {
-            const emptySlot = bot.inventory.firstEmptyInventorySlot(false)
-            if (emptySlot === null) { throw new Error(`No empty slot found`) }
-            const bundleItems = this.content(bundleItem.nbt)
-            if (bundleItems.length === 0) { throw new Error(`The bundle got empty`) }
-            const last = bundleItems[bundleItems.length - 1]
             const _takenOut = await this.takeOut(bot, bundleSlot)
-            if (last.name === item) {
+            if (_takenOut.name === item) {
+                result = _takenOut
                 break
             }
             takenOut.push(_takenOut)
         }
 
         for (const item of takenOut) {
+            await bot.waitForTicks(2)
             this.putIn(bot, registry, bundleSlot, item.slot)
         }
+
+        return result
     },
     /**
      * @param {import('mineflayer').Bot} bot
@@ -136,19 +137,22 @@ module.exports = {
         const emptySlot = bot.inventory.firstEmptyInventorySlot(false)
         if (emptySlot === null) { throw new Error(`No empty slot found`) }
 
-        const expected = bundleItemsBefore[bundleItemsBefore.length - 1]
+        const expected = bundleItemsBefore[0]
 
         await bot.clickWindow(bundleSlot, 0, 0)
         await bot.waitForTicks(1)
+
         await bot.clickWindow(emptySlot, 1, 0)
         await bot.waitForTicks(1)
+
         await bot.clickWindow(bundleSlot, 0, 0)
         await bot.waitForTicks(1)
+
+        if (bot.inventory.slots[bundleSlot]?.name !== 'bundle') { throw new Error(`Failed to put back the bundle`) }
 
         const takenOut = bot.inventory.slots[emptySlot]
         if (!takenOut) { throw new Error(`There is nothing at the destination slot after the operation`) }
-
-        if (takenOut.name !== expected.name) { throw new Error(`Unexpected item ${takenOut.name} at the destination slot after the operation`) }
+        if (takenOut.name !== expected.name) { throw new Error(`Unexpected item ${takenOut.name} at the destination slot after the operation, expected ${expected.name}`) }
         if (takenOut.count !== expected.count) { throw new Error(`Couldn't take out all the ${expected.name} from the bundle: taken ${takenOut.count}, expected ${expected.count}.`) }
 
         return takenOut

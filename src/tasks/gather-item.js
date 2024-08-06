@@ -165,6 +165,7 @@ function planResult(plan, item) {
             if (step.type === 'bundle-out' &&
                 step.item === item) {
                 count += step.count
+                continue
             }
             if (step.type === 'trade') {
                 if (step.trade.outputItem.name === item) {
@@ -209,8 +210,6 @@ const planners = [
         const _depthPrefix = ' '.repeat(context.depth)
         if (!permissions.canUseInventory) { return null }
 
-        yield
-
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
         const inInventory = bot.itemCount(item)
@@ -231,8 +230,6 @@ const planners = [
         const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canUseChests) { return null }
-
-        yield
 
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
@@ -276,7 +273,6 @@ const planners = [
 
         if (!permissions.canCraft) { return null }
 
-        yield
         const recipes = bot.bot.recipesAll(bot.mc.data.itemsByName[item].id, null, true)
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
         /**
@@ -455,6 +451,22 @@ const planners = [
 
         return null
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
+
+        const bundleItem = bundle.bestBundleWithItem(bot.bot, item)
+        if (!bundleItem) { return null }
+        const content = bundle.content(bundleItem.nbt)
+        if (!content) { return null }
+        const items = content.filter(v => v.name === item)
+        if (items.length === 0) { return null }
+
+        return {
+            type: 'bundle-out',
+            item: item,
+            count: items[0].count,
+        }
+    },
 ]
 
 /**
@@ -489,6 +501,7 @@ function* plan(bot, item, count, permissions, context) {
     const result = []
 
     while (true) {
+        yield
         const alreadyGot = planResult(result, item)
         const need = count - alreadyGot
         if (need <= 0) { break }
@@ -642,6 +655,22 @@ function* evaluatePlan(bot, plan) {
                     })
                     continue
                 }
+                case 'bundle-out': {
+                    const bundleItem = bundle.bestBundleWithItem(bot.bot, step.item)
+                    if (!bundleItem) { throw `Bundle disappeared` }
+                    const content = bundle.content(bundleItem.nbt)
+                    if (!content) { throw `Bundle content sublimated` }
+                    const items = content.filter(v => v.name === step.item)
+                    if (items.length === 0) { throw `Item disappeared from the bundle` }
+                    if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
+
+                    const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.data, bundleItem.slot, items[0].name))
+
+                    if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
+                    if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
+
+                    continue
+                }
 
                 default: debugger
             }
@@ -701,6 +730,10 @@ function stringifyPlan(bot, plan) {
                 } else {
                     builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name}, ${step.count} times\n`
                 }
+                break
+            }
+            case 'bundle-out': {
+                builder += `I have a bundle with ${step.count} ${step.item} in it\n`
                 break
             }
             default: {
@@ -782,8 +815,6 @@ const def = {
         const bestPlan = itemsAndPlans[0]
 
         const _organizedPlan = organizePlan(bestPlan.plan)
-        console.log(`[Bot "${bot.bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
-        console.log(stringifyPlan(bot, _organizedPlan))
         const _planResult = planResult(_organizedPlan, bestPlan.item)
         if (_planResult <= 0) {
             throw `Can't gather ${bestPlan.item}`
@@ -791,6 +822,8 @@ const def = {
         if (_planResult < args.count) {
             throw `I can only gather ${_planResult} ${bestPlan.item}`
         }
+        console.log(`[Bot "${bot.bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
+        console.log(stringifyPlan(bot, _organizedPlan))
         yield* evaluatePlan(bot, _organizedPlan)
     },
     id: function(args) {

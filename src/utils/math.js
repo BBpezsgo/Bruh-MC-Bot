@@ -55,6 +55,14 @@ function rotationToVector(pitch, yaw) {
     return new Vec3((f1 * f2), f3, -(f * f2))
 }
 
+/**
+ * @param {Readonly<{ x: number; y: number; }>} a
+ * @param {Readonly<{ x: number; y: number; }>} b
+ */
+function vectorAngle(a, b) {
+    return Math.atan2(b.y * a.x - b.x * a.y, b.x * a.x + b.y * a.y)
+}
+
 module.exports = {
     costDepth,
     randomInt,
@@ -64,4 +72,5 @@ module.exports = {
     lerpDeg,
     lerpRad,
     rotationToVector,
+    vectorAngle,
 }

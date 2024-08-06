@@ -33,7 +33,7 @@ module.exports = {
         const deactivateShield = function(/** @type {Item | null} */ shield) {
             if (shield && bot.isLeftHandActive) {
                 bot.deactivateHand()
-                // console.log(`[Bot "${bot.bot.username}"]: Shield deactivated`)
+                // console.log(`[Bot "${bot.bot.username}"] Shield deactivated`)
                 return true
             }
             return false
@@ -42,7 +42,7 @@ module.exports = {
         const activateShield = function(/** @type {Item | null} */ shield) {
             if (shield && !bot.isLeftHandActive) {
                 bot.activateHand('left')
-                // console.log(`[Bot "${bot.bot.username}"]: Shield activated`)
+                // console.log(`[Bot "${bot.bot.username}"] Shield activated`)
                 return true
             }
             return false
@@ -64,9 +64,9 @@ module.exports = {
             }
 
             if (meleeWeapon) {
-                console.log(`[Bot "${bot.bot.username}"]: Melee weapon "${meleeWeapon.name}" equipped`)
+                console.log(`[Bot "${bot.bot.username}"] Melee weapon "${meleeWeapon.name}" equipped`)
             } else {
-                console.log(`[Bot "${bot.bot.username}"]: No melee weapon found`)
+                console.log(`[Bot "${bot.bot.username}"] No melee weapon found`)
             }
         
             cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : hurtTime
@@ -92,13 +92,13 @@ module.exports = {
             }
         }
 
-        console.log(`[Bot "${bot.bot.username}"]: Attack ...`)
+        console.log(`[Bot "${bot.bot.username}"] Attack ...`)
     
         if (args.useMelee) {
             if (args.useMeleeWeapon) {
                 yield* equipMeleeWeapon()
             } else {
-                console.log(`[Bot "${bot.bot.username}"]: Attacking with bare hands`)
+                console.log(`[Bot "${bot.bot.username}"] Attacking with bare hands`)
                 if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
                     yield* wrap(bot.bot.unequip('hand'))
                 }
@@ -132,7 +132,7 @@ module.exports = {
     
             if (distance <= distanceToUseRangeWeapons && args.useMelee) {
                 if (distance > 6) {
-                    console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
+                    console.log(`[Bot "${bot.bot.username}"] Target too far away, moving closer ...`)
                     yield* goto.task(bot, {
                         point: args.target.position,
                         distance: 5,
@@ -175,7 +175,7 @@ module.exports = {
 
                     activateShield(shield)
                     
-                    // console.log(`[Bot "${bot.bot.username}"]: PUNCH`)
+                    // console.log(`[Bot "${bot.bot.username}"] PUNCH`)
                 }
     
                 continue
@@ -209,7 +209,7 @@ module.exports = {
                 if (weapon && weapon.ammo > 0) {
                     let grade = getGrade()
                     if (!grade || grade.blockInTrayect) {
-                        console.log(`[Bot "${bot.bot.username}"]: Target too far away, moving closer ...`)
+                        console.log(`[Bot "${bot.bot.username}"] Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
                             point: args.target.position,
                             distance: distance - 2,
@@ -231,12 +231,12 @@ module.exports = {
                             weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
     
                         if (!isCharged) {
-                            console.log(`[Bot "${bot.bot.username}"]: Charging crossbow`)
+                            console.log(`[Bot "${bot.bot.username}"] Charging crossbow`)
                             bot.activateHand('right')
                             const chargeTime = bot.getChargeTime(weapon.weapon)
                             yield* sleepG(Math.max(100, chargeTime))
                             bot.deactivateHand()
-                            console.log(`[Bot "${bot.bot.username}"]: Crossbow charged`)
+                            console.log(`[Bot "${bot.bot.username}"] Crossbow charged`)
                         }
     
                         grade = getGrade()
@@ -252,7 +252,7 @@ module.exports = {
                             yield
                             bot.deactivateHand()
                             // bot.env.entityHurtTimes[args.target.id] = performance.now() + (trajectoryTime(grade.arrowTrajectoryPoints, 60) * 1000)
-                            console.log(`[Bot "${bot.bot.username}"]: SHOOT`)
+                            console.log(`[Bot "${bot.bot.username}"] SHOOT`)
                             yield* sleepG(80)
                             saveMyArrow()
                         }
@@ -264,9 +264,9 @@ module.exports = {
                         yield
                         bot.deactivateHand()
                         // bot.env.entityHurtTimes[args.target.id] = performance.now() + (trajectoryTime(grade.arrowTrajectoryPoints, 15) * 1000)
-                        console.log(`[Bot "${bot.bot.username}"]: THROW`)
+                        console.log(`[Bot "${bot.bot.username}"] THROW`)
                     } else if (weapon.weapon === Weapons.bow) {
-                        console.log(`[Bot "${bot.bot.username}"]: Pulling bow`)
+                        console.log(`[Bot "${bot.bot.username}"] Pulling bow`)
                         bot.activateHand('right')
                         const chargeTime = bot.getChargeTime(weapon.weapon)
                         yield* sleepG(Math.max(hurtTime, chargeTime))
@@ -291,7 +291,7 @@ module.exports = {
                         yield
                         bot.deactivateHand()
                         // bot.env.entityHurtTimes[args.target.id] = performance.now() + (trajectoryTime(grade.arrowTrajectoryPoints, 60) * 1000)
-                        console.log(`[Bot "${bot.bot.username}"]: SHOOT`)
+                        console.log(`[Bot "${bot.bot.username}"] SHOOT`)
                         yield* sleepG(80)
                         saveMyArrow()
                     } else {
@@ -302,7 +302,7 @@ module.exports = {
             }
 
             if (distance > distanceToUseRangeWeapons && !bot.searchRangeWeapon()) {
-                console.log(`[Bot "${bot.bot.username}"]: Target too far away, stop attacking it`)
+                console.log(`[Bot "${bot.bot.username}"] Target too far away, stop attacking it`)
                 break
             }
     

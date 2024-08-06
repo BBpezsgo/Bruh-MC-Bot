@@ -190,7 +190,7 @@ module.exports = class Environment {
         this.villagers = {}
 
         if (!fs.existsSync(this.filePath)) {
-            console.log(`[Environment]: File not found at "${this.filePath}"`)
+            console.log(`[Environment] File not found at "${this.filePath}"`)
             return
         }
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
@@ -198,7 +198,7 @@ module.exports = class Environment {
         this.crops = data.crops ?? this.crops
         this.chests = data.chests ?? this.chests
         this.villagers = data.villagers ?? this.villagers
-        console.log(`[Environment]: Loaded`)
+        console.log(`[Environment] Loaded`)
     }
 
     /**
@@ -323,7 +323,7 @@ module.exports = class Environment {
         if (i >= 0) {
             this.bots.splice(i, 1)
         } else {
-            console.warn(`[Environment]: Failed to remove ${bot.bot.username}`)
+            console.warn(`[Environment] Failed to remove ${bot.bot.username}`)
         }
 
         if (this.bots.length === 0) {
@@ -340,7 +340,7 @@ module.exports = class Environment {
      * @returns {import('./task').Task<void>}
      */
     *scanChests(bot) {
-        console.log(`[Bot "${bot.bot.username}"]: Scanning chests ...`)
+        console.log(`[Bot "${bot.bot.username}"] Scanning chests ...`)
         const chestPositions = bot.bot.findBlocks({
             point: bot.bot.entity.position.clone(),
             maxDistance: 30,
@@ -362,7 +362,7 @@ module.exports = class Environment {
             },
             count: 69,
         })
-        console.log(`[Bot "${bot.bot.username}"]: Found ${chestPositions.length} chests`)
+        console.log(`[Bot "${bot.bot.username}"] Found ${chestPositions.length} chests`)
         for (const chestPosition of chestPositions) {
             try {
                 yield* goto.task(bot, {
@@ -370,11 +370,11 @@ module.exports = class Environment {
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
-                    console.warn(`[Bot "${bot.bot.username}"]: Chest disappeared while scanning`)
+                    console.warn(`[Bot "${bot.bot.username}"] Chest disappeared while scanning`)
                     continue
                 }
                 if (chestBlock.name !== 'chest') {
-                    console.warn(`[Bot "${bot.bot.username}"]: Chest replaced while scanning`)
+                    console.warn(`[Bot "${bot.bot.username}"] Chest replaced while scanning`)
                     continue
                 }
                 const chest = yield* wrap(bot.bot.openChest(chestBlock))
@@ -406,10 +406,10 @@ module.exports = class Environment {
                 yield* sleepG(100)
                 chest.close()
             } catch (error) {
-                console.warn(`[Bot "${bot.bot.username}"]: Error while scanning chests`, error)
+                console.warn(`[Bot "${bot.bot.username}"] Error while scanning chests`, error)
             }
         }
-        console.log(`[Bot "${bot.bot.username}"]: Chests scanned`)
+        console.log(`[Bot "${bot.bot.username}"] Chests scanned`)
     }
 
     /**
@@ -417,9 +417,9 @@ module.exports = class Environment {
      * @returns {import('./task').Task<void>}
      */
     *scanVillagers(bot) {
-        console.log(`[Bot "${bot.bot.username}"]: Scanning villagers ...`)
+        console.log(`[Bot "${bot.bot.username}"] Scanning villagers ...`)
         const villagers = Object.values(bot.bot.entities).filter(v => v.name === 'villager')
-        console.log(`[Bot "${bot.bot.username}"]: Found ${villagers.length} villagers`)
+        console.log(`[Bot "${bot.bot.username}"] Found ${villagers.length} villagers`)
         for (const villager of villagers) {
             try {
                 if (!villager.isValid) { continue }
@@ -437,10 +437,10 @@ module.exports = class Environment {
 
                 yield* sleepG(100)
             } catch (error) {
-                console.warn(`[Bot "${bot.bot.username}"]: Error while scanning villagers`, error)
+                console.warn(`[Bot "${bot.bot.username}"] Error while scanning villagers`, error)
             }
         }
-        console.log(`[Bot "${bot.bot.username}"]: Villagers scanned`)
+        console.log(`[Bot "${bot.bot.username}"] Villagers scanned`)
     }
 
     /**
