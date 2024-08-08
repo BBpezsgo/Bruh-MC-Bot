@@ -49,15 +49,15 @@ module.exports = {
         /**
          * @type {Record<string, number>}
          */
-        const originalCount = { }
+        const originalCount = {}
         for (const item of args.items) {
             originalCount[item.item] ??= 0
             originalCount[item.item] += item.count
         }
-        const fullChests = [ ]
+        const fullChests = []
 
         const BruhBot = require('../bruh-bot')
-        
+
         while (true) {
             yield
 
@@ -72,7 +72,7 @@ module.exports = {
                     throw `There is no chest`
                 }
                 const chestPosition = chestBlock.position
-        
+
                 if (chestBlock) {
                     yield* goto.task(bot, {
                         block: chestPosition,
@@ -81,7 +81,7 @@ module.exports = {
                 }
             }
 
-            const chest = yield* wrap(bot.bot.openChest(chestBlock))
+            const chest = yield* bot.openChest(chestBlock)
             try {
                 {
                     let isNewChest = true
@@ -91,12 +91,12 @@ module.exports = {
                             break
                         }
                     }
-                    
+
                     if (isNewChest) {
                         bot.memory.myChests.push(new Vec3Dimension(chestBlock.position, bot.dimension))
                     }
                 }
-        
+
                 for (const itemToDeposit of args.items) {
                     const have = bot.itemCount(itemToDeposit.item)
                     if (have === 0) {
@@ -106,7 +106,7 @@ module.exports = {
                     if (count === 0) {
                         return true
                     }
-    
+
                     if (BruhBot.firstFreeSlot(chest, itemToDeposit.item) === null) {
                         fullChests.push(chestBlock.position.clone())
                         break

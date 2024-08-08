@@ -136,7 +136,7 @@ module.exports = {
             while (true) {
                 console.log(`[Bot "${bot.bot.username}"] Try plant seed`)
 
-                const seed = bot.searchItem(...args.seedItems)
+                const seed = bot.searchItem(...args.seedItems.map(v => bot.mc.data.items[v].name))
                 if (!seed) { break }
 
                 const cropInfo = Object.values(MC.cropsByBlockName).find(v => {

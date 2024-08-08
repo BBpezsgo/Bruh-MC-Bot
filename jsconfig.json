@@ -16,7 +16,7 @@
         "noPropertyAccessFromIndexSignature": true,
         "noUncheckedIndexedAccess": true,
         "noUnusedLocals": true,
-        "noUnusedParameters": true,
+        "noUnusedParameters": false,
 
         "allowUnreachableCode": false,
         "allowUnusedLabels": false

@@ -226,9 +226,7 @@ module.exports = class Environment {
          * @type {PositionHash}
          */
         const hash = `${newBlock.position.x}-${newBlock.position.y}-${newBlock.position.z}-${dimension}`
-        if (this.allocatedBlocks[hash]) {
-            delete this.allocatedBlocks[hash]
-        }
+        delete this.allocatedBlocks[hash]
 
         if (isPlace && newBlock) {
             if (newBlock.name in MC.cropsByBlockName) {
@@ -274,9 +272,8 @@ module.exports = class Environment {
      * @param {import("prismarine-entity").Entity} entity
      */
     __entityDead(entity) {
-        if (this.entitySpawnTimes[entity.id]) {
-            delete this.entitySpawnTimes[entity.id]
-        }
+        delete this.entitySpawnTimes[entity.id]
+        delete this.entityHurtTimes[entity.id]
     }
 
     /**
@@ -285,6 +282,14 @@ module.exports = class Environment {
      */
     __entitySpawn(entity) {
         this.entitySpawnTimes[entity.id] = performance.now()
+    }
+
+    /**
+     * @private
+     * @param {import("prismarine-entity").Entity} entity
+     */
+    __entityHurt(entity) {
+        this.entityHurtTimes[entity.id] = performance.now()
     }
 
     /**
@@ -312,6 +317,7 @@ module.exports = class Environment {
         bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock, bot.dimension))
         bot.bot.on('entityDead', (entity) => this.__entityDead(entity))
         bot.bot.on('entitySpawn', (entity) => this.__entitySpawn(entity))
+        bot.bot.on('entityHurt', (entity) => this.__entityHurt(entity))
         this.bots.push(bot)
     }
 
@@ -377,7 +383,15 @@ module.exports = class Environment {
                     console.warn(`[Bot "${bot.bot.username}"] Chest replaced while scanning`)
                     continue
                 }
-                const chest = yield* wrap(bot.bot.openChest(chestBlock))
+
+                let chest
+                try {
+                    chest = yield* bot.openChest(chestBlock)
+                } catch (error) {
+                    console.error(error)
+                    continue
+                }
+
                 /**
                  * @type {SavedChest | null}
                  */
@@ -548,9 +562,7 @@ module.exports = class Environment {
                     outputItem: { name: v.outputItem.name, count: v.outputItem.count },
                 })),
             }
-            if (this.villagers[entity.id]) {
-                delete this.villagers[entity.id]
-            }
+            delete this.villagers[entity.id]
         } else {
             this.villagers[entity.id] = {
                 position: new Vec3Dimension(entity.position, dimension),

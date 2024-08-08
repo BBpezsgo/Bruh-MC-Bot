@@ -109,7 +109,7 @@ function* doCampfire(bot, campfire, recipe, count) {
             console.warn(`[Bot "${bot.bot.username}"] Unknown ingredient "${ingredient}"`)
             continue
         }
-        item = bot.searchItem(_i.id)
+        item = bot.searchItem(_i.name)
         if (item) {
             break
         }
@@ -304,7 +304,7 @@ module.exports = {
                     console.warn(`[Bot "${bot.bot.username}"] Unknown ingredient "${ingredient}"`)
                     continue
                 }
-                if (!bot.searchItem(_i.id)) {
+                if (!bot.searchItem(_i.name)) {
                     continue
                 }
                 yield* wrap(furnace.putInput(_i.id, null, 1))

@@ -60,4 +60,8 @@ module.exports = class Vec3Dimension {
      * @param {number} z
      */
     offset(x, y, z) { return new Vec3Dimension({ x: this.x + x, y: this.y + y, z: this.z + z }, this.dimension) }
+
+    toString() {
+        return `(${this.x} ${this.y} ${this.z})`
+    }
 }

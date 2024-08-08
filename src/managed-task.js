@@ -157,7 +157,7 @@ class ManagedTask {
         if (!this._task) { return }
         if (this._cancellingTask) { return }
 
-        if (this.args.cancel) {
+        if (this.args?.cancel) {
             this._cancellingTask = this.args.cancel()
         } else {
             this._status = 'cancelled'
@@ -226,7 +226,16 @@ class ManagedTask {
             }
         } catch (error) {
             this._status = 'failed'
-            console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
+            if (error instanceof Error && (
+                error.name === 'NoPath' ||
+                error.name === 'GoalChanged' ||
+                error.name === 'Timeout' ||
+                error.name === 'PathStopped'
+            )) {
+                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error.message)
+            } else {
+                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
+            }
             if (this._reject) { this._reject(error) }
             return true
         }

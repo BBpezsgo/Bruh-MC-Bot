@@ -48,6 +48,7 @@
 			"endermite",
 			"enderpearl",
 			"endregion",
+			"gamemode",
 			"hoeable",
 			"hoglin",
 			"interactable",
@@ -81,7 +82,9 @@
 			"tippedarrow",
 			"torchflower",
 			"Trayect",
+			"unbreaking",
 			"unequip",
+			"uuidv4",
 			"zoglin",
 			"zombified"
 		],

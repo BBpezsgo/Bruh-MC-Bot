@@ -2,7 +2,6 @@ const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const NBT = require('prismarine-nbt')
-const { rotationToVector } = require('./math')
 
 /**
  * @param {ReadonlyArray<import('prismarine-item').Item>} before
@@ -518,6 +517,73 @@ function NBT2JSON(nbt) {
     }
 }
 
+/**
+ * @param {NBT.Tags[NBT.TagType] | null | undefined} a
+ * @param {NBT.Tags[NBT.TagType] | null | undefined} b
+ * @returns {boolean}
+ */
+function isNBTEquals(a, b) {
+    if (!a && !b) { return true }
+    if (!a) { return false }
+    if (!b) { return false }
+
+    switch (a.type) {
+        case NBT.TagType.Byte:
+        case NBT.TagType.Double:
+        case NBT.TagType.Float:
+        case NBT.TagType.Int:
+        case NBT.TagType.Short: {
+            if (b.type !== a.type) { return false }
+            return a.value === b.value
+        }
+        case NBT.TagType.ByteArray:
+        case NBT.TagType.IntArray:
+        case NBT.TagType.ShortArray: {
+            if (b.type !== NBT.TagType.ByteArray) { return false }
+            if (a.value.length !== b.value.length) { return false }
+            return a.value.every((value, i) => b.value[i] === value)
+        }
+        case NBT.TagType.Compound: {
+            if (b.type !== NBT.TagType.Compound) { return false }
+            const keysA = Object.keys(a.value)
+            const keysB = Object.keys(b.value)
+            if (keysA.length !== keysB.length) { return false }
+            for (const key of keysA) {
+                const _a = a.value[key]
+                const _b = b.value[key]
+                if (!isNBTEquals(_a, _b)) { return false }
+            }
+            return true
+        }
+        case NBT.TagType.List: {
+            if (b.type !== NBT.TagType.List) { return false }
+            if (a.value.value.length !== b.value.value.length) { return false }
+            if (a.value.type !== b.value.type) { return false }
+            /** @type {Array<NBT.Tags[NBT.TagType]>} */ //@ts-ignore
+            const _a = a.value.value.map(v => ({ type: a.value.type, value: v }))
+            /** @type {Array<NBT.Tags[NBT.TagType]>} */ //@ts-ignore
+            const _b = b.value.value.map(v => ({ type: b.value.type, value: v }))
+            return _a.every((value, i) => isNBTEquals(value, _b[i]))
+        }
+        case NBT.TagType.Long: {
+            if (b.type !== NBT.TagType.Long) { return false }
+            return (a.value[0] === b.value[0]) && (a.value[1] === b.value[1])
+        }
+        case NBT.TagType.LongArray: {
+            if (b.type !== NBT.TagType.LongArray) { return false }
+            if (a.value.length !== b.value.length) { return false }
+            return a.value.every((value, i) => ((b.value[i][0] === value[0]) && (b.value[i][1] === value[1])))
+        }
+        case NBT.TagType.String: {
+            if (b.type !== NBT.TagType.String) { return false }
+            return a.value === b.value
+        }
+        default: {
+            return false
+        }
+    }
+}
+
 module.exports = {
     itemsDelta,
     backNForthSort,
@@ -534,4 +600,5 @@ module.exports = {
     directBlockNeighbors,
     isDirectNeighbor,
     NBT2JSON,
+    isNBTEquals,
 }

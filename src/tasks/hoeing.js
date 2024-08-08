@@ -35,7 +35,7 @@ module.exports = {
 
         const equipHoe = function*() {
             for (const hoe of hoes) {
-                const hoeItem = bot.searchItem(hoe)
+                const hoeItem = bot.searchItem(bot.mc.data.items[hoe].name)
                 if (hoeItem) {
                     if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoe) {
                         yield* wrap(bot.bot.equip(hoe, 'hand'))

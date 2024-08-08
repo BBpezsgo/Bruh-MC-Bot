@@ -20,7 +20,7 @@ const waitCompost = function*(bot, composter) {
         yield* wrap(bot.bot.activateBlock(composter))
         return true
     }
-    
+
     if (composter.getProperties()['level'] === 8) {
         yield* wrap(bot.bot.unequip('hand'))
         yield* wrap(bot.bot.activateBlock(composter))
@@ -41,9 +41,7 @@ const getItem = function(bot, includeNono) {
             !includeNono) {
             continue
         }
-        const compostableId = bot.mc.data.itemsByName[compostable]?.id
-        if (!compostableId) { continue }
-        const item = bot.searchItem(compostableId)
+        const item = bot.searchItem(compostable)
         if (item) {
             return item
         }
@@ -59,7 +57,7 @@ module.exports = {
         if (bot.quietMode) {
             throw `Can't compost in quiet mode`
         }
-    
+
         let composted = 0
 
         while (true) {
@@ -67,43 +65,43 @@ module.exports = {
             if (!item) {
                 break
             }
-    
+
             let composter = bot.bot.findBlock({
                 matching: bot.mc.data.blocksByName['composter'].id,
                 maxDistance: 32,
             })
-    
+
             if (!composter) {
                 throw `There is no composter`
             }
-    
+
             yield* goto.task(bot, {
                 block: composter.position,
             })
-    
+
             composter = bot.bot.blockAt(composter.position)
             if (composter.type !== bot.mc.data.blocksByName['composter'].id) {
                 throw `Composter destroyed while I was trying to get there`
             }
-    
+
             yield* waitCompost(bot, composter)
-    
+
             yield* wrap(bot.bot.equip(item, 'hand'))
             if (!bot.bot.heldItem) {
                 continue
             }
-    
+
             yield* wrap(bot.bot.activateBlock(composter))
             composted++
-    
+
             yield* waitCompost(bot, composter)
         }
-    
+
         yield* pickupItem.task(bot, {
             inAir: false,
             maxDistance: 4,
         })
-    
+
         return composted
     },
     id: function() {

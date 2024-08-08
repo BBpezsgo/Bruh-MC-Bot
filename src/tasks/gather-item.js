@@ -576,7 +576,7 @@ function* evaluatePlan(bot, plan) {
                         openedChest = null
                     }
                     if (!openedChest) {
-                        const chest = yield* wrap(bot.bot.openChest(chestBlock))
+                        const chest = yield* bot.openChest(chestBlock)
                         openedChest = {
                             chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
                             chest: chest,
