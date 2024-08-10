@@ -584,6 +584,21 @@ function isNBTEquals(a, b) {
     }
 }
 
+/**
+ * @template TItem
+ * @param {Generator<TItem, any, any>} generator
+ * @returns {Array<TItem>}
+ */
+function toArray(generator) {
+    const result = []
+    while (true) {
+        const v = generator.next()
+        if (v.done === true) { break }
+        result.push(v.value)
+    }
+    return result
+}
+
 module.exports = {
     itemsDelta,
     backNForthSort,
@@ -601,4 +616,5 @@ module.exports = {
     isDirectNeighbor,
     NBT2JSON,
     isNBTEquals,
+    toArray,
 }

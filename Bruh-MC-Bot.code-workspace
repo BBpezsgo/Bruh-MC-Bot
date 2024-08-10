@@ -11,6 +11,10 @@
 		}
 	],
 	"settings": {
+		"files.exclude": {
+			"bun.lockb": true,
+			"node_modules": true,
+		},
 		"material-icon-theme.files.associations": {
 			"template.js": "template",
 			"config.js": "settings"
@@ -55,6 +59,7 @@
 			"lerp",
 			"mapcloning",
 			"mapextending",
+			"minecart",
 			"minecrafthawkeye",
 			"mineflayer",
 			"netherite",

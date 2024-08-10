@@ -8,6 +8,8 @@ const Vec3Dimension = require('../vec3-dimension')
  * @returns {boolean}
  */
 function can(bot) {
+    if (bot.dimension !== 'overworld') { return false }
+
     const thunderstorm = bot.bot.isRaining && (bot.bot.thunderState > 0)
 
     if (!thunderstorm && !(bot.bot.time.timeOfDay >= 12541 && bot.bot.time.timeOfDay <= 23458)) {

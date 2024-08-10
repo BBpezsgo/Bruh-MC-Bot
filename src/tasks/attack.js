@@ -128,6 +128,20 @@ module.exports = {
 
         let reequipMeleeWeapon = false
 
+        /**
+         * @param {Entity} entity
+         */
+        const calculateScore = function(entity) {
+            const distanceScore = 1 / bot.bot.entity.position.distanceSquared(entity.position)
+            const healthScore = entity.health ? (1 / entity.health) : 0
+            const dangerScore = bot.memory.hurtBy[entity.id]?.length ? 1 : 0
+            return (
+                (distanceScore) +
+                (healthScore) +
+                (dangerScore * 5)
+            )
+        }
+
         while (true) {
             yield
             /**
@@ -162,8 +176,7 @@ module.exports = {
                         continue
                     }
 
-                    const distanceSqr = bot.bot.entity.position.distanceSquared(candidate.position)
-                    const candidateScore = 1 / distanceSqr
+                    const candidateScore = calculateScore(candidate)
                     if (!target || candidateScore > targetScore) {
                         targetScore = candidateScore
                         target = candidate
@@ -188,7 +201,6 @@ module.exports = {
                         point: target.position,
                         distance: 5,
                         timeout: 500,
-                        ignoreOthers: true,
                     })
                     reequipMeleeWeapon = true
                     continue

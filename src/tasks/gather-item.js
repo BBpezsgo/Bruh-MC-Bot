@@ -83,6 +83,84 @@ const bundle = require('../utils/bundle')
  * }} PlanningContext
  */
 
+class PredictedEnvironment {
+    /**
+     * @readonly
+     * @type {Record<string, number>}
+     */
+    inventory
+    /**
+     * @readonly
+     * @type {Record<import('../environment').PositionHash, Record<string, number>>}
+     */
+    chests
+
+    /**
+     * @param {ReadonlyArray<PlanStep>} steps
+     * @param {import('../mc')['data']} registry
+     */
+    constructor(steps, registry) {
+        this.inventory = {}
+        this.chests = {}
+        for (const step of steps) {
+            switch (step.type) {
+                case 'goto': {
+                    continue
+                }
+                case 'chest': {
+                    /**
+                     * @type {import('../environment').PositionHash}
+                     */
+                    const hash = `${step.chest.x}-${step.chest.y}-${step.chest.z}-${step.chest.dimension}`
+                    this.chests[hash] ??= {}
+                    this.chests[hash][step.item] ??= 0
+                    this.chests[hash][step.item] -= step.count
+                    continue
+                }
+                case 'inventory': {
+                    this.inventory[step.item] ??= 0
+                    this.inventory[step.item] -= step.count
+                    continue
+                }
+                case 'trade': {
+                    if (step.trade.inputItem1) {
+                        this.inventory[step.trade.inputItem1.name] ??= 0
+                        this.inventory[step.trade.inputItem1.name] -= step.trade.inputItem1.count
+                    }
+                    if (step.trade.inputItem2) {
+                        this.inventory[step.trade.inputItem2.name] ??= 0
+                        this.inventory[step.trade.inputItem2.name] -= step.trade.inputItem2.count
+                    }
+                    if (step.trade.outputItem) {
+                        this.inventory[step.trade.outputItem.name] ??= 0
+                        this.inventory[step.trade.outputItem.name] += step.trade.inputItem2.count
+                    }
+                    continue
+                }
+                case 'smelt': {
+                    this.inventory[step.item] ??= 0
+                    this.inventory[step.item] += step.count
+                    continue
+                }
+                case 'craft': {
+                    for (const delta of step.recipe.delta) {
+                        const itemName = registry.items[delta.id].name
+                        this.inventory[itemName] ??= 0
+                        this.inventory[itemName] += delta.count
+                    }
+                    continue
+                }
+                case 'request': {
+                    continue
+                }
+                case 'bundle-out': {
+                    continue
+                }
+            }
+        }
+    }
+}
+
 const planningLogs = false
 
 /**
@@ -210,9 +288,11 @@ const planners = [
         const _depthPrefix = ' '.repeat(context.depth)
         if (!permissions.canUseInventory) { return null }
 
+        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
+
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
-        const inInventory = bot.itemCount(item)
+        const inInventory = bot.itemCount(item) + (future.inventory[item] ?? 0)
         if (inInventory === 0) {
             if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
             return null
@@ -231,9 +311,14 @@ const planners = [
 
         if (!permissions.canUseChests) { return null }
 
+        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
+
         if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
-        const inChestsWithMyItems = inChests.filter(v => v.myCount > 0 && v.position.dimension === bot.dimension)
+        const inChestsWithMyItems = inChests.filter(v => {
+            const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.[item] ?? 0)
+            return have > 0 && v.position.dimension === bot.dimension
+        })
         inChestsWithMyItems.sort((a, b) => {
             const aDist = bot.bot.entity.position.distanceSquared(a.position.xyz(bot.dimension))
             const bDist = bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension))
@@ -242,8 +327,9 @@ const planners = [
 
         for (const inChestWithMyItems of inChestsWithMyItems) {
             yield
-            const needFromChest = Math.min(inChestWithMyItems.myCount, count)
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Found ${inChestWithMyItems.myCount} in a chest`)
+            const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.[item] ?? 0)
+            const needFromChest = Math.min(have, count)
+            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Found ${have} in a chest`)
 
             return {
                 type: 'chest',
@@ -257,7 +343,7 @@ const planners = [
         return null
     },
     function*(bot, item, count, permissions, context, planSoFar) {
-        const _depthPrefix = ' '.repeat(context.depth)
+        // const _depthPrefix = ' '.repeat(context.depth)
 
         const need = count
         const locked = bot.env.lockOthersItems(bot.bot.username, item, need)
@@ -384,7 +470,7 @@ const planners = [
         return result
     },
     function*(bot, item, count, permissions, context, planSoFar) {
-        const _depthPrefix = ' '.repeat(context.depth)
+        // const _depthPrefix = ' '.repeat(context.depth)
 
         const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position.xyz(bot.dimension)) - bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension)))
         for (const villager of sortedVillagers) {
@@ -452,7 +538,7 @@ const planners = [
         return null
     },
     function*(bot, item, count, permissions, context, planSoFar) {
-        const _depthPrefix = ' '.repeat(context.depth)
+        // const _depthPrefix = ' '.repeat(context.depth)
 
         const bundleItem = bundle.bestBundleWithItem(bot.bot, item)
         if (!bundleItem) { return null }
@@ -589,6 +675,13 @@ function* evaluatePlan(bot, plan) {
                     continue
                 }
                 case 'craft': {
+                    for (const ingredient of step.recipe.delta) {
+                        if (ingredient.count >= 0) { continue }
+                        const has = bot.bot.inventory.count(ingredient.id, ingredient.metadata)
+                        if (has < -ingredient.count) {
+                            throw `Not enough ${bot.mc.data.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${-ingredient.count}`
+                        }
+                    }
                     if (step.recipe.requiresTable) {
                         let tableBlock = bot.bot.findBlock({
                             matching: bot.mc.data.blocksByName['crafting_table'].id,
@@ -779,6 +872,7 @@ function organizePlan(plan) {
  *   organizePlan: organizePlan;
  *   stringifyPlan: stringifyPlan;
  *   normalizePlanCost: normalizePlanCost;
+ *   PredictedEnvironment: typeof PredictedEnvironment,
  * }}
  */
 const def = {
@@ -824,6 +918,28 @@ const def = {
         }
         console.log(`[Bot "${bot.bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
         console.log(stringifyPlan(bot, _organizedPlan))
+        console.log(`[Bot "${bot.bot.username}"] Environment in the future:`)
+        {
+            let builder = ''
+            const future = new PredictedEnvironment(_organizedPlan, bot.mc.data)
+
+            builder += 'Inventory:\n'
+            for (const name in future.inventory) {
+                const delta = future.inventory[name]
+                builder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+            }
+            builder += 'Chests:\n'
+            for (const position in future.chests) {
+                /** @type {Record<string, number>} */ // @ts-ignore
+                const chest = future.chests[position]
+                builder += `  at ${position}`
+                for (const name in chest) {
+                    const delta = chest[name]
+                    builder += `    ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                }
+            }
+            console.log(builder)
+        }
         yield* evaluatePlan(bot, _organizedPlan)
     },
     id: function(args) {
@@ -838,6 +954,7 @@ const def = {
     plan: plan,
     organizePlan: organizePlan,
     stringifyPlan: stringifyPlan,
+    PredictedEnvironment: PredictedEnvironment,
 }
 
 module.exports = def

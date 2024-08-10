@@ -174,6 +174,12 @@ module.exports = class Environment {
     itemRequests
 
     /**
+     * @readonly
+     * @type {Record<number, import("prismarine-entity").Entity>}
+     */
+    entityOwners
+
+    /**
      * @param {string} filePath
      */
     constructor(filePath) {
@@ -188,6 +194,7 @@ module.exports = class Environment {
         this.allocatedBlocks = {}
         this.itemRequests = []
         this.villagers = {}
+        this.entityOwners = {}
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
@@ -203,21 +210,23 @@ module.exports = class Environment {
 
     /**
      * @private
+     * @param {import('./bruh-bot')} bot
      * @param {import('mineflayer').Player} player
      * @param {import("mineflayer").Dimension} dimension
      */
-    __playerUpdated(player, dimension) {
+    __playerUpdated(bot, player, dimension) {
         if (!player.entity?.position) { return }
         this.setPlayerPosition(player.username, new Vec3Dimension(player.entity.position, dimension))
     }
 
     /**
      * @private
+     * @param {import('./bruh-bot')} bot
      * @param {Block | null} oldBlock
      * @param {Block} newBlock
      * @param {import("mineflayer").Dimension} dimension
      */
-    __blockUpdate(oldBlock, newBlock, dimension) {
+    __blockUpdate(bot, oldBlock, newBlock, dimension) {
         const isPlace = (!oldBlock || oldBlock.name === 'air')
         const isBreak = (!newBlock || newBlock.name === 'air')
         if (isPlace && isBreak) { return }
@@ -269,26 +278,119 @@ module.exports = class Environment {
 
     /**
      * @private
+     * @param {import('./bruh-bot')} bot
      * @param {import("prismarine-entity").Entity} entity
      */
-    __entityDead(entity) {
+    __entityDead(bot, entity) {
         delete this.entitySpawnTimes[entity.id]
         delete this.entityHurtTimes[entity.id]
+        delete this.entityOwners[entity.id]
+        for (const id in this.entityOwners) {
+            const v = this.entityOwners[id]
+            if (!v.isValid || v.id === entity.id) {
+                delete this.entityOwners[id]
+            }
+        }
     }
 
     /**
      * @private
+     * @param {import('./bruh-bot')} bot
      * @param {import("prismarine-entity").Entity} entity
      */
-    __entitySpawn(entity) {
+    __entityGone(bot, entity) {
+        delete this.entityOwners[entity.id]
+        for (const id in this.entityOwners) {
+            const v = this.entityOwners[id]
+            if (!v.isValid || v.id === entity.id) {
+                delete this.entityOwners[id]
+            }
+        }
+    }
+
+    /**
+     * @private
+     * @param {import('./bruh-bot')} bot
+     * @param {import("prismarine-entity").Entity} entity
+     */
+    __entitySpawn(bot, entity) {
         this.entitySpawnTimes[entity.id] = performance.now()
+        switch (entity.name) {
+            case 'item':
+            case 'arrow':
+            case 'spectral_arrow':
+            case 'trident':
+            case 'egg':
+            case 'snowball':
+            case 'fishing_bobber':
+            case 'ender_pearl':
+            case 'llama_spit':
+            case 'shulker_bullet':
+            case 'fireball':
+            case 'small_fireball':
+            case 'dragon_fireball':
+            case 'potion':
+            case 'area_effect_cloud':
+                let bestOwner = null
+                let bestDistance = Infinity
+                for (const id in bot.bot.entities) {
+                    const potentialOwner = bot.bot.entities[id]
+                    if (!potentialOwner) { continue }
+                    if (!potentialOwner.isValid) { continue }
+                    if (potentialOwner.id === entity.id) { continue }
+
+                    let from
+                    switch (potentialOwner.name) {
+                        case 'player':
+                            if (potentialOwner.metadata[6] === 5) {
+                                from = potentialOwner.position.offset(0, 1.25, 0)
+                            } else {
+                                from = potentialOwner.position.offset(0, 1.6, 0)
+                            }
+                            break
+                        default:
+                            from = potentialOwner.position
+                            break
+                    }
+                    let maxDistance
+                    switch (entity.name) {
+                        case 'item':
+                            maxDistance = 0.28
+                            break
+                        case 'snowball':
+                        case 'egg':
+                        case 'arrow':
+                        case 'spectral_arrow':
+                        case 'trident':
+                        case 'potion':
+                            maxDistance = 0.08
+                            break
+                        default:
+                            maxDistance = 0.1
+                            break
+                    }
+                    const d = Math.round(from.distanceTo(entity.position) * 1000) / 1000
+                    if (d > maxDistance + .1) { continue }
+                    if (d < bestDistance) {
+                        bestDistance = d
+                        bestOwner = potentialOwner
+                    }
+                    break
+                }
+                if (bestOwner) {
+                    this.entityOwners[entity.id] ??= bestOwner
+                }
+                break
+            default:
+                break
+        }
     }
 
     /**
-     * @private
+     * @param {import('./bruh-bot')} bot
      * @param {import("prismarine-entity").Entity} entity
      */
-    __entityHurt(entity) {
+    __entityHurt(bot, entity) {
         this.entityHurtTimes[entity.id] = performance.now()
     }
 
@@ -313,11 +415,12 @@ module.exports = class Environment {
             }, 10000)
         }
 
-        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(player, bot.dimension))
-        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(oldBlock, newBlock, bot.dimension))
-        bot.bot.on('entityDead', (entity) => this.__entityDead(entity))
-        bot.bot.on('entitySpawn', (entity) => this.__entitySpawn(entity))
-        bot.bot.on('entityHurt', (entity) => this.__entityHurt(entity))
+        bot.bot.on('playerUpdated', (player) => this.__playerUpdated(bot, player, bot.dimension))
+        bot.bot.on('blockUpdate', (oldBlock, newBlock) => this.__blockUpdate(bot, oldBlock, newBlock, bot.dimension))
+        bot.bot.on('entityDead', (entity) => this.__entityDead(bot, entity))
+        bot.bot.on('entitySpawn', (entity) => this.__entitySpawn(bot, entity))
+        bot.bot.on('entityHurt', (entity) => this.__entityHurt(bot, entity))
+        bot.bot.on('entityGone', (entity) => this.__entityGone(bot, entity))
         this.bots.push(bot)
     }
 
@@ -775,19 +878,19 @@ module.exports = class Environment {
                     let nearby = 0
                     let neighbors = 0
                     if (false) {
-                        for (let x = -4; x <= 4; x++) {
-                            for (let y = -1; y <= 1; y++) {
-                                for (let z = -4; z <= 4; z++) {
-                                    const other = bot.bot.blockAt(block.position.offset(x, y, z))
-                                    if (!other || other.name !== cropInfo.cropName) { continue }
-                                    if (bruh.find(v => v.equals(other.position))) { continue }
-                                    nearby++
-                                    if (isDirectNeighbor(block.position, other.position)) {
-                                        neighbors++
-                                    }
-                                }
-                            }
-                        }
+                        // for (let x = -4; x <= 4; x++) {
+                        //     for (let y = -1; y <= 1; y++) {
+                        //         for (let z = -4; z <= 4; z++) {
+                        //             const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                        //             if (!other || other.name !== cropInfo.cropName) { continue }
+                        //             if (bruh.find(v => v.equals(other.position))) { continue }
+                        //             nearby++
+                        //             if (isDirectNeighbor(block.position, other.position)) {
+                        //                 neighbors++
+                        //             }
+                        //         }
+                        //     }
+                        // }
                     } else {
                         for (let x = -1; x <= 1; x++) {
                             for (let y = -1; y <= 1; y++) {

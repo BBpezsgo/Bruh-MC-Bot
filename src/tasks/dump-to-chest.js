@@ -1,5 +1,5 @@
 const { Vec3 } = require('vec3')
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 

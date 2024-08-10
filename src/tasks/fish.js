@@ -81,18 +81,18 @@ module.exports = {
                 splashHeard = 0
                 n++
             } else {
-                yield* goto.task(bot, {
-                    point: water.position,
-                    distance: 1,
-                })
-
-                yield* wrap(bot.bot.equip(fishingRod, 'hand'))
-                yield* wrap(bot.bot.lookAt(water.position, true))
-                yield* sleepG(500)
-                bot.bot.activateItem(false)
-                console.log(`[Bot "${bot.bot.username}"] Bobber thrown`)
-                splashHeard = 0
-                n++
+                // yield* goto.task(bot, {
+                //     point: water.position,
+                //     distance: 1,
+                // })
+                // 
+                // yield* wrap(bot.bot.equip(fishingRod, 'hand'))
+                // yield* wrap(bot.bot.lookAt(water.position, true))
+                // yield* sleepG(500)
+                // bot.bot.activateItem(false)
+                // console.log(`[Bot "${bot.bot.username}"] Bobber thrown`)
+                // splashHeard = 0
+                // n++
             }
 
             yield* sleepG(100)

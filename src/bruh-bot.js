@@ -417,11 +417,18 @@ module.exports = class BruhBot {
             /** @type {number} */
             const sourceCauseId = packet.sourceCauseId
             if (!sourceCauseId) { return }
+            // @ts-ignore
+            if (this.env.bots.find(v => v.bot.entity.id === sourceCauseId)) { return }
             const source = this.bot.entities[sourceCauseId - 1]
             if (!source) { return }
             if (entity.id === this.bot.entity.id) {
-                this.memory.hurtBy[source.id] ??= []
-                this.memory.hurtBy[source.id].push(performance.now())
+                let indirectSource = source
+                while (this.env.entityOwners[indirectSource.id]) {
+                    indirectSource = this.env.entityOwners[source.id]
+                }
+                this.memory.hurtBy[indirectSource.id] ??= []
+                this.memory.hurtBy[indirectSource.id].push(performance.now())
+                console.log(`Damaged by ${indirectSource.username ?? indirectSource.displayName ?? indirectSource.name ?? 'someone'}`)
             }
         })
 
@@ -489,7 +496,31 @@ module.exports = class BruhBot {
             _path = null
         })
 
-        this.bot.on('physicsTick', () => {
+        /**
+         * @type {null | NodeJS.Timeout}
+         */
+        let tickInterval = null
+
+        const defendAgainst = (/** @type {import("prismarine-entity").Entity} */ hazard) => {
+            if (!this.defendMyselfGoal ||
+                this.defendMyselfGoal.isDone ||
+                !this.tasks.has(this.defendMyselfGoal.id)) {
+                this.defendMyselfGoal = this.tasks.push(this, attack, {
+                    targets: { [hazard.id]: hazard },
+                    useBow: true,
+                    useMelee: true,
+                    useMeleeWeapon: true,
+                }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2),)
+            } else {
+                if ('targets' in this.defendMyselfGoal.args) {
+                    this.defendMyselfGoal.args.targets[hazard.id] = hazard
+                } else {
+                    throw new Error(`Invalid task for defending myself`)
+                }
+            }
+        }
+
+        const tick = () => {
             if (_path) {
                 for (let i = 0; i < _path.path.length; i++) {
                     this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
@@ -667,23 +698,7 @@ module.exports = class BruhBot {
             })
 
             if (hostile) {
-                if (!this.defendMyselfGoal ||
-                    this.defendMyselfGoal.isDone ||
-                    !this.tasks.has(this.defendMyselfGoal.id)) {
-                    this.defendMyselfGoal = this.tasks.push(this, attack, {
-                        targets: { [hostile.id]: hostile },
-                        useBow: true,
-                        useMelee: true,
-                        useMeleeWeapon: true,
-                    }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2),)
-                } else {
-                    if ('targets' in this.defendMyselfGoal.args) {
-                        this.defendMyselfGoal.args.targets[hostile.id] = hostile
-                    } else {
-                        throw new Error(`Invalid task for defending myself`)
-                    }
-                }
-                return
+                defendAgainst(hostile)
             }
 
             if (this.bot.food < 18 &&
@@ -703,13 +718,15 @@ module.exports = class BruhBot {
                         }
                     }
 
-                    if (this.memory.hurtBy[by] &&
-                        this.memory.hurtBy[by].length >= 1) {
+                    if (!this.memory.hurtBy[by] ||
+                        this.memory.hurtBy[by].length === 0) { continue }
+
+                    {
                         const entity = this.bot.entities[by]
                         if (entity &&
-                            entity.isValid &&
-                            entity.position.distanceTo(this.bot.entity.position) < 4) {
+                            entity.isValid) {
                             let canAttack = true
+                            // @ts-ignore
                             const player = Object.values(this.bot.players).find(v => v && v.entity && v.entity.id == by)
                             if (player && (
                                 player.gamemode === 1 ||
@@ -717,18 +734,23 @@ module.exports = class BruhBot {
                             )) {
                                 canAttack = false
                             }
-                            if (canAttack) {
-                                this.bot.attack(entity)
-                                delete this.memory.hurtBy[by]
-                            } else {
+                            if (!canAttack) {
                                 console.warn(`Can't attack ${by}`)
                                 delete this.memory.hurtBy[by]
+                            } else if (entity.position.distanceTo(this.bot.entity.position) < 4) {
+                                this.bot.attack(entity)
+                                delete this.memory.hurtBy[by]
+                            } else if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
+                                defendAgainst(entity)
                             }
                         }
                     }
 
-                    if (this.memory.hurtBy[by] &&
-                        this.memory.hurtBy[by].length >= 2) {
+                    /*
+                    if (!this.memory.hurtBy[by] ||
+                        this.memory.hurtBy[by].length === 0) { continue }
+
+                    {
                         this.tasks.push(this, {
                             task: function*(bot, args) {
                                 if (!args.by || !args.by.isValid) {
@@ -752,7 +774,13 @@ module.exports = class BruhBot {
                         }, { by: this.bot.entities[by] }, 0)
                         delete this.memory.hurtBy[by]
                     }
+                    */
                 }
+            }
+
+            if (this.defendMyselfGoal &&
+                !this.defendMyselfGoal.isDone) {
+                return
             }
 
             for (const request of this.env.itemRequests) {
@@ -821,7 +849,7 @@ module.exports = class BruhBot {
 
             if (this.tryAutoHarvestInterval.is()) {
                 if (this.env.getCrops(this, this.bot.entity.position.clone(), true).length > 0) {
-                    const harvestTask = this.tasks.push(this, harvest, {}, priorities.unnecessary)
+                    this.tasks.push(this, harvest, {}, priorities.unnecessary)
                     /*if (harvestTask) {
                         harvestTask.wait()
                       .then(() => {
@@ -973,6 +1001,20 @@ module.exports = class BruhBot {
                     return
                 }
             }
+        }
+
+        this.bot.on('mount', () => {
+            if (!tickInterval) {
+                tickInterval = setInterval(tick, 50)
+            }
+        })
+
+        this.bot.on('physicsTick', () => {
+            if (tickInterval) {
+                clearInterval(tickInterval)
+                tickInterval = null
+            }
+            tick()
         })
 
         this.bot.on('death', () => {
@@ -1173,6 +1215,33 @@ module.exports = class BruhBot {
                         const planCost = gatherItem.planCost(organizedPlan)
                         respond(`There is a plan for ${planResult} ${args.item} with a cost of ${gatherItem.normalizePlanCost(planCost)}:`)
                         respond(gatherItem.stringifyPlan(bot, organizedPlan))
+
+                        {
+                            respond(`Delta:`)
+                            let builder = ''
+                            const future = new gatherItem.PredictedEnvironment(organizedPlan, bot.mc.data)
+
+                            builder += 'Inventory:\n'
+                            for (const name in future.inventory) {
+                                const delta = future.inventory[name]
+                                if (delta) {
+                                    builder += `  ${delta} ${name}\n`
+                                }
+                            }
+                            builder += 'Chests:\n'
+                            for (const position in future.chests) {
+                                /** @type {Record<string, number>} */ // @ts-ignore
+                                const chest = future.chests[position]
+                                builder += `  at ${position}`
+                                for (const name in chest) {
+                                    const delta = chest[name]
+                                    if (delta) {
+                                        builder += `    ${delta} ${name}\n`
+                                    }
+                                }
+                            }
+                            respond(builder)
+                        }
                     },
                     id: function(args) {
                         return `plan-${args.count}-${args.item}`
@@ -2440,6 +2509,27 @@ module.exports = class BruhBot {
             }
         } finally {
             this.bot.off('actionBar', onActionBar)
+        }
+    }
+
+    /**
+     * @param {import('prismarine-entity').Entity} vehicle
+     * @returns {import('./task').Task<void>}
+     */
+    *mount(vehicle) {
+        let isMounted = false
+        const onMount = () => { isMounted = true }
+        this.bot.once('mount', onMount)
+        this.bot.mount(vehicle)
+        const timeout = new Timeout(1000)
+        while (true) {
+            if (isMounted) { return }
+            if (timeout.done()) {
+                this.bot.off('actionBar', onMount)
+                return
+                // throw new Error(`Could not mount the entity`)
+            }
+            yield
         }
     }
 }
