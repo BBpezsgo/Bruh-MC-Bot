@@ -1,39 +1,29 @@
+//#region Packages
+
 const MineFlayer = require('mineflayer')
 const MineFlayerPathfinder = require('mineflayer-pathfinder')
 const MineFlayerElytra = require('mineflayer-elytrafly').elytrafly
 const MineFlayerHawkEye = require('minecrafthawkeye').default
 const MineFlayerArmorManager = require('mineflayer-armor-manager')
-const TaskManager = require('./task-manager')
-const goto = require('./tasks/goto')
-const MC = require('./mc')
 const { Item } = require('prismarine-item')
-const meleeWeapons = require('./melee-weapons')
-const { Interval, parseLocationH, canEntityAttack, entityRangeOfSight, entityAttackDistance, parseYesNoH, isNBTEquals } = require('./utils/other')
+const hawkeye = require('minecrafthawkeye')
+const levenshtein = require('damerau-levenshtein')
+
+//#endregion
+
+//#region Local
+
+const TaskManager = require('./task-manager')
+const MC = require('./mc')
+const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
-const bundle = require('./utils/bundle')
-const hawkeye = require('minecrafthawkeye')
-const attack = require('./tasks/attack')
-const gatherItem = require('./tasks/gather-item')
-const eat = require('./tasks/eat')
-const fish = require('./tasks/fish')
-const followPlayer = require('./tasks/follow-player')
-const mlg = require('./tasks/mlg')
-const clearMlgJunk = require('./tasks/clear-mlg-junk')
-const giveAll = require('./tasks/give-all')
-const pickupItem = require('./tasks/pickup-item')
-const pickupXp = require('./tasks/pickup-xp')
-const harvest = require('./tasks/harvest')
 const Environment = require('./environment')
 const Memory = require('./memory')
-const sleep = require('./tasks/sleep')
-const enderpearlTo = require('./tasks/enderpearl-to')
-const blockExplosion = require('./tasks/block-explosion')
-const plantSeed = require('./tasks/plant-seed')
-const giveTo = require('./tasks/give-to')
-const equipment = require('./equipment')
 const Debug = require('./debug')
-const levenshtein = require('damerau-levenshtein')
+const tasks = require('./tasks')
+
+//#endregion
 
 const priorities = Object.freeze({
     critical: 300,
@@ -221,9 +211,16 @@ module.exports = class BruhBot {
     tryAutoHarvestInterval
 
     /**
+     * @private
      * @type {boolean}
      */
-    quietMode
+    _quietMode
+
+    /**
+     * @readonly
+     * @type {boolean}
+     */
+    get quietMode() { return this._quietMode || this.userQuiet }
 
     /**
      * @private
@@ -259,6 +256,18 @@ module.exports = class BruhBot {
      * @type {import('mineflayer').Dimension}
      */
     get dimension() { return this.bot.game.dimension }
+
+    /**
+     * @private @readonly
+     * @type {string}
+     */
+    _username
+
+    /**
+     * @readonly
+     * @type {string}
+     */
+    get username() { return this.bot.username ?? this._username }
 
     /**
      * @type {((soundName: string | number) => void) | null}
@@ -302,13 +311,14 @@ module.exports = class BruhBot {
      * @param {Readonly<BotConfig>} config
      */
     constructor(config) {
-        console.log(`[Bot "${config.bot.username}"] Launching ...`)
+        this._username = config.bot.username
 
         // @ts-ignore
         global.bots ??= {}
         // @ts-ignore
         global.bots[config.bot.username] = this
 
+        console.log(`[Bot "${config.bot.username}"] Connecting ...`)
         this.bot = MineFlayer.createBot({
             host: config.server.host,
             port: config.server.port,
@@ -323,7 +333,7 @@ module.exports = class BruhBot {
         this.env.addBot(this)
 
         this.chatAwaits = []
-        this.quietMode = true
+        this._quietMode = true
         this._isLeftHandActive = false
         this._isRightHandActive = false
         this.defendMyselfGoal = null
@@ -332,17 +342,18 @@ module.exports = class BruhBot {
         this.aimingEntities = {}
         this.incomingProjectiles = {}
         this.lockedItems = []
+        this.lookAtPlayers = {}
+
+        this.saveInterval = new Interval(30000)
 
         this.ensureEquipmentInterval = new Interval(60000)
-        this.tryAutoCookInterval = new Interval(10000)
-        this.dumpTrashInterval = new Interval(30000)
-        this.saveInterval = new Interval(30000)
+        // this.tryAutoCookInterval = new Interval(10000)
+        // this.dumpTrashInterval = new Interval(30000)
         this.trySleepInterval = new Interval(5000)
         this.tryAutoHarvestInterval = new Interval(5000)
         this.checkQuietInterval = new Interval(500)
         this.randomLookInterval = new Interval(10000)
         this.moveAwayInterval = new Interval(3000)
-        this.lookAtPlayers = {}
 
         this.permissiveMovements = null
         this.restrictedMovements = null
@@ -435,7 +446,7 @@ module.exports = class BruhBot {
         this.tasks = new TaskManager()
 
         this.bot.once('inject_allowed', () => {
-            console.log(`[Bot "${this.bot.username}"] Loading plugins ...`)
+            console.log(`[Bot "${this.username}"] Loading plugins ...`)
             this.bot.loadPlugin(MineFlayerPathfinder.pathfinder)
             this.bot.loadPlugin(MineFlayerArmorManager)
             this.bot.loadPlugin(MineFlayerHawkEye)
@@ -444,16 +455,28 @@ module.exports = class BruhBot {
             this.bot.pathfinder.enablePathShortcut = true
             this.bot.hawkEye.startRadar()
 
-            console.log(`[Bot "${this.bot.username}"] Plugins loaded`)
+            console.log(`[Bot "${this.username}"] Plugins loaded`)
         })
 
         this.bot.once('spawn', () => {
-            console.log(`[Bot "${this.bot.username}"] Spawned`)
+            console.log(`[Bot "${this.username}"] Spawned`)
 
-            console.log(`[Bot "${this.bot.username}"] Loading ...`)
+            console.log(`[Bot "${this.username}"] Loading ...`)
 
             // @ts-ignore
             this.mc = new MC(this.bot.version, config.jarPath)
+
+            for (const entity of this.mc.data.entitiesArray) {
+                // if (!MC.hostiles[entity.name]) {
+                //     console.warn(entity.name)
+                // }
+                // if (entityRangeOfSight(entity.name) === undefined) {
+                //     console.warn(entity.name, 'range of sight')
+                // }
+                // if (entityAttackDamage(entity.name) === undefined) {
+                //     console.warn(entity.name, 'attack damage')
+                // }
+            }
 
             // @ts-ignore
             this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
@@ -467,14 +490,14 @@ module.exports = class BruhBot {
             this.mc.setRestrictedMovements(this.cutTreeMovements)
             this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.data.blocksByName['oak_leaves'].id)
 
-            console.log(`[Bot "${this.bot.username}"] Ready`)
+            console.log(`[Bot "${this.username}"] Ready`)
         })
 
         this.bot.on('move', () => {
             if (!this.mc) { return }
             if (this.bot.entity.velocity.y < this.mc.data2.general.fallDamageVelocity) {
                 this.tasks.tick()
-                this.tasks.push(this, mlg, null, priorities.critical)
+                this.tasks.push(this, tasks.mlg, null, priorities.critical)
                 return
             }
         })
@@ -505,7 +528,7 @@ module.exports = class BruhBot {
             if (!this.defendMyselfGoal ||
                 this.defendMyselfGoal.isDone ||
                 !this.tasks.has(this.defendMyselfGoal.id)) {
-                this.defendMyselfGoal = this.tasks.push(this, attack, {
+                this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
                     targets: { [hazard.id]: hazard },
                     useBow: true,
                     useMelee: true,
@@ -534,19 +557,46 @@ module.exports = class BruhBot {
                 }
             }
 
-            if (this.checkQuietInterval.is()) {
+            if (this.checkQuietInterval?.is()) {
                 let shouldBeQuiet = false
+
+                if (!shouldBeQuiet && this.bot.findBlock({
+                    matching: this.mc.data.blocksByName['sculk_sensor'].id,
+                    maxDistance: 8,
+                    count: 1,
+                    point: this.bot.entity.position,
+                    useExtraInfo: false,
+                })) { shouldBeQuiet = true }
+
+                if (!shouldBeQuiet && this.bot.findBlock({
+                    matching: this.mc.data.blocksByName['calibrated_sculk_sensor'].id,
+                    maxDistance: 16,
+                    count: 1,
+                    point: this.bot.entity.position,
+                    useExtraInfo: false,
+                })) { shouldBeQuiet = true }
+
+                if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
+                    if (entity.name !== 'warden') { return false }
+                    const distance = entity.position.distanceTo(this.bot.entity.position)
+                    if (distance > 16) { return false }
+                    return true
+                })) { shouldBeQuiet = true }
 
                 this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
 
-                if (!shouldBeQuiet && this.bot.controlState.sneak && this.tasks.isIdle) {
-                    this.bot.setControlState('sneak', false)
+                if (this.tasks.isIdle) {
+                    if (!shouldBeQuiet && this.bot.controlState.sneak) {
+                        this.bot.setControlState('sneak', false)
+                    } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
+                        this.bot.setControlState('sneak', true)
+                    }
                 }
 
                 this.permissiveMovements.sneak = shouldBeQuiet
                 this.restrictedMovements.sneak = shouldBeQuiet
                 this.cutTreeMovements.sneak = shouldBeQuiet
-                this.quietMode = shouldBeQuiet
+                this._quietMode = shouldBeQuiet
             }
 
             if (this.saveInterval.is()) {
@@ -560,10 +610,10 @@ module.exports = class BruhBot {
 
                 if (creeper) {
                     if (this.searchItem('shield')) {
-                        this.tasks.push(this, blockExplosion, null, priorities.critical)
+                        this.tasks.push(this, tasks.blockExplosion, null, priorities.critical)
                         return
                     } else {
-                        this.tasks.push(this, goto, {
+                        this.tasks.push(this, tasks.goto, {
                             flee: creeper.position,
                             distance: 8,
                             timeout: 300,
@@ -574,7 +624,7 @@ module.exports = class BruhBot {
 
                 creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
                 if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
-                    this.tasks.push(this, goto, {
+                    this.tasks.push(this, tasks.goto, {
                         flee: creeper.position,
                         distance: 8,
                         timeout: 300,
@@ -590,7 +640,7 @@ module.exports = class BruhBot {
                         delete this.aimingEntities[id]
                         continue
                     }
-                    // console.log(`[Bot "${this.bot.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
+                    // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
                     this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
 
                     const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
@@ -606,14 +656,14 @@ module.exports = class BruhBot {
                     })
 
                     if (angle < 0) {
-                        this.tasks.push(this, goto, {
+                        this.tasks.push(this, tasks.goto, {
                             point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
                             distance: 0,
                             searchRadius: 3,
                             timeout: 500,
                         }, priorities.critical - 2)
                     } else {
-                        this.tasks.push(this, goto, {
+                        this.tasks.push(this, tasks.goto, {
                             point: this.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
                             distance: 0,
                             searchRadius: 3,
@@ -635,10 +685,10 @@ module.exports = class BruhBot {
                     const dot = projectileDirection.dot(directionToSelf)
                     if (dot <= 0) { continue }
 
-                    console.log(`[Bot "${this.bot.username}"] Incoming projectile`)
+                    console.log(`[Bot "${this.username}"] Incoming projectile`)
                     this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
 
-                    this.tasks.push(this, goto, {
+                    this.tasks.push(this, tasks.goto, {
                         point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
                         distance: 0,
                         searchRadius: 3,
@@ -653,7 +703,7 @@ module.exports = class BruhBot {
             }
 
             const hostile = this.bot.nearestEntity(v => {
-                if (!canEntityAttack(v)) { return false }
+                if (!MC.canEntityAttack(v)) { return false }
 
                 if (this.defendMyselfGoal &&
                     !this.defendMyselfGoal.isDone &&
@@ -670,24 +720,23 @@ module.exports = class BruhBot {
                     return false
                 }
 
-                const rangeOfSight = entityRangeOfSight(v)
-                if (!rangeOfSight) { return false }
+                const _hostile = MC.hostiles[v.name]
+                if (!_hostile) { return false }
 
-                const reachDistance = entityAttackDistance(v)
-                if (!reachDistance) { return false }
+                if (!_hostile.rangeOfSight) { return false }
 
                 const distance = v.position.distanceTo(this.bot.entity.position)
 
-                if (distance > rangeOfSight) { return false }
+                if (distance > _hostile.rangeOfSight) { return false }
 
                 {
                     const myPosition = this.bot.entity.position.offset(0, 1.6, 0)
                     const entityPosition = v.position.offset(0, v.height ?? 0.5, 0)
-    
+
                     /**
                      * @type {import('prismarine-world').iterators.RaycastResult}
                      */
-                    const intercept = this.bot.world.raycast(myPosition, entityPosition.subtract(myPosition).normalize(), rangeOfSight)
+                    const intercept = this.bot.world.raycast(myPosition, entityPosition.subtract(myPosition).normalize(), _hostile.rangeOfSight)
                     if (intercept) {
                         // console.log(intercept)
                         return false
@@ -704,7 +753,7 @@ module.exports = class BruhBot {
             if (this.bot.food < 18 &&
                 !this.quietMode &&
                 (this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints').length > 0)) {
-                this.tasks.push(this, eat, null, priorities.surviving)
+                this.tasks.push(this, tasks.eat, null, priorities.surviving)
                 return
             }
 
@@ -784,11 +833,11 @@ module.exports = class BruhBot {
             }
 
             for (const request of this.env.itemRequests) {
-                if (request.lock.by === this.bot.username) { continue }
+                if (request.lock.by === this.username) { continue }
                 if (request.getStatus() !== 'none') { continue }
                 if (!this.itemCount(request.lock.item)) { continue }
                 request.onTheWay()
-                this.tasks.push(this, giveTo, {
+                this.tasks.push(this, tasks.giveTo, {
                     player: request.lock.by,
                     items: [{ name: request.lock.item, count: request.lock.count }],
                 }, priorities.otherBots)
@@ -797,13 +846,13 @@ module.exports = class BruhBot {
                     .catch(() => request.callback(false))
             }
 
-            if (this.trySleepInterval.is() &&
-                sleep.can(this)) {
-                this.tasks.push(this, sleep, null, priorities.low)
+            if (this.trySleepInterval?.is() &&
+                tasks.sleep.can(this)) {
+                this.tasks.push(this, tasks.sleep, null, priorities.low)
             }
 
             if (this.memory.mlgJunkBlocks.length > 0) {
-                this.tasks.push(this, clearMlgJunk, null, priorities.cleanup)
+                this.tasks.push(this, tasks.clearMlgJunk, null, priorities.cleanup)
                 return
             }
 
@@ -816,18 +865,18 @@ module.exports = class BruhBot {
                         }
                         const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
                         if (!entity) {
-                            console.warn(`[Bot "${bot.bot.username}"] Can't find the arrow`)
+                            console.warn(`[Bot "${bot.username}"] Can't find the arrow`)
                             return
                         }
-                        yield* goto.task(bot, {
+                        yield* tasks.goto.task(bot, {
                             point: entity.position,
                             distance: 1,
                         })
                         yield* taskUtils.sleepG(1000)
                         if (entity.isValid) {
-                            console.warn(`[Bot "${bot.bot.username}"] Can't pick up this arrow`)
+                            console.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
                         } else {
-                            console.log(`[Bot "${bot.bot.username}"] Arrow picked up`)
+                            console.log(`[Bot "${bot.username}"] Arrow picked up`)
                         }
                     },
                     id: function() {
@@ -840,25 +889,21 @@ module.exports = class BruhBot {
             }
 
             if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 })) {
-                this.tasks.push(this, pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, priorities.unnecessary)
+                this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, priorities.unnecessary)
             }
 
             if ('result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
-                this.tasks.push(this, pickupXp, { maxDistance: 5 }, priorities.unnecessary)
+                this.tasks.push(this, tasks.pickupXp, { maxDistance: 5 }, priorities.unnecessary)
             }
 
-            if (this.tryAutoHarvestInterval.is()) {
+            if (this.tryAutoHarvestInterval?.is()) {
                 if (this.env.getCrops(this, this.bot.entity.position.clone(), true).length > 0) {
-                    this.tasks.push(this, harvest, {}, priorities.unnecessary)
-                    /*if (harvestTask) {
+                    const harvestTask = this.tasks.push(this, tasks.harvest, {}, priorities.unnecessary)
+                    if (harvestTask) {
                         harvestTask.wait()
-                      .then(() => {
-                                const goal = this.tasks.push(this, compost, null, priorities.unnecessary)
-                            })
-                            .catch(() => {
-                                
-                            })
-                    }*/
+                            .then(() => this.tasks.push(this, tasks.compost, {}, priorities.unnecessary))
+                            .catch(() => { })
+                    }
                 } else {
                     /** @type {Array<import('./environment').SavedCrop>} */
                     const crops = []
@@ -868,24 +913,21 @@ module.exports = class BruhBot {
                         if (blockAt.name === 'air') { crops.push(crop) }
                     }
                     if (crops.length > 0) {
-                        this.tasks.push(this, plantSeed, {
+                        this.tasks.push(this, tasks.plantSeed, {
                             harvestedCrops: crops,
                         }, priorities.unnecessary)
                     }
                 }
             }
 
-            /*
-            if (this.dumpTrashInterval.is()) {
+            if (this.dumpTrashInterval?.is()) {
                 const trashItems = this.getTrashItems()
 
-                const countedCrashItems = trashItems.map(v => ({ item: v.type, count: v.count }))
-                this.tasks.push(this, dumpToChest, { items: countedCrashItems }, priorities.unnecessary)
+                this.tasks.push(this, tasks.dumpToChest, { items: trashItems.map(v => ({ item: v.name, count: v.count })) }, priorities.unnecessary)
             }
-            */
 
-            /*
-            if (this.tryAutoCookInterval.is()) {
+            if (this.tryAutoCookInterval?.is()) {
+                /*
                 const rawFood = this.searchItem(...MC.rawFoods)
                 if (rawFood) {
                     if (this.mc.simpleSeeds.includes(rawFood.type) &&
@@ -905,10 +947,12 @@ module.exports = class BruhBot {
                         }
                     }
                 }
+                */
             }
-            */
 
-            if (this.ensureEquipmentInterval.is()) {
+            if (this.ensureEquipmentInterval?.is()) {
+                const equipment = require('./equipment')
+
                 let foodPointsInInventory = 0
                 for (const item of this.bot.inventory.items()) {
                     if (!MC.badFoods.includes(item.name)) {
@@ -924,8 +968,8 @@ module.exports = class BruhBot {
                         case 'food': {
                             if (foodPointsInInventory >= item.food) { break }
                             const foods = this.mc.getGoodFoods(false).map(v => v.name)
-                            console.warn(`[Bot "${this.bot.username}"] Low on food`)
-                            this.tasks.push(this, gatherItem, {
+                            console.warn(`[Bot "${this.username}"] Low on food`)
+                            this.tasks.push(this, tasks.gatherItem, {
                                 item: foods,
                                 count: 1,
                                 canCraft: true,
@@ -933,12 +977,13 @@ module.exports = class BruhBot {
                                 canKill: false,
                                 canUseChests: true,
                                 canUseInventory: true,
+                                force: true,
                             }, priorities.low)
                             break
                         }
                         case 'single': {
                             if (this.itemCount(item.item) > 0) { break }
-                            this.tasks.push(this, gatherItem, {
+                            this.tasks.push(this, tasks.gatherItem, {
                                 item: item.item,
                                 count: 1,
                                 canCraft: true,
@@ -951,7 +996,7 @@ module.exports = class BruhBot {
                         }
                         case 'any': {
                             if (item.item.find(v => this.itemCount(v) > 0)) { break }
-                            this.tasks.push(this, gatherItem, {
+                            this.tasks.push(this, tasks.gatherItem, {
                                 item: item.prefer,
                                 count: 1,
                                 canCraft: true,
@@ -975,14 +1020,14 @@ module.exports = class BruhBot {
                 !this.bot.pathfinder.goal
             )
             ) {
-                if (this.moveAwayInterval.is()) {
+                if (this.moveAwayInterval?.is()) {
                     const roundedSelfPosition = this.bot.entity.position.clone().round()
                     for (const playerName in this.bot.players) {
-                        if (playerName === this.bot.username) { continue }
+                        if (playerName === this.username) { continue }
                         const playerEntity = this.bot.players[playerName].entity
                         if (!playerEntity) { continue }
                         if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
-                            this.tasks.push(this, goto, {
+                            this.tasks.push(this, tasks.goto, {
                                 flee: roundedSelfPosition,
                                 distance: 2,
                             }, priorities.unnecessary)
@@ -992,11 +1037,11 @@ module.exports = class BruhBot {
                 }
 
                 if (this.lookAtNearestPlayer()) {
-                    this.randomLookInterval.restart()
+                    this.randomLookInterval?.restart()
                     return
                 }
 
-                if (this.randomLookInterval.is()) {
+                if (this.randomLookInterval?.is()) {
                     this.lookRandomly()
                     return
                 }
@@ -1018,28 +1063,28 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('death', () => {
-            console.log(`[Bot "${this.bot.username}"] Died`)
+            console.log(`[Bot "${this.username}"] Died`)
         })
 
         this.bot.on('kicked', (/** @type {any} */ reason) => {
             if (typeof reason === 'string') {
-                console.warn(`[Bot "${this.bot.username}"] Kicked:`, reason)
+                console.warn(`[Bot "${this.username}"] Kicked:`, reason)
                 return
             }
 
             const json = JSON.stringify(reason)
 
             if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"disconnect.timeout"}}}') {
-                console.error(`[Bot "${this.bot.username}"] Kicked because I was AFK`)
+                console.error(`[Bot "${this.username}"] Kicked because I was AFK`)
                 return
             }
 
             if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"multiplayer.disconnect.kicked"}}}') {
-                console.error(`[Bot "${this.bot.username}"] Someone kicked me`)
+                console.error(`[Bot "${this.username}"] Someone kicked me`)
                 return
             }
 
-            console.error(`[Bot "${this.bot.username}"] Kicked:`, reason)
+            console.error(`[Bot "${this.username}"] Kicked:`, reason)
         })
 
         this.bot.on('error', (error) => {
@@ -1048,7 +1093,7 @@ module.exports = class BruhBot {
                 // @ts-ignore
                 for (const subError of error.errors) {
                     if ('syscall' in subError && subError.syscall === 'connect') {
-                        console.error(`[Bot "${this.bot.username}"] Failed to connect to ${subError.address}: ${(() => {
+                        console.error(`[Bot "${this.username}"] Failed to connect to ${subError.address}: ${(() => {
                             switch (subError.code) {
                                 case 'ECONNREFUSED': return 'Connection refused'
                                 default: return subError.code
@@ -1056,14 +1101,14 @@ module.exports = class BruhBot {
                         })()}`)
                         continue
                     }
-                    console.error(`[Bot "${this.bot.username}"]`, subError)
+                    console.error(`[Bot "${this.username}"]`, subError)
                 }
                 return
             } else if ('syscall' in error && 'code' in error) {
                 if (error.syscall === 'connect') {
                     switch (error.code) {
                         case 'ECONNREFUSED': {
-                            console.error(`[Bot "${this.bot.username}"] Connection refused`)
+                            console.error(`[Bot "${this.username}"] Connection refused`)
                             return
                         }
                         default:
@@ -1071,10 +1116,10 @@ module.exports = class BruhBot {
                     }
                 }
             }
-            console.error(`[Bot "${this.bot.username}"]`, error)
+            console.error(`[Bot "${this.username}"]`, error)
         })
 
-        this.bot.on('login', () => { console.log(`[Bot "${this.bot.username}"] Logged in`) })
+        this.bot.on('login', () => { console.log(`[Bot "${this.username}"] Logged in`) })
 
         this.bot.on('end', (reason) => {
             this.env.removeBot(this)
@@ -1083,15 +1128,15 @@ module.exports = class BruhBot {
 
             switch (reason) {
                 case 'socketClosed': {
-                    console.warn(`[Bot "${this.bot.username}"] Ended: Socket closed`)
+                    console.warn(`[Bot "${this.username}"] Ended: Socket closed`)
                     break
                 }
                 case 'disconnect.quitting': {
-                    console.log(`[Bot "${this.bot.username}"] Quit`)
+                    console.log(`[Bot "${this.username}"] Quit`)
                     break
                 }
                 default: {
-                    console.log(`[Bot "${this.bot.username}"] Ended:`, reason)
+                    console.log(`[Bot "${this.username}"] Ended:`, reason)
                     break
                 }
             }
@@ -1129,18 +1174,10 @@ module.exports = class BruhBot {
         const handlers = []
 
         handlers.push(/** @type {StringChatHandler} */({
-            match: 'test1',
+            match: 'test',
             command: (sender, message, respond) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
-                        const bundleSlot = bot.bot.inventory.slots.findIndex(v => v && v.name === 'bundle')
-                        const otherItemSlot = bot.bot.inventory.slots.findIndex(v => v && v.name !== 'bundle' && v.stackSize === 64)
-                        if (!otherItemSlot) {
-                            respond(`:(`)
-                            return
-                        }
-                        yield* taskUtils.wrap(bundle.putIn(bot.bot, bot.mc.data, bundleSlot, otherItemSlot))
-                        console.log(bundle.content(bot.bot.inventory.slots[bundleSlot].nbt))
                     },
                     id: function(args) { return 'test' },
                     humanReadableId: function(args) { return 'test' },
@@ -1149,17 +1186,46 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
-            match: 'test2',
+            match: 'fly',
             command: (sender, message, respond) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
-                        const bundleSlot = bot.bot.inventory.slots.findIndex(v => v && v.name === 'bundle')
-                        yield* taskUtils.wrap(bundle.empty(bot.bot, bundleSlot))
-                        console.log(bundle.content(bot.bot.inventory.slots[bundleSlot].nbt))
+                        let location = bot.env.getPlayerPosition(args.player, 10000)
+                        if (!location) {
+                            try {
+                                const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
+                                location = parseLocationH(response)
+                            } catch (error) {
+
+                            }
+                            if (location) {
+                                respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
+                            } else {
+                                throw `I can't find you`
+                            }
+                        }
+                        if (bot.dimension !== location.dimension) {
+                            throw `We are in a different dimension`
+                        }
+                        const elytraItem = bot.searchItem('elytra')
+                        if (!elytraItem) {
+                            throw `I have no elytra`
+                        }
+                        bot.bot.equip(elytraItem, 'torso')
+                        bot.bot.elytrafly.elytraFlyTo(location.xyz(bot.dimension))
+                        let isDone = false
+                        bot.bot.once('elytraFlyGoalReached', () => {
+                            isDone = true
+                        })
+                        while (!isDone) {
+                            yield
+                        }
                     },
-                    id: function(args) { return 'test2' },
-                    humanReadableId: function(args) { return 'test2' },
-                }, null, priorities.user)
+                    id: function(args) { return `fly-to-${args.player}` },
+                    humanReadableId: function(args) { return `Flying to ${args.player}` },
+                }, {
+                    player: sender
+                }, priorities.user)
             },
         }))
 
@@ -1175,7 +1241,7 @@ module.exports = class BruhBot {
                     respond(`I don't know what ${itemName} is`)
                     return
                 }
-                this.tasks.push(this, gatherItem, {
+                this.tasks.push(this, tasks.gatherItem, {
                     canCraft: true,
                     canDig: false,
                     canKill: false,
@@ -1205,21 +1271,21 @@ module.exports = class BruhBot {
                 }
                 this.tasks.push(this, {
                     task: function*(bot, args) {
-                        const plan = yield* gatherItem.plan(bot, args.item, args.count, args, {
+                        const plan = yield* tasks.gatherItem.plan(bot, args.item, args.count, args, {
                             cachedPlans: {},
                             depth: 0,
                             recursiveItems: [],
                         })
-                        const organizedPlan = gatherItem.organizePlan(plan)
-                        const planResult = gatherItem.planResult(organizedPlan, args.item)
-                        const planCost = gatherItem.planCost(organizedPlan)
-                        respond(`There is a plan for ${planResult} ${args.item} with a cost of ${gatherItem.normalizePlanCost(planCost)}:`)
-                        respond(gatherItem.stringifyPlan(bot, organizedPlan))
+                        const organizedPlan = tasks.gatherItem.organizePlan(plan)
+                        const planResult = tasks.gatherItem.planResult(organizedPlan, args.item)
+                        const planCost = tasks.gatherItem.planCost(organizedPlan)
+                        respond(`There is a plan for ${planResult} ${args.item} with a cost of ${tasks.gatherItem.normalizePlanCost(planCost)}:`)
+                        respond(tasks.gatherItem.stringifyPlan(bot, organizedPlan))
 
                         {
                             respond(`Delta:`)
                             let builder = ''
-                            const future = new gatherItem.PredictedEnvironment(organizedPlan, bot.mc.data)
+                            const future = new tasks.gatherItem.PredictedEnvironment(organizedPlan, bot.mc.data)
 
                             builder += 'Inventory:\n'
                             for (const name in future.inventory) {
@@ -1276,7 +1342,7 @@ module.exports = class BruhBot {
                 }
 
                 const confirm = () => {
-                    const task = this.tasks.push(this, attack, {
+                    const task = this.tasks.push(this, tasks.attack, {
                         target: target.entity,
                         useBow: true,
                         useMelee: true,
@@ -1358,7 +1424,7 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: 'fish',
             command: (sender, message, respond) => {
-                const task = this.tasks.push(this, fish, {
+                const task = this.tasks.push(this, tasks.fish, {
                     onStatusMessage: respond,
                 }, priorities.user)
                 if (task) {
@@ -1409,7 +1475,7 @@ module.exports = class BruhBot {
                     if (i > 0) { builder += ' ; ' }
                     if (item.count === 1) {
                         if (item.item.name === 'bundle') {
-                            const bundleSize = bundle.size(this.mc.data, item.item)
+                            const bundleSize = require('./utils/bundle').size(this.mc.data, item.item)
                             if (bundleSize === 0) {
                                 builder += `${item.item.displayName} (empty)`
                             } else {
@@ -1469,7 +1535,7 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: 'follow',
             command: (sender, message, respond) => {
-                const task = this.tasks.push(this, followPlayer, {
+                const task = this.tasks.push(this, tasks.followPlayer, {
                     player: sender,
                     range: 2,
                     onNoPlayer: function*(bot) {
@@ -1535,7 +1601,7 @@ module.exports = class BruhBot {
                                 throw `I can't find you`
                             }
                         }
-                        yield* goto.task(bot, {
+                        yield* tasks.goto.task(bot, {
                             point: location,
                             distance: 1,
                             timeout: 30000,
@@ -1575,7 +1641,7 @@ module.exports = class BruhBot {
                     throw `We are in a different dimension`
                 }
 
-                const task = this.tasks.push(this, enderpearlTo, {
+                const task = this.tasks.push(this, tasks.enderpearlTo, {
                     destination: target.xyz(this.dimension).offset(0, 0.1, 0),
                     onStatusMessage: respond,
                 }, priorities.user)
@@ -1604,7 +1670,7 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: 'give all',
             command: (sender, message, respond) => {
-                const task = this.tasks.push(this, giveAll, {
+                const task = this.tasks.push(this, tasks.giveAll, {
                     player: sender,
                     onStatusMessage: respond,
                 }, priorities.user)
@@ -1619,10 +1685,49 @@ module.exports = class BruhBot {
             }
         }))
 
+        handlers.push(/** @type {RegexpChatHandler} */({
+            match: /give\W+([0-9]*)\W*([a-zA-Z_ ]+)/,
+            command: (sender, message, respond) => {
+                const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
+                const itemName = message[2].toLowerCase().trim()
+                let item
+
+                if (!item) {
+                    item = this.mc.data.itemsByName[itemName]
+                }
+
+                if (!item) {
+                    item = this.mc.data.itemsByName[itemName.replace(/ /g, '_')]
+                }
+
+                if (!item) {
+                    for (const _item of this.mc.data.itemsArray) {
+                        if (_item.displayName === itemName) {
+
+                        }
+                    }
+                }
+
+                if (!item) {
+                    respond(`I don't know what ${message[2]} is`)
+                    return
+                }
+
+                const task = this.tasks.push(this, tasks.giveTo, {
+                    player: sender,
+                    items: [{ name: item.name, count: count }],
+                })
+                task.wait()
+                    .then(() => respond(`There it is`))
+                    .catch(error => error === 'cancelled' || respond(error))
+                respond(`Okay`)
+            }
+        }))
+
         handlers.push(/** @type {StringChatHandler} */({
             match: 'give trash',
             command: (sender, message, respond) => {
-                const task = this.tasks.push(this, giveTo, {
+                const task = this.tasks.push(this, tasks.giveTo, {
                     player: sender,
                     items: this.getTrashItems(),
                     onStatusMessage: respond,
@@ -1691,6 +1796,8 @@ module.exports = class BruhBot {
      * @returns {Array<{ name: string; count: number; }>}
      */
     getTrashItems() {
+        const equipment = require('./equipment')
+
         const result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count, type: v.type, originalCount: v.count }))
         /**
          * @type {ReadonlyArray<import('./equipment').SatisfiedEquipmentItem>}
@@ -1810,7 +1917,7 @@ module.exports = class BruhBot {
         let selected = null
 
         for (const playerUsername in this.bot.players) {
-            if (playerUsername === this.bot.username) { continue }
+            if (playerUsername === this.username) { continue }
             const player = this.bot.players[playerUsername]
 
             if (!player.entity ||
@@ -1910,7 +2017,7 @@ module.exports = class BruhBot {
             }
         }
 
-        if (sender === this.bot.username) { return }
+        if (sender === this.username) { return }
 
         for (const handler of this.chatHandlers) {
             if (typeof handler.match === 'string') {
@@ -1978,7 +2085,7 @@ module.exports = class BruhBot {
                             bestHandler.command(sender, message, respond)
                         }
                     })
-                    .catch(error => console.warn(`[Bot "${this.bot.username}"] Ask timed out: ${error}`))
+                    .catch(error => console.warn(`[Bot "${this.username}"] Ask timed out: ${error}`))
             }
         }
     }
@@ -2421,10 +2528,10 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @returns {(meleeWeapons.MeleeWeapon & { item: Item }) | null}
+     * @returns {(import('./melee-weapons').MeleeWeapon & { item: Item }) | null}
      */
     bestMeleeWeapon() {
-        const weapons = meleeWeapons.weapons
+        const weapons = require('./melee-weapons').weapons
         for (const weapon of weapons) {
             const item = this.searchItem(weapon.name)
             if (item) {
@@ -2530,6 +2637,39 @@ module.exports = class BruhBot {
                 // throw new Error(`Could not mount the entity`)
             }
             yield
+        }
+    }
+
+    /**
+     * @param {string} item
+     * @param {number} [count = 1]
+     */
+    *toss(item, count = 1) {
+
+        /**
+         * @type {ReadonlyArray<MineFlayer.EquipmentDestination>}
+         */
+        const specialSlotNames = [
+            'head',
+            'torso',
+            'legs',
+            'feet',
+            'hand',
+            'off-hand',
+        ]
+
+        let tossed = 0
+        for (const have of this.items()) {
+            if (have.name !== item) { continue }
+            for (const specialSlotName of specialSlotNames) {
+                if (this.bot.getEquipmentDestSlot(specialSlotName) !== have.slot) { continue }
+                yield* taskUtils.wrap(this.bot.unequip(specialSlotName))
+            }
+            const tossCount = Math.min(count - tossed, have.count)
+            if (tossCount <= 0) { continue }
+
+            yield* taskUtils.wrap(this.bot.toss(have.type, null, tossCount))
+            tossed += tossCount
         }
     }
 }

@@ -27,14 +27,14 @@ module.exports = {
             yield
 
             try {
-                if (bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
-                    console.log(`[Bot "${bot.bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
+                if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
+                    console.log(`[Bot "${bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
                 
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
                     let tool = null
                 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                        console.log(`[Bot "${bot.bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
+                        console.log(`[Bot "${bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
                 
                         tool = bot.mc.getCorrectTool(current, bot.bot)
                 
@@ -45,7 +45,7 @@ module.exports = {
                         if (!tool.has &&
                             !current.canHarvest(null)) {
                             // if (this.gatherTool) {
-                            //     console.log(`[Bot "${bot.bot.username}"] Gathering ${tool.item.displayName} ...`)
+                            //     console.log(`[Bot "${bot.username}"] Gathering ${tool.item.displayName} ...`)
                             //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
                             //     if ('error' in toolGathered) return error(toolGathered.error)
                             // } else {
@@ -66,16 +66,16 @@ module.exports = {
                         }
                     }
                 
-                    console.log(`[Bot "${bot.bot.username}"] Tool:`, tool)
+                    console.log(`[Bot "${bot.username}"] Tool:`, tool)
         
-                    console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
+                    console.log(`[Bot "${bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
                         block: current.position,
                         movements: bot.cutTreeMovements,
                     })
                 
                     if (tool?.has) {
-                        console.log(`[Bot "${bot.bot.username}"] Equipping "${tool.item.displayName}" ...`)
+                        console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
                         yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
                     }
                 
@@ -83,11 +83,11 @@ module.exports = {
                         throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
                     }
         
-                    console.log(`[Bot "${bot.bot.username}"] Digging ...`)
+                    console.log(`[Bot "${bot.username}"] Digging ...`)
                     yield* wrap(bot.bot.dig(current))
                     digged.push(current.position.clone())
                 } else {
-                    console.log(`[Bot "${bot.bot.username}"] Block will be digged by someone else, skipping`)
+                    console.log(`[Bot "${bot.username}"] Block will be digged by someone else, skipping`)
                 }
             } catch (error) {
                 if (!args.alsoTheNeighbors) {
@@ -109,7 +109,7 @@ module.exports = {
             }
         }
 
-        console.log(`[Bot "${bot.bot.username}"] Waiting 500 ms ...`)
+        console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
         yield* sleepG(500)
 
         for (let i = digged.length - 1; i >= 0; i--) {
@@ -122,7 +122,7 @@ module.exports = {
                 if (!nearestEntity) { break }
                 const distance = position.distanceTo(nearestEntity.position)
                 if (distance < 1.5) {
-                    console.log(`[Bot "${bot.bot.username}"] Picking up item ...`)
+                    console.log(`[Bot "${bot.username}"] Picking up item ...`)
                     yield* goto.task(bot, {
                         point: nearestEntity.position,
                         distance: 0,
@@ -133,7 +133,7 @@ module.exports = {
                         throw `Inventory is full`
                     }
 
-                    console.log(`[Bot "${bot.bot.username}"] Waiting 500 ms ...`)
+                    console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
                     yield* sleepG(500)
                 } else {
                     break

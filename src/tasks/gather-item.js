@@ -15,6 +15,7 @@ const bundle = require('../utils/bundle')
  *   baseItems?: ReadonlyArray<number>;
  *   originalCount?: number;
  *   depth?: number;
+ *   force?: boolean;
  * }} Args
  */
 
@@ -278,7 +279,7 @@ function planResult(plan, item) {
  *   bot: import('../bruh-bot'),
  *   item: string,
  *   count: number,
- *   permissions : PermissionArgs,
+ *   permissions : PermissionArgs & { force?: boolean },
  *   context: PlanningContext,
  *   planSoFar: Plan
  * ) => (import('../task').Task<(PlanStep | Plan) | Array<PlanStep | Plan>> | null)>}
@@ -287,18 +288,19 @@ const planners = [
     function*(bot, item, count, permissions, context, planSoFar) {
         const _depthPrefix = ' '.repeat(context.depth)
         if (!permissions.canUseInventory) { return null }
+        if (permissions.force) { return null }
 
         const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
 
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check inventory ...`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
         const inInventory = bot.itemCount(item) + (future.inventory[item] ?? 0)
         if (inInventory === 0) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   None`)
             return null
         }
 
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Has ${inInventory}`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Has ${inInventory}`)
         const needFromInventory = Math.min(inInventory, count)
         return {
             type: 'inventory',
@@ -313,7 +315,7 @@ const planners = [
 
         const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
 
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check chests ...`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
         const inChestsWithMyItems = inChests.filter(v => {
             const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.[item] ?? 0)
@@ -329,7 +331,7 @@ const planners = [
             yield
             const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.[item] ?? 0)
             const needFromChest = Math.min(have, count)
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Found ${have} in a chest`)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Found ${have} in a chest`)
 
             return {
                 type: 'chest',
@@ -339,14 +341,14 @@ const planners = [
             }
         }
 
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   None`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   None`)
         return null
     },
     function*(bot, item, count, permissions, context, planSoFar) {
         // const _depthPrefix = ' '.repeat(context.depth)
 
         const need = count
-        const locked = bot.env.lockOthersItems(bot.bot.username, item, need)
+        const locked = bot.env.lockOthersItems(bot.username, item, need)
         if (locked.length === 0) { return null }
 
         return {
@@ -360,7 +362,7 @@ const planners = [
         if (!permissions.canCraft) { return null }
 
         const recipes = bot.bot.recipesAll(bot.mc.data.itemsByName[item].id, null, true)
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
         /**
          * @type {{ plan: Array<ReadonlyArray<PlanStep>>; recipe: Recipe; } | null}
          */
@@ -377,7 +379,10 @@ const planners = [
                 if (ingredient.count >= 0) { continue }
                 yield
                 const ingredientCount = -ingredient.count
-                const subplan = yield* plan(bot, bot.mc.data.items[ingredient.id].name, ingredientCount, permissions, {
+                const subplan = yield* plan(bot, bot.mc.data.items[ingredient.id].name, ingredientCount, {
+                    ...permissions,
+                    force: false,
+                }, {
                     depth: context.depth + 1,
                     recursiveItems: [
                         ...context.recursiveItems,
@@ -394,7 +399,7 @@ const planners = [
                 ingredientPlans.push(subplan.flat())
             }
             if (notGood) {
-                if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Not good`)
+                if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
                 continue
             }
             /**
@@ -416,7 +421,7 @@ const planners = [
         }
 
         if (!bestRecipe) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   No recipe found`)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   No recipe found`)
             return null
         }
 
@@ -427,14 +432,17 @@ const planners = [
 
         if (bestRecipe.recipe.requiresTable &&
             planResult(planSoFar, 'crafting_table') <= 0) {
-            if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Plan for crafting table ...`)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Plan for crafting table ...`)
             yield
             const tableInWorld = bot.bot.findBlock({
                 matching: bot.mc.data.blocksByName['crafting_table'].id,
                 maxDistance: 32,
             })
             if (!tableInWorld) {
-                const tablePlan = yield* plan(bot, 'crafting_table', 1, permissions, {
+                const tablePlan = yield* plan(bot, 'crafting_table', 1, {
+                    ...permissions,
+                    force: false,
+                }, {
                     depth: context.depth,
                     recursiveItems: [
                         ...context.recursiveItems,
@@ -444,7 +452,7 @@ const planners = [
                 })
                 context.cachedPlans[`${'crafting_table'}-${1}`] = tablePlan.flat()
                 if (planResult(tablePlan, 'crafting_table') <= 0) {
-                    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Can't gather crafting table, recipe is not good`)
+                    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Can't gather crafting table, recipe is not good`)
                     bestRecipe = null
                 }
                 result.push(tablePlan.flat())
@@ -457,7 +465,7 @@ const planners = [
             }
         }
 
-        if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} |   Recipe found`)
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Recipe found`)
 
         result.push(bestRecipe.plan.flat())
         result.push({
@@ -482,7 +490,10 @@ const planners = [
                 if (count <= 0) { break }
                 const tradeCount = Math.ceil(count / trade.outputItem.count)
 
-                const pricePlan1 = trade.inputItem1 ? yield* plan(bot, trade.inputItem1.name, trade.inputItem1.count * tradeCount, permissions, {
+                const pricePlan1 = trade.inputItem1 ? yield* plan(bot, trade.inputItem1.name, trade.inputItem1.count * tradeCount, {
+                    ...permissions,
+                    force: false,
+                }, {
                     cachedPlans: context.cachedPlans,
                     depth: context.depth + 1,
                     recursiveItems: [
@@ -492,7 +503,10 @@ const planners = [
                     ],
                 }) : null
 
-                const pricePlan2 = trade.inputItem2 ? yield* plan(bot, trade.inputItem2.name, trade.inputItem2.count * tradeCount, permissions, {
+                const pricePlan2 = trade.inputItem2 ? yield* plan(bot, trade.inputItem2.name, trade.inputItem2.count * tradeCount, {
+                    ...permissions,
+                    force: false,
+                }, {
                     cachedPlans: context.cachedPlans,
                     depth: context.depth + 1,
                     recursiveItems: [
@@ -559,7 +573,7 @@ const planners = [
  * @param {import('../bruh-bot')} bot
  * @param {string} item
  * @param {number} count
- * @param {PermissionArgs} permissions
+ * @param {PermissionArgs & { force?: boolean }} permissions
  * @param {PlanningContext} context
  * @returns {import('../task').Task<Plan>}
  */
@@ -571,15 +585,15 @@ function* plan(bot, item, count, permissions, context) {
 
     const _depthPrefix = ' '.repeat(context.depth)
     if (context.recursiveItems.includes(item)) {
-        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
+        if (planningLogs) console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
         return []
     }
     if (context.depth > 10) {
-        console.warn(`[Bot "${bot.bot.username}"] ${_depthPrefix} Too plan for item "${item}", skipping`)
+        console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Too deep plan for item "${item}", skipping`)
         return []
     }
 
-    if (planningLogs) console.log(`[Bot "${bot.bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
+    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
 
     /**
      * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
@@ -627,7 +641,7 @@ function* evaluatePlan(bot, plan) {
      */
     let openedChest = null
 
-    console.log(`[Bot "${bot.bot.username}"] Evaluating plan`)
+    console.log(`[Bot "${bot.username}"] Evaluating plan`)
 
     try {
         for (const step of plan) {
@@ -916,9 +930,9 @@ const def = {
         if (_planResult < args.count) {
             throw `I can only gather ${_planResult} ${bestPlan.item}`
         }
-        console.log(`[Bot "${bot.bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
+        console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
         console.log(stringifyPlan(bot, _organizedPlan))
-        console.log(`[Bot "${bot.bot.username}"] Environment in the future:`)
+        console.log(`[Bot "${bot.username}"] Environment in the future:`)
         {
             let builder = ''
             const future = new PredictedEnvironment(_organizedPlan, bot.mc.data)

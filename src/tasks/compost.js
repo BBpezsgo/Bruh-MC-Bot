@@ -1,9 +1,10 @@
 const { Item } = require('prismarine-item')
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap, sleepTicks } = require('../utils/tasks')
 const { Timeout } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
+const MC = require('../mc')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -13,12 +14,8 @@ const waitCompost = function*(bot, composter) {
     if (composter.getProperties()['level'] === 7) {
         const timeout = new Timeout(2000)
         while (!timeout.done() && composter.getProperties()['level'] !== 8) {
-            yield* sleepG(500)
+            yield* sleepTicks()
         }
-
-        yield* wrap(bot.bot.unequip('hand'))
-        yield* wrap(bot.bot.activateBlock(composter))
-        return true
     }
 
     if (composter.getProperties()['level'] === 8) {
@@ -36,15 +33,35 @@ const waitCompost = function*(bot, composter) {
  * @returns {Item | null}
  */
 const getItem = function(bot, includeNono) {
-    for (const compostable in bot.mc.data2.compost) {
-        if (bot.mc.data2.compost[compostable].no &&
-            !includeNono) {
-            continue
+    const trashItems = bot.getTrashItems()
+    for (const trashItem of trashItems) {
+        const compostable = bot.mc.data2.compost[trashItem.name]
+        if (!compostable) { continue }
+        if (compostable.no && !includeNono) { continue }
+        let isSeed = false
+        for (const cropBlockName in MC.cropsByBlockName) {
+            if (isSeed) { break }
+            const crop = MC.cropsByBlockName[cropBlockName]
+            switch (crop.type) {
+                case 'seeded':
+                case 'simple':
+                case 'spread':
+                case 'grows_fruit':
+                case 'grows_block': {
+                    isSeed = crop.seed === trashItem.name
+                    break
+                }
+                case 'tree': {
+                    isSeed = crop.sapling === trashItem.name
+                    break
+                }
+                default: break
+            }
         }
-        const item = bot.searchItem(compostable)
-        if (item) {
-            return item
-        }
+        if (isSeed && trashItem.count <= 4) { continue }
+        const has = bot.searchItem(trashItem.name)
+        if (!has) { continue }
+        return has
     }
     return null
 }
@@ -60,19 +77,20 @@ module.exports = {
 
         let composted = 0
 
+        let composter = bot.bot.findBlock({
+            matching: bot.mc.data.blocksByName['composter'].id,
+            maxDistance: 32,
+        })
+
+        if (!composter) {
+            throw `There is no composter`
+        }
+
         while (true) {
+            yield
             const item = getItem(bot, false)
             if (!item) {
                 break
-            }
-
-            let composter = bot.bot.findBlock({
-                matching: bot.mc.data.blocksByName['composter'].id,
-                maxDistance: 32,
-            })
-
-            if (!composter) {
-                throw `There is no composter`
             }
 
             yield* goto.task(bot, {
@@ -98,6 +116,7 @@ module.exports = {
         }
 
         yield* pickupItem.task(bot, {
+            point: composter.position,
             inAir: false,
             maxDistance: 4,
         })

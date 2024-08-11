@@ -1,3 +1,4 @@
+const { toArray } = require('../utils/other')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
@@ -6,7 +7,7 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.bot.inventory.items().length === 0) {
+        if (toArray(bot.items()).length === 0) {
             throw `I don't have anything`
         }
 
@@ -26,16 +27,20 @@ module.exports = {
         let tossedSomething = false
 
         for (const itemToGive of args.items) {
-            const has = bot.bot.inventory.count(bot.mc.data.itemsByName[itemToGive.name].id, null)
+            const has = bot.itemCount(itemToGive.name)
             if (!has) { continue }
             const countCanGive = Math.min(has, itemToGive.count)
-            yield* wrap(bot.bot.toss(bot.mc.data.itemsByName[itemToGive.name].id, null, countCanGive))
+            yield* bot.toss(itemToGive.name, countCanGive)
             tossedSomething = true
             yield* sleepG(100)
         }
 
         if (!tossedSomething) {
-            throw `Don't have anything`
+            if (args.items.length === 1) {
+                throw `Don't have ${args.items[0].name}`
+            } else {
+                throw `Don't have anything`
+            }
         }
     },
     id: function(args) {

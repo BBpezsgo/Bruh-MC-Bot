@@ -3,6 +3,7 @@ const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')
 const getMcData = require('minecraft-data')
 const MinecraftData = require('./mc-data')
+const { EntityPose } = require('./entity-metadata')
 
 /**
  * @typedef { 'sword' | 'shovel' | 'pickaxe' | 'axe' | 'hoe' } Tool
@@ -437,6 +438,310 @@ module.exports = class MC {
         },
     }
 
+    // iron_golem, llama, polar_bear, trader_llama, vex, wither
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     * @returns {boolean}
+     */
+    static canEntityAttack(entity) {
+        if (entity.metadata[2]) { return false }
+        if (entity.metadata[6] === EntityPose.DYING) { return false }
+        if (entity.name === 'slime') {
+            if (entity.metadata[16]) { return true }
+            return false
+        }
+        if (entity.name === 'ghast') { return true }
+        if (entity.type !== 'hostile') { return false }
+        if (entity.name === 'zombified_piglin') { return false }
+        if (entity.name === 'enderman') { return false }
+        return true
+    }
+
+    /**
+     * @typedef {number | { easy: number; normal: number; hard: number; }} DamageAmount
+     */
+
+    /**
+     * @readonly
+     * @type {Readonly<Record<string, {
+     *   rangeOfSight: number;
+     *   meleeAttack?: {
+     *     range: number;
+     *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *   };
+     *   rangeAttack?: {
+     *     range: number;
+     *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *   };
+     * }>>}
+     */
+    static get hostiles() { return ({
+        'shulker': {
+            rangeAttack: {
+                range: 16,
+                damage: 4,
+            },
+            rangeOfSight: 16,
+        },
+        'blaze': {
+            meleeAttack: {
+                range: 1,
+                damage: { easy: 4, normal: 6, hard: 9 },
+            },
+            rangeAttack: {
+                range: 48,
+                damage: 5,
+            },
+            rangeOfSight: 48,
+        },
+        'drowned': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            },
+            rangeOfSight: 24,
+        },
+        'illusioner': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 5, normal: 5, hard: 5 }
+            },
+            rangeOfSight: 16,
+        },
+        'phantom': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 }
+            },
+            rangeOfSight: 64,
+        },
+        'warden': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 16, normal: 30, hard: 45 },
+            },
+            rangeAttack: {
+                range: 20,
+                damage: { easy: 6, normal: 10, hard: 15 },
+            },
+            rangeOfSight: 16,
+        },
+        'evoker': {
+            meleeAttack: {
+                range: 2,
+                damage: 24,
+            },
+            rangeOfSight: 12,
+        },
+        'creeper': {
+            meleeAttack: {
+                range: 3,
+                damage: { easy: 22, normal: 43, hard: 64 },
+            },
+            rangeOfSight: 15,
+        },
+        'skeleton': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 }
+            },
+            rangeAttack: {
+                range: 15,
+                damage: { easy: 4, normal: 4, hard: 5 },
+            },
+            rangeOfSight: 16,
+        },
+        'cave_spider': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 },
+            },
+            rangeOfSight: 16,
+        },
+        'endermite': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 },
+            },
+            rangeOfSight: 16,
+        },
+        'hoglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 5, normal: 8, hard: 12 },
+            },
+            rangeOfSight: 16,
+        },
+        'magma_cube': {
+            meleeAttack: {
+                range: 2,
+                damage: function(entity) {
+                    /** @type {number} */ //@ts-ignore
+                    const size = entity.metadata[16]
+                    switch (size) {
+                        case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
+                        case 1: return { easy: 3, normal: 5, hard: 6 }
+                        case 2: return { easy: 4, normal: 6, hard: 9 }
+                        default: return { easy: 4, normal: 6, hard: 9 }
+                    }
+                },
+            },
+            rangeOfSight: 16,
+        },
+        'slime': {
+            meleeAttack: {
+                range: 2,
+                damage: function(entity) {
+                    /** @type {number} */ //@ts-ignore
+                    const size = entity.metadata[16]
+                    switch (size) {
+                        case 0: return { easy: 0, normal: 0, hard: 0 }
+                        case 1: return { easy: 2, normal: 2, hard: 3 }
+                        case 2: return { easy: 3, normal: 4, hard: 6 }
+                        default: return { easy: 3, normal: 4, hard: 6 }
+                    }
+                },
+            },
+            rangeOfSight: 16,
+        },
+        'wither_skeleton': {
+            meleeAttack: {
+                range: 2,
+                // armed
+                damage: { easy: 5, normal: 8, hard: 12 },
+            },
+            rangeOfSight: 16,
+        },
+        'witch': {
+            rangeAttack: {
+                range: 8,
+                damage: 6, // harming potion
+            },
+            rangeOfSight: 16,
+        },
+        'spider': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 },
+            },
+            rangeOfSight: 16,
+        },
+        'stray': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2, normal: 2, hard: 3 },
+            },
+            rangeAttack: {
+                range: 15,
+                // 3 - 5
+                damage: { easy: 5, normal: 5, hard: 5 },
+            },
+            // also has tipped arrows
+            rangeOfSight: 16,
+        },
+        'ravager': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 7, normal: 12, hard: 18 },
+            },
+            // roar: 6
+            rangeOfSight: 32,
+        },
+        'husk': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            },
+            rangeOfSight: 35,
+        },
+        'zombie_villager': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            },
+            rangeOfSight: 35,
+        },
+        'zombie': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            },
+            rangeOfSight: 35,
+        },
+        'piglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 5, normal: 8, hard: 12 },
+            },
+            rangeAttack: {
+                range: 16, // ?
+                damage: { easy: 5, normal: 5, hard: 5 },
+            },
+            rangeOfSight: 16,
+        },
+        'piglin_brute': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 7.5, normal: 13, hard: 19.5 },
+            },
+            // also can be unarmed
+            rangeOfSight: 16,
+        },
+        'pillager': {
+            rangeAttack: {
+                range: 8,
+                damage: { easy: 3.5, normal: 4, hard: 4.5 },
+            },
+            rangeOfSight: 64,
+        },
+        'silverfish': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 1, normal: 1, hard: 1.5 },
+            },
+            rangeOfSight: 16,
+        },
+        'zoglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 5, normal: 8, hard: 12 },
+            },
+            rangeOfSight: 16,
+        },
+        'vindicator': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 7.5, normal: 13, hard: 19.5 },
+            },
+            // also can be unarmed
+            rangeOfSight: 16,
+        },
+        'enderman': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 4.5, normal: 7, hard: 10.5 },
+            },
+            rangeOfSight: 64,
+        },
+        'zombified_piglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { easy: 5, normal: 8, hard: 12 },
+            },
+            // also can be unarmed
+            rangeOfSight: 55,
+        },
+        'ghast': {
+            rangeAttack: {
+                range: 64,
+                damage: 6,
+                // + explosion
+            },
+            rangeOfSight: 64,
+        },
+    }) }
+
     /**
      * @param {string} blockName
      * @returns {(AnyCrop & { cropName: string }) | null}
@@ -747,124 +1052,6 @@ module.exports = class MC {
             if (MC.rawFoods.includes(item.name) && !includeRaws) { return false }
             return true
         })
-    }
-
-    /**
-     * @param {boolean} includeFoods
-     */
-    notTrashItems(includeFoods) {
-        const result = [
-            this.data.itemsByName['wooden_hoe']?.id,
-            this.data.itemsByName['stone_hoe']?.id,
-            this.data.itemsByName['iron_hoe']?.id,
-            this.data.itemsByName['golden_hoe']?.id,
-            this.data.itemsByName['diamond_hoe']?.id,
-            this.data.itemsByName['netherite_hoe']?.id,
-
-            this.data.itemsByName['wooden_axe']?.id,
-            this.data.itemsByName['stone_axe']?.id,
-            this.data.itemsByName['iron_axe']?.id,
-            this.data.itemsByName['golden_axe']?.id,
-            this.data.itemsByName['diamond_axe']?.id,
-            this.data.itemsByName['netherite_axe']?.id,
-
-            this.data.itemsByName['wooden_pickaxe']?.id,
-            this.data.itemsByName['stone_pickaxe']?.id,
-            this.data.itemsByName['iron_pickaxe']?.id,
-            this.data.itemsByName['golden_pickaxe']?.id,
-            this.data.itemsByName['diamond_pickaxe']?.id,
-            this.data.itemsByName['netherite_pickaxe']?.id,
-
-            this.data.itemsByName['wooden_shovel']?.id,
-            this.data.itemsByName['stone_shovel']?.id,
-            this.data.itemsByName['iron_shovel']?.id,
-            this.data.itemsByName['golden_shovel']?.id,
-            this.data.itemsByName['diamond_shovel']?.id,
-            this.data.itemsByName['netherite_shovel']?.id,
-
-            this.data.itemsByName['wooden_sword']?.id,
-            this.data.itemsByName['stone_sword']?.id,
-            this.data.itemsByName['iron_sword']?.id,
-            this.data.itemsByName['golden_sword']?.id,
-            this.data.itemsByName['diamond_sword']?.id,
-            this.data.itemsByName['netherite_sword']?.id,
-
-            this.data.itemsByName['shield']?.id,
-            this.data.itemsByName['bow']?.id,
-            this.data.itemsByName['crossbow']?.id,
-            this.data.itemsByName['fishing_rod']?.id,
-            this.data.itemsByName['arrow']?.id,
-            this.data.itemsByName['ender_pearl']?.id,
-            this.data.itemsByName['bucket']?.id,
-            this.data.itemsByName['water_bucket']?.id,
-        ]
-        if (includeFoods) {
-            result.push(...[
-                this.data.itemsByName['apple']?.id,
-                this.data.itemsByName['melon_slice']?.id,
-                this.data.itemsByName['beef']?.id,
-                this.data.itemsByName['cooked_beef']?.id,
-                this.data.itemsByName['porkchop']?.id,
-                this.data.itemsByName['cooked_porkchop']?.id,
-                this.data.itemsByName['mutton']?.id,
-                this.data.itemsByName['cooked_mutton']?.id,
-                this.data.itemsByName['chicken']?.id,
-                this.data.itemsByName['cooked_chicken']?.id,
-                this.data.itemsByName['rabbit']?.id,
-                this.data.itemsByName['cooked_rabbit']?.id,
-                this.data.itemsByName['cooke']?.id,
-                this.data.itemsByName['pumpkin_pie']?.id,
-                this.data.itemsByName['mushroom_stew']?.id,
-                this.data.itemsByName['beetroot_soup']?.id,
-                this.data.itemsByName['rabbit_stew']?.id,
-                this.data.itemsByName['dried_kelp']?.id,
-                this.data.itemsByName['bread']?.id,
-                this.data.itemsByName['potato']?.id,
-                this.data.itemsByName['baked_potato']?.id,
-                this.data.itemsByName['carrot']?.id,
-                this.data.itemsByName['beetroot']?.id,
-                this.data.itemsByName['raw_cod']?.id,
-                this.data.itemsByName['cooked_cod']?.id,
-                this.data.itemsByName['raw_salmon']?.id,
-                this.data.itemsByName['cooked_salmon']?.id,
-            ])
-        }
-        return result
-    }
-
-    /**
-     * @param {Recipe} recipe
-     * @returns {boolean}
-     */
-    isCompacting(recipe) {
-        let gain
-        let req
-        for (const d of recipe.delta) {
-            if (d.count > 0) {
-                if (gain) {
-                    return false
-                }
-                gain = d.id
-            } else if (d.count < 0) {
-                if (req) {
-                    return false
-                }
-                req = d.id
-            }
-        }
-
-        for (const from in this.data2.compacting) {
-            const to = this.data2.compacting[from]
-            const fromId = this.data.itemsByName[from].id
-            const toId = this.data.itemsByName[to].id
-
-            if (gain === toId &&
-                req === fromId) {
-                return true
-            }
-        }
-
-        return false
     }
 
     /**

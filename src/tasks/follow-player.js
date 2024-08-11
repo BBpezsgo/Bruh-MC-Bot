@@ -25,19 +25,19 @@ module.exports = {
 
             if (!target) {
                 if (!args.onNoPlayer) {
-                    console.warn(`[Bot "${bot.bot.username}"] Can't find ${args.player}`)
+                    console.warn(`[Bot "${bot.username}"] Can't find ${args.player}`)
                     throw `Can't find ${args.player}`
                 }
-                console.warn(`[Bot "${bot.bot.username}"] Can't find ${args.player}, asking for location ...`)
+                console.warn(`[Bot "${bot.username}"] Can't find ${args.player}, asking for location ...`)
                 target = yield* args.onNoPlayer(bot, null)
-                console.log(`[Bot "${bot.bot.username}"] Location response: ${target}`)
+                console.log(`[Bot "${bot.username}"] Location response: ${target}`)
 
                 if (!target) {
                     target = bot.env.getPlayerPosition(args.player)
                     if (!target) {
                         throw `Can't find ${args.player}`
                     } else {
-                        console.warn(`[Bot "${bot.bot.username}"] Player not responded, using outdated position`)
+                        console.warn(`[Bot "${bot.username}"] Player not responded, using outdated position`)
                     }
                 } else {
                     bot.env.setPlayerPosition(args.player, target)

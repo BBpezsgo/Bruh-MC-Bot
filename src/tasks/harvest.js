@@ -39,20 +39,20 @@ module.exports = {
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
             cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)
 
-            console.log(`[Bot "${bot.bot.username}"] Harvesting ${cropPositions.length} crops ...`)
+            console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
             for (const cropPosition of cropPositions) {
                 // yield
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
-                console.log(`[Bot "${bot.bot.username}"] Harvesting ${cropBlock.name} ...`)
+                console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
 
                 const cropInfo = MC.resolveCrop(cropBlock.name)
                 if (!cropInfo) {
-                    console.warn(`[Bot "${bot.bot.username}"] This aint a crop`)
+                    console.warn(`[Bot "${bot.username}"] This aint a crop`)
                     continue
                 }
 
-                // console.log(`[Bot "${bot.bot.username}"] Goto block ...`)
+                // console.log(`[Bot "${bot.username}"] Goto block ...`)
 
                 try {
                     yield* goto.task(bot, {
@@ -63,13 +63,13 @@ module.exports = {
                     continue
                 }
 
-                // console.log(`[Bot "${bot.bot.username}"] Actually harvesting ...`)
+                // console.log(`[Bot "${bot.username}"] Actually harvesting ...`)
 
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
-                        if (!(bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'dig'))) {
-                            console.log(`[Bot "${bot.bot.username}"] Crop will be digged by someone else, skipping ...`)
+                        if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'dig'))) {
+                            console.log(`[Bot "${bot.username}"] Crop will be digged by someone else, skipping ...`)
                             yield
                             continue
                         }
@@ -91,14 +91,14 @@ module.exports = {
                             }
                         }
                         if (!fruitBlock) {
-                            console.warn(`[Bot "${bot.bot.username}"] This block isn't grown`)
+                            console.warn(`[Bot "${bot.username}"] This block isn't grown`)
                             continue
                         }
                         yield* goto.task(bot, {
                             block: fruitBlock.position,
                         })
-                        if (!(bot.env.allocateBlock(bot.bot.username, new Vec3Dimension(fruitBlock.position, bot.dimension), 'dig'))) {
-                            console.log(`[Bot "${bot.bot.username}"] Crop fruit will be digged by someone else, skipping ...`)
+                        if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(fruitBlock.position, bot.dimension), 'dig'))) {
+                            console.log(`[Bot "${bot.username}"] Crop fruit will be digged by someone else, skipping ...`)
                             yield
                             continue
                         }
@@ -107,11 +107,11 @@ module.exports = {
                     }
                     case 'tree': {
                         if (cropInfo.log !== cropBlock.name) {
-                            console.warn(`[Bot "${bot.bot.username}"] This tree aint right`)
+                            console.warn(`[Bot "${bot.username}"] This tree aint right`)
                             continue
                         }
                         if (cropInfo.size !== 'small') {
-                            console.warn(`[Bot "${bot.bot.username}"] This tree is too big for me`)
+                            console.warn(`[Bot "${bot.username}"] This tree is too big for me`)
                             continue
                         }
                         yield* dig.task(bot, {
@@ -144,9 +144,9 @@ module.exports = {
                 }
 
                 if (isSaved) {
-                    // console.log(`[Bot "${bot.bot.username}"] Crop already saved`)
+                    // console.log(`[Bot "${bot.username}"] Crop already saved`)
                 } else {
-                    // console.log(`[Bot "${bot.bot.username}"] Crop saved`)
+                    // console.log(`[Bot "${bot.username}"] Crop saved`)
                     bot.env.crops.push({
                         position: new Vec3Dimension(cropPosition, bot.dimension),
                         block: cropInfo.cropName,
@@ -156,7 +156,7 @@ module.exports = {
                 harvestedPoints.push(cropPosition)
 
                 if (!replantDuringHarvesting) {
-                    // console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
+                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
                     harvestedCrops.push({
                         position: new Vec3Dimension(cropPosition, bot.dimension),
                         block: cropInfo.cropName,
@@ -181,7 +181,7 @@ module.exports = {
                 }
 
                 try {
-                    console.log(`[Bot "${bot.bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
+                    console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
 
                     const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[cropInfo.seed].id, null, false)
                     if (!seed) {
@@ -193,13 +193,13 @@ module.exports = {
                         throw `Place on is null`
                     }
 
-                    // console.log(`[Bot "${bot.bot.username}"] Replant on ${placeOn.block.name}`)
+                    // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
 
                     yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed)
 
-                    console.log(`[Bot "${bot.bot.username}"] Seed ${cropInfo.seed} replanted`)
+                    console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
                 } catch (error) {
-                    console.log(`[Bot "${bot.bot.username}"] Crop position saved`)
+                    console.log(`[Bot "${bot.username}"] Crop position saved`)
                     harvestedCrops.push({
                         position: new Vec3Dimension(cropPosition, bot.dimension),
                         block: cropInfo.cropName,
@@ -239,7 +239,7 @@ module.exports = {
             items.push(item)
         }
 
-        console.log(`[Bot ${bot.bot.username}] Picking up ${items.length} items`)
+        console.log(`[Bot ${bot.username}] Picking up ${items.length} items`)
 
         for (let i = 0; i < 2 && items.length > 0; i++) {
             const sortedItems = basicRouteSearch(bot.bot.entity.position, items, v => v.position)
@@ -253,7 +253,7 @@ module.exports = {
                         items.splice(j)
                     }
                 } catch (error) {
-                    console.warn(`[Bot ${bot.bot.username}]`, error)
+                    console.warn(`[Bot ${bot.username}]`, error)
                 }
             }
         }

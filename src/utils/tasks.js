@@ -11,6 +11,18 @@ function* sleepG(ms) {
 }
 
 /**
+ * @param {number} [ticks = 1]
+ * @returns {Generator<void, void, void>}
+ */
+function* sleepTicks(ticks = 1) {
+    const end = performance.now() + ticks * 50
+
+    while (performance.now() < end) {
+        yield
+    }
+}
+
+/**
  * @param {number} ms
  * @returns {Promise<void>}
  */
@@ -94,4 +106,5 @@ module.exports = {
     wrap,
     finished,
     waitForEvent,
+    sleepTicks,
 }

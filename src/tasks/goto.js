@@ -315,7 +315,7 @@ module.exports = {
             }
 
             if (!args.ignoreOthers &&
-                bot.env.isDestinationOccupied(bot.bot.username, new Vec3(args.point.x, args.point.y, args.point.z))) {
+                bot.env.isDestinationOccupied(bot.username, new Vec3(args.point.x, args.point.y, args.point.z))) {
                 let found = false
                 for (let d = 1; d < 3; d++) {
                     if (found) { break }
@@ -324,7 +324,7 @@ module.exports = {
                         for (let z = -1; z < 1; z++) {
                             if (found) { break }
                             const currentDestination = (new Vec3(args.point.x, args.point.y, args.point.z)).translate(x * d, 0, z * d)
-                            if (bot.env.isDestinationOccupied(bot.bot.username, currentDestination)) {
+                            if (bot.env.isDestinationOccupied(bot.username, currentDestination)) {
                                 continue
                             }
                             if ('dimension' in args.point) {
@@ -386,12 +386,51 @@ module.exports = {
         } else {
             bot.bot.pathfinder.searchRadius = -1
         }
-        if (args.movements) {
-            bot.bot.pathfinder.setMovements(args.movements)
-        } else {
-            bot.bot.pathfinder.setMovements(bot.restrictedMovements)
-        }
 
+        const originalMovements = args.movements ?? bot.restrictedMovements
+        const newMovements = new Movements(bot.bot)
+
+        newMovements.blocksCanBreakAnyway = originalMovements.blocksCanBreakAnyway
+        newMovements.blocksCantBreak = originalMovements.blocksCantBreak
+        newMovements.blocksToAvoid = originalMovements.blocksToAvoid
+        newMovements.entitiesToAvoid = originalMovements.entitiesToAvoid
+
+        newMovements.carpets = originalMovements.carpets
+        newMovements.climbables = originalMovements.climbables
+        newMovements.emptyBlocks = originalMovements.emptyBlocks
+        newMovements.fences = originalMovements.fences
+        newMovements.gravityBlocks = originalMovements.gravityBlocks
+        newMovements.interactableBlocks = originalMovements.interactableBlocks
+        newMovements.liquids = originalMovements.liquids
+        newMovements.openable = originalMovements.openable
+        newMovements.passableEntities = originalMovements.passableEntities
+        newMovements.replaceables = originalMovements.replaceables
+        newMovements.scafoldingBlocks = originalMovements.scafoldingBlocks
+
+        newMovements.digCost = originalMovements.digCost
+        newMovements.entityCost = originalMovements.entityCost
+        newMovements.liquidCost = originalMovements.liquidCost
+        newMovements.placeCost = originalMovements.placeCost
+
+        newMovements.entityIntersections = originalMovements.entityIntersections
+        newMovements.exclusionAreasBreak = originalMovements.exclusionAreasBreak
+        newMovements.exclusionAreasPlace = originalMovements.exclusionAreasPlace
+        newMovements.exclusionAreasStep = originalMovements.exclusionAreasStep
+
+        newMovements.allow1by1towers = originalMovements.allow1by1towers && !bot.quietMode
+        newMovements.allowEntityDetection = originalMovements.allowEntityDetection
+        newMovements.allowFreeMotion = originalMovements.allowFreeMotion
+        newMovements.allowParkour = originalMovements.allowParkour
+        newMovements.allowSprinting = originalMovements.allowSprinting && !bot.quietMode
+        newMovements.canDig = originalMovements.canDig && !bot.quietMode
+        newMovements.canOpenDoors = originalMovements.canOpenDoors && !bot.quietMode
+        newMovements.dontCreateFlow = originalMovements.dontCreateFlow
+        newMovements.dontMineUnderFallingBlock = originalMovements.dontMineUnderFallingBlock
+        newMovements.infiniteLiquidDropdownDistance = originalMovements.infiniteLiquidDropdownDistance && !bot.quietMode
+        newMovements.maxDropDown = originalMovements.maxDropDown
+        newMovements.sneak = originalMovements.sneak || bot.quietMode
+
+        bot.bot.pathfinder.setMovements(newMovements)
         bot.bot.pathfinder.tickTimeout = 10
 
         yield* wrap(bot.bot.pathfinder.goto(goal))

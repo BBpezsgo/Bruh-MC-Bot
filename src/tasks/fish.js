@@ -77,7 +77,7 @@ module.exports = {
                 yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
                 yield* sleepG(500)
                 bot.bot.activateItem(false)
-                console.log(`[Bot "${bot.bot.username}"] Bobber thrown`)
+                console.log(`[Bot "${bot.username}"] Bobber thrown`)
                 splashHeard = 0
                 n++
             } else {
@@ -90,7 +90,7 @@ module.exports = {
                 // yield* wrap(bot.bot.lookAt(water.position, true))
                 // yield* sleepG(500)
                 // bot.bot.activateItem(false)
-                // console.log(`[Bot "${bot.bot.username}"] Bobber thrown`)
+                // console.log(`[Bot "${bot.username}"] Bobber thrown`)
                 // splashHeard = 0
                 // n++
             }
@@ -108,7 +108,7 @@ module.exports = {
             //     yield* sleepG(100)
             // }
 
-            // console.log(`[Bot "${bot.bot.username}"] Bobber landed`)
+            // console.log(`[Bot "${bot.username}"] Bobber landed`)
 
             bot.onHeard = async (/** @type {string | number} */ soundName) => {
                 if (soundName !== 'entity.bobber.splash' &&
@@ -124,7 +124,7 @@ module.exports = {
                 bobber.isValid &&
                 isFishing) {
                 if (interval.is()) {
-                    console.warn(`[Bot "${bot.bot.username}"] Fishing timed out (${interval.time / 1000} sec)`)
+                    console.warn(`[Bot "${bot.username}"] Fishing timed out (${interval.time / 1000} sec)`)
                     break
                 }
                 yield* sleepG(100)

@@ -100,13 +100,13 @@ function* doCampfire(bot, campfire, recipe, count) {
 
     const exceedingWaitTime = 1000
 
-    console.log(`[Bot: "${bot.bot.username}"] Doing campfire ...`)
+    console.log(`[Bot: "${bot.username}"] Doing campfire ...`)
 
     let item
     for (const ingredient of recipe.ingredient) {
         const _i = bot.mc.data.itemsByName[ingredient]
         if (!_i) {
-            console.warn(`[Bot "${bot.bot.username}"] Unknown ingredient "${ingredient}"`)
+            console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
             continue
         }
         item = bot.searchItem(_i.name)
@@ -135,9 +135,9 @@ function* doCampfire(bot, campfire, recipe, count) {
         if (collector.displayName !== bot.bot.entity.displayName) { return }
         const dropped = collected.getDroppedItem()
         if (!dropped) { return }
-        console.log(`[Bot: "${bot.bot.username}"] Item "${dropped.name}" picked up`)
+        console.log(`[Bot: "${bot.username}"] Item "${dropped.name}" picked up`)
         if (dropped.type !== result.id) { return }
-        console.log(`[Bot "${bot.bot.username}"] This is the expected result`)
+        console.log(`[Bot "${bot.username}"] This is the expected result`)
         pickedUp = dropped
         placedCount--
         if (placedCount <= 0) {
@@ -149,12 +149,12 @@ function* doCampfire(bot, campfire, recipe, count) {
         if (!('Items' in campfire.blockEntity)) { continue }
         if (!Array.isArray(campfire.blockEntity.Items)) { continue }
         if (campfire.blockEntity.Items.length >= 4 || placedCount >= 4) {
-            console.log(`[Bot: "${bot.bot.username}"] Campfire is full`)
+            console.log(`[Bot: "${bot.username}"] Campfire is full`)
             break
         }
         yield* wrap(bot.bot.equip(item, 'hand'))
         yield* wrap(bot.bot.activateBlock(campfire))
-        console.log(`[Bot: "${bot.bot.username}"] Food placed on campfire`)
+        console.log(`[Bot: "${bot.username}"] Food placed on campfire`)
         placedCount++
     }
 
@@ -169,13 +169,13 @@ function* doCampfire(bot, campfire, recipe, count) {
         items: [result.name],
     }
 
-    console.log(`[Bot: "${bot.bot.username}"] Wait for ${((recipe.time * 1000) + exceedingWaitTime) / 1000} secs ...`)
+    console.log(`[Bot: "${bot.username}"] Wait for ${((recipe.time * 1000) + exceedingWaitTime) / 1000} secs ...`)
 
     while (true) {
         yield
 
         if (minimumTime.done() && pickedUp) {
-            console.log(`[Bot: "${bot.bot.username}"] Campfire finished`)
+            console.log(`[Bot: "${bot.username}"] Campfire finished`)
             return pickedUp
         }
 
@@ -187,7 +187,7 @@ function* doCampfire(bot, campfire, recipe, count) {
         yield* sleepG(500)
 
         if ('result' in bot.env.getClosestItem(bot, null, itemFilter)) {
-            console.log(`[Bot: "${bot.bot.username}"] Picking up item`)
+            console.log(`[Bot: "${bot.username}"] Picking up item`)
             yield* pickupItem.task(bot, itemFilter)
         }
     }
@@ -301,7 +301,7 @@ module.exports = {
             for (const ingredient of recipe.ingredient) {
                 const _i = bot.mc.data.itemsByName[ingredient]
                 if (!_i) {
-                    console.warn(`[Bot "${bot.bot.username}"] Unknown ingredient "${ingredient}"`)
+                    console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
                     continue
                 }
                 if (!bot.searchItem(_i.name)) {

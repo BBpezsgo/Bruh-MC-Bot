@@ -8,6 +8,16 @@ function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min)
 }
 
+const nonceCharacters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+
+function nonce(length = 8) {
+    let result = ''
+    for (let i = 0; i < length; i++) {
+        result += nonceCharacters[Math.round(Math.random() * length)]
+    }
+    return result
+}
+
 /**
  * @param {number} a
  * @param {number} b
@@ -73,4 +83,5 @@ module.exports = {
     lerpRad,
     rotationToVector,
     vectorAngle,
+    nonce,
 }

@@ -8,7 +8,7 @@ const dig = require('./dig')
  */
 module.exports = {
     task: function*(bot) {
-        console.log(`[Bot "${bot.bot.username}"] Clearing MLG junk ...`, bot.memory.mlgJunkBlocks)
+        console.log(`[Bot "${bot.username}"] Clearing MLG junk ...`, bot.memory.mlgJunkBlocks)
         for (let i = bot.memory.mlgJunkBlocks.length - 1; i >= 0; i--) {
             yield
 
@@ -32,20 +32,20 @@ module.exports = {
                     })) {
                         notFirst = true
                         if (junkBlock.name !== 'water') {
-                            console.warn(`[Bot "${bot.bot.username}"] Unknown MLG junk block: "${junkBlock.name}"`)
+                            console.warn(`[Bot "${bot.username}"] Unknown MLG junk block: "${junkBlock.name}"`)
                             break
                         }
     
-                        console.log(`[Bot "${bot.bot.username}"] Clearing MLG junk: water ...`)
+                        console.log(`[Bot "${bot.username}"] Clearing MLG junk: water ...`)
                         yield* goto.task(bot, {
                             block: junkBlock.position,
                             reach: 2,
                         })
     
-                        console.log(`[Bot "${bot.bot.username}"] Equip bucket ...`)
+                        console.log(`[Bot "${bot.username}"] Equip bucket ...`)
                         const bucket = bot.searchItem('bucket')
                         if (!bucket) {
-                            console.warn(`[Bot "${bot.bot.username}"] No bucket found`)
+                            console.warn(`[Bot "${bot.username}"] No bucket found`)
                             break
                         }
                         yield* wrap(bot.bot.equip(bucket, 'hand'))
@@ -54,7 +54,7 @@ module.exports = {
                     }
 
                     if (!notFirst) {
-                        console.warn(`[Bot "${bot.bot.username}"] No water at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
+                        console.warn(`[Bot "${bot.username}"] No water at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
                     }
 
                     break
@@ -74,7 +74,7 @@ module.exports = {
                     })
 
                     if (!junkBlock) {
-                        console.warn(`[Bot "${bot.bot.username}"] No "${junk.blockName}" found at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
+                        console.warn(`[Bot "${bot.username}"] No "${junk.blockName}" found at ${junk.position.x} ${junk.position.y} ${junk.position.z}`)
                         continue
                     }
 
@@ -88,7 +88,7 @@ module.exports = {
                     const junkBoat = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === junk.id)
                     if (!junkBoat) {
                         bot.memory.mlgJunkBlocks.push(junk)
-                        console.warn(`[Bot "${bot.bot.username}"] Junk boat not found`)
+                        console.warn(`[Bot "${bot.username}"] Junk boat not found`)
                         break
                     }
 
@@ -101,7 +101,7 @@ module.exports = {
                     break
                 }
                 default:
-                    console.warn(`[Bot "${bot.bot.username}"] Unknown MLG junk`)
+                    console.warn(`[Bot "${bot.username}"] Unknown MLG junk`)
                     break
             }
         }
