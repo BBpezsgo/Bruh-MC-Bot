@@ -1,5 +1,5 @@
 declare module 'prismarine-entity' {
-    interface EntityMetadata extends Array<object> {
+    interface EntityMetadata extends Array<any> {
         0?: import('./entity-metadata').EntityMetadataBitmask
         /** Air ticks */
         1?: number

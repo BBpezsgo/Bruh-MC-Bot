@@ -28,7 +28,7 @@ module.exports = {
 
             try {
                 if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
-                    console.log(`[Bot "${bot.username}"] Digging ${current.displayName} (${current.position}) ...`)
+                    console.log(`[Bot "${bot.username}"] Digging ${current.displayName} ${current.position} ...`)
                 
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
                     let tool = null

@@ -5,10 +5,22 @@ const Environment = require('./environment')
 
 const environment = new Environment(path.join(config.worldPath, 'environment.json'))
 
-new BruhBot({
-    ...config,
-    environment: environment,
-    bot: {
-        username: 'Bruh'
-    }
-})
+const usernames = [
+    'Bruh',
+    'mr',
+    'silly',
+    'hi',
+    'uwu',
+]
+
+const botCount = 1
+
+for (let i = 0; i < Math.min(botCount, usernames.length); i++) {
+    new BruhBot({
+        ...config,
+        environment: environment,
+        bot: {
+            username: usernames[i]
+        },
+    })
+}

@@ -1,8 +1,8 @@
 const ManagedTask = require('./managed-task')
 
 /**
- * @template TArgs
  * @exports
+ * @template {{}} TArgs
  * @typedef {number | ((args: TArgs) => number)} Priority
  */
 

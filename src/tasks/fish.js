@@ -6,7 +6,7 @@ const { Weapons } = require('minecrafthawkeye')
 const { Interval } = require('../utils/other')
 
 /**
- * @type {import('../task').TaskDef<number, { }>}
+ * @type {import('../task').TaskDef<number>}
  */
 module.exports = {
     task: function*(bot, args) {

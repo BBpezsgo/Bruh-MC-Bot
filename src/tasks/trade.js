@@ -60,7 +60,7 @@ module.exports = {
         }
 
         if (!args.villager) {
-            const entities = Object.values(bot.bot.entities).filter(v => v.isValid && v.name === 'villager')
+            const entities = Object.values(bot.bot.entities).filter(v => (v.isValid) && (v.name === 'villager'))
             entities.sort((a, b) => (bot.bot.entity.position.distanceSquared(a.position) - bot.bot.entity.position.distanceSquared(b.position)))
             for (const entity of entities) {
                 yield* goto.task(bot, {
@@ -68,6 +68,7 @@ module.exports = {
                     distance: 2,
                 })
                 if (!entity.isValid) { continue }
+                if (entity.name !== 'villager') { continue }
 
                 const villager = yield* wrap(bot.bot.openVillager(args.villager))
                 while (!villager.trades) { yield }
@@ -90,6 +91,10 @@ module.exports = {
             point: args.villager.position,
             distance: 2,
         })
+
+        if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {
+            throw `This aint a villager`
+        }
 
         const villager = yield* wrap(bot.bot.openVillager(args.villager))
         while (!villager.trades) { yield }

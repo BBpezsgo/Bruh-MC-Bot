@@ -132,7 +132,7 @@ class GoalHawkeye extends goals.Goal {
  */
 
 /**
- * @type {import('../task').TaskDef<void | 'here', (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs, Error>}
+ * @type {import('../task').TaskDef<'ok' | 'here', (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs, Error>}
  */
 module.exports = {
     /**

@@ -2,12 +2,261 @@ const { Entity } = require('prismarine-entity')
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Weapons } = require('minecrafthawkeye')
 const { Item } = require('prismarine-item')
-const MeleeWeapons = require('../melee-weapons')
 const { goals } = require('mineflayer-pathfinder')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const MC = require('../mc')
 const { EntityPose } = require('../entity-metadata')
+const TextDisplay = require('../text-display')
+
+/**
+ * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
+ */
+const toolLevels = Object.freeze([
+    'wood',
+    'stone',
+    'iron',
+    'gold',
+    'diamond',
+    'netherite',
+])
+
+/**
+ * @typedef {{
+*   name: string;
+*   damage: number;
+*   speed: number;
+*   cooldown: number;
+*   level: typeof toolLevels[number];
+* }} MeleeWeapon
+*/
+
+/**
+ * @type {ReadonlyArray<MeleeWeapon>}
+ */
+const meleeWeapons = (/** @type {Array<MeleeWeapon>} */ ([
+    {
+        name: 'wooden_sword',
+        damage: 4,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'wood',
+    },
+    {
+        name: 'stone_sword',
+        damage: 5,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'stone',
+    },
+    {
+        name: 'iron_sword',
+        damage: 6,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'iron',
+    },
+    {
+        name: 'golden_sword',
+        damage: 4,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_sword',
+        damage: 7,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_sword',
+        damage: 8,
+        speed: 1.6,
+        cooldown: 1 / 1.6,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_axe',
+        damage: 7,
+        speed: 0.8,
+        cooldown: 1 / 0.8,
+        level: 'wood',
+    },
+    {
+        name: 'stone_axe',
+        damage: 9,
+        speed: 0.8,
+        cooldown: 1 / 0.8,
+        level: 'stone',
+    },
+    {
+        name: 'iron_axe',
+        damage: 9,
+        speed: 0.9,
+        cooldown: 1 / 0.9,
+        level: 'iron',
+    },
+    {
+        name: 'golden_axe',
+        damage: 7,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_axe',
+        damage: 9,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_axe',
+        damage: 10,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_shovel',
+        damage: 2.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'wood',
+    },
+    {
+        name: 'stone_shovel',
+        damage: 3.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'stone',
+    },
+    {
+        name: 'iron_shovel',
+        damage: 4.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'iron',
+    },
+    {
+        name: 'golden_shovel',
+        damage: 2.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_shovel',
+        damage: 5.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_shovel',
+        damage: 6.5,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_pickaxe',
+        damage: 2,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'wood',
+    },
+    {
+        name: 'stone_pickaxe',
+        damage: 3,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'stone',
+    },
+    {
+        name: 'iron_pickaxe',
+        damage: 4,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'iron',
+    },
+    {
+        name: 'golden_pickaxe',
+        damage: 2,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_pickaxe',
+        damage: 5,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_pickaxe',
+        damage: 6,
+        speed: 1.2,
+        cooldown: 1 / 1.2,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_hoe',
+        damage: 1,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'wood',
+    },
+    {
+        name: 'stone_hoe',
+        damage: 1,
+        speed: 2,
+        cooldown: 1 / 2,
+        level: 'stone',
+    },
+    {
+        name: 'iron_hoe',
+        damage: 1,
+        speed: 3,
+        cooldown: 1 / 3,
+        level: 'iron',
+    },
+    {
+        name: 'golden_hoe',
+        damage: 1,
+        speed: 1,
+        cooldown: 1 / 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_hoe',
+        damage: 1,
+        speed: 4,
+        cooldown: 1 / 4,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_hoe',
+        damage: 1,
+        speed: 4,
+        cooldown: 1 / 4,
+        level: 'netherite',
+    },
+])).sort((a, b) => {
+    const aScore = a.damage * a.speed
+    const bScore = b.damage * b.speed
+
+    if (aScore === bScore) {
+        const aLevel = toolLevels.indexOf(a.level)
+        const bLevel = toolLevels.indexOf(b.level)
+        return aLevel - bLevel
+    }
+
+    return bScore - aScore
+})
 
 const distanceToUseRangeWeapons = 12
 
@@ -20,19 +269,118 @@ const distanceToUseRangeWeapons = 12
  */
 
 /**
- * @type {import('../task').TaskDef<void, ({ target: Entity; } | { targets: Record<number, Entity>; }) & PermissionArgs>}
+ * @param {Weapons} item
+ * @returns {number}
+ */
+function getChargeTime(item) {
+    switch (item) {
+        case 'bow':
+            return 1200
+        case 'crossbow':
+            return 1300 // 1250
+        default:
+            return 0
+    }
+}
+
+/**
+ * @param {Item} item
+ * @returns {boolean}
+ */ // @ts-ignore
+function isCrossbowCharged(item) {
+    return (
+        item.nbt &&
+        (item.nbt.type === 'compound') &&
+        item.nbt.value['ChargedProjectiles'] &&
+        (item.nbt.value['ChargedProjectiles'].type === 'list') &&
+        (item.nbt.value['ChargedProjectiles'].value.value.length > 0)
+    )
+}
+
+/**
+ * @param {import('../bruh-bot')} bot
+ * @returns {{
+ *   item: import('prismarine-item').Item;
+ *   weapon: Weapons;
+ *   ammo: number;
+ * } | null}
+ */
+function searchRangeWeapon(bot) {
+    const keys = Object.values(Weapons)
+
+    for (const weapon of keys) {
+        const searchFor = bot.mc.data.itemsByName[weapon]?.id
+
+        if (!searchFor) { continue }
+
+        const found = bot.bot.inventory.findInventoryItem(searchFor, null, false)
+        if (!found) { continue }
+
+        let ammo
+
+        switch (weapon) {
+            case Weapons.bow:
+            case Weapons.crossbow:
+                ammo = bot.bot.inventory.count(bot.mc.data.itemsByName['arrow'].id, null)
+                break
+
+            // case hawkeye.Weapons.egg:
+            case Weapons.snowball:
+                // case hawkeye.Weapons.trident:
+                ammo = bot.bot.inventory.count(found.type, null)
+                break
+
+            default: continue
+        }
+
+        if (ammo === 0) {
+            continue
+        }
+
+        return {
+            item: found,
+            weapon: weapon,
+            ammo: ammo,
+        }
+    }
+
+    return null
+}
+
+/**
+ * @param {import('../bruh-bot')} bot
+ * @returns {(MeleeWeapon & { item: Item }) | null}
+ */
+function bestMeleeWeapon(bot) {
+    for (const meleeWeapon of meleeWeapons) {
+        const item = bot.searchItem(meleeWeapon.name)
+        if (!item) { continue }
+        return {
+            ...meleeWeapon,
+            item: item,
+        }
+    }
+    return null
+}
+
+/**
+ * @type {import('../task').TaskDef<void, ({
+ *   target: Entity;
+ * } | {
+ *   targets: Record<number, Entity>;
+ * }) & PermissionArgs>}
  */
 module.exports = {
     task: function*(bot, args) {
         if (!args.useBow && !args.useMelee) {
             throw `Every possible way of attacking is disabled`
         }
-    
+
         let lastPunch = 0
         const hurtTime = bot.mc.data2.general.hurtTime
         let cooldown = hurtTime
-        
-        /** @type {(MeleeWeapons.MeleeWeapon & { item: Item }) | null}*/
+
+        /** @type {(MeleeWeapon & { item: Item }) | null}*/
         let meleeWeapon = null
         /** @type {Item | null} */
         let shield = bot.searchItem('shield')
@@ -45,7 +393,7 @@ module.exports = {
             }
             return false
         }
-    
+
         const activateShield = function(/** @type {Item | null} */ shield) {
             if (shield && !bot.isLeftHandActive) {
                 bot.activateHand('left')
@@ -54,11 +402,11 @@ module.exports = {
             }
             return false
         }
-    
+
         const equipMeleeWeapon = function*() {
-            meleeWeapon = bot.bestMeleeWeapon()
+            meleeWeapon = bestMeleeWeapon(bot)
             const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
-    
+
             if (meleeWeapon) {
                 if (!holds || holds.type !== meleeWeapon.item.type) {
                     lastPunch = performance.now()
@@ -75,15 +423,15 @@ module.exports = {
             } else {
                 console.log(`[Bot "${bot.username}"] No melee weapon found`)
             }
-        
+
             cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : hurtTime
         }
-    
+
         /**
          * @param {Entity} target 
          */
         const startMoving = function*(target) {
-            if (bot.bot.pathfinder.goal && 
+            if (bot.bot.pathfinder.goal &&
                 bot.bot.pathfinder.goal instanceof goals.GoalFollow &&
                 bot.bot.pathfinder.goal.entity?.id == target?.id) {
                 return
@@ -93,12 +441,12 @@ module.exports = {
             }
             bot.bot.pathfinder.setGoal(new goals.GoalFollow(target, 3))
         }
-    
+
         /**
          * @param {Entity} target 
          */
         const stopMoving = (target) => {
-            if (bot.bot.pathfinder.goal && 
+            if (bot.bot.pathfinder.goal &&
                 bot.bot.pathfinder.goal instanceof goals.GoalFollow &&
                 bot.bot.pathfinder.goal.entity?.id == target?.id) {
                 bot.bot.pathfinder.stop()
@@ -106,7 +454,7 @@ module.exports = {
         }
 
         console.log(`[Bot "${bot.username}"] Attack ...`)
-    
+
         if (args.useMelee) {
             if (args.useMeleeWeapon) {
                 yield* equipMeleeWeapon()
@@ -151,12 +499,12 @@ module.exports = {
             const distanceScore = 1 / distance
             const healthScore = entity.health ? (1 / entity.health) : 0
             const dangerScore = bot.memory.hurtBy[entity.id]?.length ? 1 : 0
-            
+
             const hostile = MC.hostiles[entity.name]
             let meleeAttack = (distance < 2) ? 1 : 0
             let rangeAttack = 0
             if (hostile) {
-                if (hostile.rangeOfSight > distance) {
+                if (distance > hostile.rangeOfSight) {
                     return 0
                 }
                 if (hostile.meleeAttack && distance <= hostile.meleeAttack.range) {
@@ -188,8 +536,12 @@ module.exports = {
             let target = null
             if ('target' in args) {
                 target = args.target
-                targetScore = Infinity
                 if (!isAlive(target)) { break }
+                targetScore = calculateScore(target)
+
+                const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
+                label.lockOn(target.id)
+                label.text = { text: `${targetScore}` }
 
                 if (bot.env.entityHurtTimes[target.id] &&
                     (performance.now() - bot.env.entityHurtTimes[target.id]) < hurtTime) {
@@ -211,6 +563,11 @@ module.exports = {
                     }
 
                     const candidateScore = calculateScore(candidate)
+
+                    const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
+                    label.lockOn(candidate.id)
+                    label.text = { text: `${candidateScore}` }
+
                     if (!target || candidateScore > targetScore) {
                         targetScore = candidateScore
                         target = candidate
@@ -226,11 +583,13 @@ module.exports = {
                 cooldown = hurtTime
             }
 
+            TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore}`, color: 'red' }
+
             const distance = bot.bot.entity.position.distanceTo(target.position)
-    
+
             if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                 if (distance > 6) {
-                    console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                    // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                     yield* goto.task(bot, {
                         point: target.position,
                         distance: 5,
@@ -241,17 +600,17 @@ module.exports = {
                 }
 
                 stopMoving(target)
-    
+
                 if (reequipMeleeWeapon) {
-                    console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
+                    // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
                     shield = bot.searchItem('shield')
                     yield* equipMeleeWeapon()
-                    console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
+                    // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                     reequipMeleeWeapon = false
                 }
-    
+
                 if (shield) {
-                    if (!bot.holdsShield()) {
+                    if (!bot.holds('shield', true)) {
                         yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
                     }
                     yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
@@ -262,7 +621,7 @@ module.exports = {
                     if (deactivateShield(shield)) {
                         yield
                     }
-    
+
                     bot.bot.attack(target)
                     lastPunch = now
                     bot.env.entityHurtTimes[target.id] = performance.now()
@@ -271,10 +630,10 @@ module.exports = {
 
                     activateShield(shield)
                 }
-    
+
                 continue
             }
-    
+
             const saveMyArrow = () => {
                 const arrow = bot.bot.nearestEntity((/** @type {Entity} */ v) => {
                     if (v.name !== 'arrow') { return false }
@@ -285,17 +644,17 @@ module.exports = {
                     return true
                 })
                 if (arrow) {
-                    console.log(`[Bot "${bot.username}"] Arrow saved`)
+                    // console.log(`[Bot "${bot.username}"] Arrow saved`)
                     bot.memory.myArrows.push(arrow.id)
                 }
             }
-    
+
             if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
                 stopMoving(target)
                 deactivateShield(shield)
-    
-                const weapon = bot.searchRangeWeapon()
-    
+
+                const weapon = searchRangeWeapon(bot)
+
                 const getGrade = () => {
                     return bot.bot.hawkEye.getMasterGrade({
                         isValid: false,
@@ -306,7 +665,7 @@ module.exports = {
                 if (weapon && weapon.ammo > 0) {
                     let grade = getGrade()
                     if (!grade || grade.blockInTrayect) {
-                        console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                        // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
                             point: target.position,
                             distance: distance - 2,
@@ -326,16 +685,16 @@ module.exports = {
                             weapon.item.nbt.value['ChargedProjectiles'] &&
                             weapon.item.nbt.value['ChargedProjectiles'].type === 'list' &&
                             weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
-    
+
                         if (!isCharged) {
-                            console.log(`[Bot "${bot.username}"] Charging crossbow`)
+                            // console.log(`[Bot "${bot.username}"] Charging crossbow`)
                             bot.activateHand('right')
-                            const chargeTime = bot.getChargeTime(weapon.weapon)
+                            const chargeTime = getChargeTime(weapon.weapon)
                             yield* sleepG(Math.max(100, chargeTime))
                             bot.deactivateHand()
-                            console.log(`[Bot "${bot.username}"] Crossbow charged`)
+                            // console.log(`[Bot "${bot.username}"] Crossbow charged`)
                         }
-    
+
                         grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
                             console.log(`[Bot "${bot.username}"] Trajectory changed while charging crossbow`)
@@ -343,7 +702,7 @@ module.exports = {
                             continue
                         }
                         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
-    
+
                         if (target && target.isValid) {
                             bot.activateHand('right')
                             yield* sleepTicks()
@@ -352,18 +711,18 @@ module.exports = {
                             saveMyArrow()
                         }
                     } else if (weapon.weapon === Weapons.egg ||
-                               weapon.weapon === Weapons.snowball) {
+                        weapon.weapon === Weapons.snowball) {
                         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
                         if (bot.bot.supportFeature('useItemWithOwnPacket')) {
                             bot.bot._client.write('use_item', {
-                              hand: 0
+                                hand: 0
                             })
-                          }
+                        }
                         bot.env.entityHurtTimes[target.id] = performance.now() - 50 - 50
                     } else if (weapon.weapon === Weapons.bow) {
-                        console.log(`[Bot "${bot.username}"] Pulling bow`)
+                        // console.log(`[Bot "${bot.username}"] Pulling bow`)
                         bot.activateHand('right')
-                        const chargeTime = bot.getChargeTime(weapon.weapon)
+                        const chargeTime = getChargeTime(weapon.weapon)
                         yield* sleepG(Math.max(hurtTime, chargeTime))
 
                         if (!target || !target.isValid) {
@@ -374,14 +733,14 @@ module.exports = {
 
                         grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
-                            console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
+                            // console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
                             if (!(yield* bot.clearMainHand())) {
                                 console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
                             }
                             reequipMeleeWeapon = true
                             continue
                         }
-    
+
                         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
                         bot.deactivateHand()
                         yield* sleepTicks(2)
@@ -393,16 +752,16 @@ module.exports = {
                 }
             }
 
-            if (distance > distanceToUseRangeWeapons && !bot.searchRangeWeapon()) {
-                console.log(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
-                break
+            if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
+                console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
+                continue
             }
-    
+
             if (target && target.isValid) {
                 startMoving(target)
             }
         }
-    
+
         if (bot.isLeftHandActive) {
             bot.deactivateHand()
         }

@@ -164,7 +164,7 @@ module.exports = class Environment {
 
     /**
      * @private
-     * @type {NodeJS.Timeout}
+     * @type {NodeJS.Timeout | Timer}
      */
     interval
 

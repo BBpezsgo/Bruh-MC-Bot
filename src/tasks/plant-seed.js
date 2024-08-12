@@ -73,7 +73,7 @@ module.exports = {
                 // yield
                 const crop = MC.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
-                console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
+                // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
                 
                 const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
                 const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[seedName].id, null, false)
@@ -127,14 +127,14 @@ module.exports = {
                     continue
                 }
 
-                console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
+                // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
                 plantedCount++
                 continue
             }
         } else {
             while (true) {
-                console.log(`[Bot "${bot.username}"] Try plant seed`)
+                // console.log(`[Bot "${bot.username}"] Try plant seed`)
 
                 const seed = bot.searchItem(...args.seedItems.map(v => bot.mc.data.items[v].name))
                 if (!seed) { break }
@@ -152,7 +152,7 @@ module.exports = {
                 const placeOn = bot.env.getPlantableBlock(bot, bot.bot.entity.position.clone(), cropInfo, false, true)
                 if (!placeOn) { break }
 
-                console.log(`[Bot "${bot.username}"] Plant ${seed.displayName} on ${placeOn.block.name}`)
+                // console.log(`[Bot "${bot.username}"] Plant ${seed.displayName} on ${placeOn.block.name}`)
 
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
 

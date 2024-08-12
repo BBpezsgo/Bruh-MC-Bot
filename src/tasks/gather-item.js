@@ -134,7 +134,7 @@ class PredictedEnvironment {
                     }
                     if (step.trade.outputItem) {
                         this.inventory[step.trade.outputItem.name] ??= 0
-                        this.inventory[step.trade.outputItem.name] += step.trade.inputItem2.count
+                        this.inventory[step.trade.outputItem.name] += step.trade.outputItem.count
                     }
                     continue
                 }

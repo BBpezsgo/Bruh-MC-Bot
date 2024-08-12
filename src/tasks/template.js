@@ -2,7 +2,7 @@
 const { sleepG, wrap } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok', null>}
+ * @type {import('../task').TaskDef<'ok', {}>}
  */
 module.exports = {
     // @ts-ignore

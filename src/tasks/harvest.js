@@ -39,12 +39,12 @@ module.exports = {
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
             cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)
 
-            console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
+            // console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
             for (const cropPosition of cropPositions) {
                 // yield
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
-                console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
+                // console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
 
                 const cropInfo = MC.resolveCrop(cropBlock.name)
                 if (!cropInfo) {
@@ -181,7 +181,7 @@ module.exports = {
                 }
 
                 try {
-                    console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
+                    // console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
 
                     const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[cropInfo.seed].id, null, false)
                     if (!seed) {
@@ -197,14 +197,14 @@ module.exports = {
 
                     yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed)
 
-                    console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
+                    // console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
                 } catch (error) {
-                    console.log(`[Bot "${bot.username}"] Crop position saved`)
+                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
                     harvestedCrops.push({
                         position: new Vec3Dimension(cropPosition, bot.dimension),
                         block: cropInfo.cropName,
                     })
-                    console.warn(error)
+                    // console.warn(error)
                 }
             }
 

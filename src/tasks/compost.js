@@ -67,7 +67,7 @@ const getItem = function(bot, includeNono) {
 }
 
 /**
- * @type {import('../task').TaskDef<number, { }>}
+ * @type {import('../task').TaskDef<number>}
  */
 module.exports = {
     task: function*(bot) {
@@ -105,14 +105,10 @@ module.exports = {
             yield* waitCompost(bot, composter)
 
             yield* wrap(bot.bot.equip(item, 'hand'))
-            if (!bot.bot.heldItem) {
-                continue
-            }
+            if (!bot.bot.heldItem) { continue }
 
             yield* wrap(bot.bot.activateBlock(composter))
             composted++
-
-            yield* waitCompost(bot, composter)
         }
 
         yield* pickupItem.task(bot, {

@@ -11,10 +11,6 @@
 		}
 	],
 	"settings": {
-		"files.exclude": {
-			"bun.lockb": true,
-			"node_modules": true,
-		},
 		"material-icon-theme.files.associations": {
 			"template.js": "template",
 			"config.js": "settings"
@@ -58,6 +54,7 @@
 			"hoglin",
 			"illusioner",
 			"interactable",
+			"keybind",
 			"lerp",
 			"mapcloning",
 			"mapextending",

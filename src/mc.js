@@ -3,7 +3,6 @@ const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')
 const getMcData = require('minecraft-data')
 const MinecraftData = require('./mc-data')
-const { EntityPose } = require('./entity-metadata')
 
 /**
  * @typedef { 'sword' | 'shovel' | 'pickaxe' | 'axe' | 'hoe' } Tool
@@ -439,24 +438,6 @@ module.exports = class MC {
     }
 
     // iron_golem, llama, polar_bear, trader_llama, vex, wither
-
-    /**
-     * @param {import('prismarine-entity').Entity} entity
-     * @returns {boolean}
-     */
-    static canEntityAttack(entity) {
-        if (entity.metadata[2]) { return false }
-        if (entity.metadata[6] === EntityPose.DYING) { return false }
-        if (entity.name === 'slime') {
-            if (entity.metadata[16]) { return true }
-            return false
-        }
-        if (entity.name === 'ghast') { return true }
-        if (entity.type !== 'hostile') { return false }
-        if (entity.name === 'zombified_piglin') { return false }
-        if (entity.name === 'enderman') { return false }
-        return true
-    }
 
     /**
      * @typedef {number | { easy: number; normal: number; hard: number; }} DamageAmount

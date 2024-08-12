@@ -18,7 +18,7 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'failed', { }>}
+ * @type {import('../task').TaskDef<'ok' | 'failed'>}
  */
 module.exports = {
     task: function*(bot) {

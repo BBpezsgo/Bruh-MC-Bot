@@ -24,7 +24,7 @@ function can(bot) {
 }
 
 /**
- * @type {import('../task').TaskDef<void, { }> & { can: can }}
+ * @type {import('../task').TaskDef & { can: can }}
  */
 module.exports = {
     task: function*(bot, args) {

@@ -1,7 +1,7 @@
 const { sleepG, wrap } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'full', { }>}
+ * @type {import('../task').TaskDef<'ok' | 'full'>}
  */
 module.exports = {
     task: function*(bot) {

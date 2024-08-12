@@ -21,7 +21,10 @@ const mathUtils = require('./utils/math')
 const Environment = require('./environment')
 const Memory = require('./memory')
 const Debug = require('./debug')
+const TextDisplay = require('./text-display')
+const Commands = require('./commands')
 const tasks = require('./tasks')
+const { EntityPose } = require('./entity-metadata')
 
 //#endregion
 
@@ -308,6 +311,12 @@ module.exports = class BruhBot {
     chatHandlers
 
     /**
+     * @readonly
+     * @type {Commands}
+     */
+    commands
+
+    /**
      * @param {Readonly<BotConfig>} config
      */
     constructor(config) {
@@ -334,6 +343,7 @@ module.exports = class BruhBot {
 
         this.chatAwaits = []
         this._quietMode = true
+        this.userQuiet = false
         this._isLeftHandActive = false
         this._isRightHandActive = false
         this.defendMyselfGoal = null
@@ -343,6 +353,7 @@ module.exports = class BruhBot {
         this.incomingProjectiles = {}
         this.lockedItems = []
         this.lookAtPlayers = {}
+        this.commands = new Commands(this.bot)
 
         this.saveInterval = new Interval(30000)
 
@@ -466,17 +477,17 @@ module.exports = class BruhBot {
             // @ts-ignore
             this.mc = new MC(this.bot.version, config.jarPath)
 
-            for (const entity of this.mc.data.entitiesArray) {
-                // if (!MC.hostiles[entity.name]) {
-                //     console.warn(entity.name)
-                // }
-                // if (entityRangeOfSight(entity.name) === undefined) {
-                //     console.warn(entity.name, 'range of sight')
-                // }
-                // if (entityAttackDamage(entity.name) === undefined) {
-                //     console.warn(entity.name, 'attack damage')
-                // }
-            }
+            // for (const entity of this.mc.data.entitiesArray) {
+            //     if (!MC.hostiles[entity.name]) {
+            //         console.warn(entity.name)
+            //     }
+            //     if (entityRangeOfSight(entity.name) === undefined) {
+            //         console.warn(entity.name, 'range of sight')
+            //     }
+            //     if (entityAttackDamage(entity.name) === undefined) {
+            //         console.warn(entity.name, 'attack damage')
+            //     }
+            // }
 
             // @ts-ignore
             this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
@@ -497,7 +508,7 @@ module.exports = class BruhBot {
             if (!this.mc) { return }
             if (this.bot.entity.velocity.y < this.mc.data2.general.fallDamageVelocity) {
                 this.tasks.tick()
-                this.tasks.push(this, tasks.mlg, null, priorities.critical)
+                this.tasks.push(this, tasks.mlg, {}, priorities.critical)
                 return
             }
         })
@@ -520,7 +531,7 @@ module.exports = class BruhBot {
         })
 
         /**
-         * @type {null | NodeJS.Timeout}
+         * @type {null | NodeJS.Timeout | Timer}
          */
         let tickInterval = null
 
@@ -549,7 +560,24 @@ module.exports = class BruhBot {
                     this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
                 }
             }
+
+            TextDisplay.tick(this)
             this.debug.tick()
+
+            for (let i = 0; i < 10; i++) {
+                this.commands.tick()
+            }
+
+            // for (const entityId in this.bot.entities) {
+            //     const entity = this.bot.entities[entityId]
+            //     const labelId = `entity-${entityId}`
+            //     if (entity.name === 'text_display') { continue }
+            //     if (!TextDisplay.registry[labelId]) {
+            //         new TextDisplay(this.commands, labelId)
+            //         TextDisplay.registry[labelId].text = { text: entity.username ?? entity.displayName ?? entity.name ?? '?' }
+            //     }
+            //     TextDisplay.registry[labelId].setPosition(entity.position.offset(0, entity.height + .3, 0))
+            // }
 
             for (let i = this.lockedItems.length - 1; i >= 0; i--) {
                 if (this.lockedItems[i].isUnlocked) {
@@ -610,7 +638,7 @@ module.exports = class BruhBot {
 
                 if (creeper) {
                     if (this.searchItem('shield')) {
-                        this.tasks.push(this, tasks.blockExplosion, null, priorities.critical)
+                        this.tasks.push(this, tasks.blockExplosion, {}, priorities.critical)
                         return
                     } else {
                         this.tasks.push(this, tasks.goto, {
@@ -703,7 +731,8 @@ module.exports = class BruhBot {
             }
 
             const hostile = this.bot.nearestEntity(v => {
-                if (!MC.canEntityAttack(v)) { return false }
+                if (v.metadata[2]) { return false } // Has custom name
+                if (v.metadata[6] === EntityPose.DYING) { return false }
 
                 if (this.defendMyselfGoal &&
                     !this.defendMyselfGoal.isDone &&
@@ -713,10 +742,13 @@ module.exports = class BruhBot {
                     return false
                 }
 
-                if (v.metadata &&
-                    (v.metadata[15] !== undefined) &&
-                    (typeof v.metadata[15] === 'number') &&
-                    !(v.metadata[15] & 0x04)) {
+                if ((typeof v.metadata[15] === 'number') &&
+                    !(v.metadata[15] & 0x04)) { // Not aggressive
+                    return false
+                }
+
+                if ((typeof v.metadata[15] === 'number') &&
+                    !(v.metadata[15] & 0x01)) { // Has no AI
                     return false
                 }
 
@@ -753,7 +785,7 @@ module.exports = class BruhBot {
             if (this.bot.food < 18 &&
                 !this.quietMode &&
                 (this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints').length > 0)) {
-                this.tasks.push(this, tasks.eat, null, priorities.surviving)
+                this.tasks.push(this, tasks.eat, {}, priorities.surviving)
                 return
             }
 
@@ -798,7 +830,7 @@ module.exports = class BruhBot {
                     /*
                     if (!this.memory.hurtBy[by] ||
                         this.memory.hurtBy[by].length === 0) { continue }
-
+    
                     {
                         this.tasks.push(this, {
                             task: function*(bot, args) {
@@ -848,11 +880,11 @@ module.exports = class BruhBot {
 
             if (this.trySleepInterval?.is() &&
                 tasks.sleep.can(this)) {
-                this.tasks.push(this, tasks.sleep, null, priorities.low)
+                this.tasks.push(this, tasks.sleep, {}, priorities.low)
             }
 
             if (this.memory.mlgJunkBlocks.length > 0) {
-                this.tasks.push(this, tasks.clearMlgJunk, null, priorities.cleanup)
+                this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
                 return
             }
 
@@ -885,15 +917,15 @@ module.exports = class BruhBot {
                     humanReadableId: function() {
                         return `Picking up my arrows`
                     },
-                }, null, priorities.cleanup)
+                }, {}, priorities.cleanup)
             }
 
-            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 5, minLifetime: 5000 })) {
-                this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 5, minLifetime: 5000 }, priorities.unnecessary)
+            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
+                this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 20, minLifetime: 5000 }, priorities.unnecessary)
             }
 
-            if ('result' in this.env.getClosestXp(this, { maxDistance: 5 })) {
-                this.tasks.push(this, tasks.pickupXp, { maxDistance: 5 }, priorities.unnecessary)
+            if ('result' in this.env.getClosestXp(this, { maxDistance: 20 })) {
+                this.tasks.push(this, tasks.pickupXp, { maxDistance: 20 }, priorities.unnecessary)
             }
 
             if (this.tryAutoHarvestInterval?.is()) {
@@ -1181,7 +1213,7 @@ module.exports = class BruhBot {
                     },
                     id: function(args) { return 'test' },
                     humanReadableId: function(args) { return 'test' },
-                }, null, priorities.user)
+                }, {}, priorities.user)
             },
         }))
 
@@ -1386,7 +1418,7 @@ module.exports = class BruhBot {
                     humanReadableId: function() {
                         return `Scanning chests`
                     },
-                }, null, priorities.user)
+                }, {}, priorities.user)
                 if (task) {
                     respond(`Okay`)
                     task.wait()
@@ -1409,7 +1441,7 @@ module.exports = class BruhBot {
                     humanReadableId: function() {
                         return `Scanning villagers`
                     },
-                }, null, priorities.user)
+                }, {}, priorities.user)
                 if (task) {
                     respond(`Okay`)
                     task.wait()
@@ -2174,100 +2206,6 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {string | number} cookingResult
-     * @returns {Array<import('./mc-data').CookingRecipe>}
-     */
-    getCookingRecipesFromResult(cookingResult) {
-        if (typeof cookingResult === 'number') {
-            cookingResult = this.mc.data.items[cookingResult]?.name
-        }
-        /** @type {Array<import('./mc-data').SmeltingRecipe | import('./mc-data').SmokingRecipe | import('./mc-data').BlastingRecipe | import('./mc-data').CampfireRecipe>} */
-        const recipes = []
-        if (!cookingResult) {
-            return []
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.smelting)) {
-            if (recipe.result === cookingResult) {
-                recipes.push(recipe)
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.smoking)) {
-            if (recipe.result === cookingResult) {
-                recipes.push(recipe)
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.blasting)) {
-            if (recipe.result === cookingResult) {
-                recipes.push(recipe)
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.campfire)) {
-            if (recipe.result === cookingResult) {
-                recipes.push(recipe)
-            }
-        }
-
-        recipes.sort((a, b) => a.time - b.time)
-
-        return recipes
-    }
-
-    /**
-     * @param {string | number} raw
-     * @returns {Array<import('./mc-data').CookingRecipe>}
-     */
-    getCookingRecipesFromRaw(raw) {
-        if (typeof raw === 'number') {
-            raw = this.mc.data.items[raw]?.name
-        }
-        /** @type {Array<import('./mc-data').SmeltingRecipe | import('./mc-data').SmokingRecipe | import('./mc-data').BlastingRecipe | import('./mc-data').CampfireRecipe>} */
-        const recipes = []
-        if (!raw) {
-            return []
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.smelting)) {
-            for (const ingredient of recipe.ingredient) {
-                if (ingredient === raw) {
-                    recipes.push(recipe)
-                }
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.smoking)) {
-            for (const ingredient of recipe.ingredient) {
-                if (ingredient === raw) {
-                    recipes.push(recipe)
-                }
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.blasting)) {
-            for (const ingredient of recipe.ingredient) {
-                if (ingredient === raw) {
-                    recipes.push(recipe)
-                }
-            }
-        }
-
-        for (const recipe of Object.values(this.mc.data2.recipes.campfire)) {
-            for (const ingredient of recipe.ingredient) {
-                if (ingredient === raw) {
-                    recipes.push(recipe)
-                }
-            }
-        }
-
-        recipes.sort((a, b) => a.time - b.time)
-
-        return recipes
-    }
-
-    /**
      * @param {ReadonlyArray<string>} items
      * @returns {Item | null}
      */
@@ -2334,55 +2272,6 @@ module.exports = class BruhBot {
         return count
     }
 
-    /**
-     * @returns {{
-     *   item: import('prismarine-item').Item;
-     *   weapon: hawkeye.Weapons;
-     *   ammo: number;
-     * } | null}
-     */
-    searchRangeWeapon() {
-        const keys = Object.values(hawkeye.Weapons)
-
-        for (const weapon of keys) {
-            const searchFor = this.mc.data.itemsByName[weapon]?.id
-
-            if (!searchFor) { continue }
-
-            const found = this.bot.inventory.findInventoryItem(searchFor, null, false)
-            if (!found) { continue }
-
-            let ammo
-
-            switch (weapon) {
-                case hawkeye.Weapons.bow:
-                case hawkeye.Weapons.crossbow:
-                    ammo = this.bot.inventory.count(this.mc.data.itemsByName['arrow'].id, null)
-                    break
-
-                // case hawkeye.Weapons.egg:
-                case hawkeye.Weapons.snowball:
-                    // case hawkeye.Weapons.trident:
-                    ammo = this.bot.inventory.count(found.type, null)
-                    break
-
-                default: continue
-            }
-
-            if (ammo === 0) {
-                continue
-            }
-
-            return {
-                item: found,
-                weapon: weapon,
-                ammo: ammo,
-            }
-        }
-
-        return null
-    }
-
     *clearMainHand() {
         const emptySlot = this.bot.inventory.firstEmptyInventorySlot(true)
         if (!emptySlot) {
@@ -2444,104 +2333,22 @@ module.exports = class BruhBot {
     }
 
     /**
-     * Source: https://github.com/PrismarineJS/mineflayer-pvp/blob/master/src/PVP.ts
+     * @param {string} item
      */
-    holdsShield() {
-        if (this.bot.supportFeature('doesntHaveOffHandSlot')) {
-            return false
-        }
+    holds(item, offhand = false) {
+        if (offhand) {
+            if (this.bot.supportFeature('doesntHaveOffHandSlot')) { return false }
 
-        const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]
-        if (!slot) {
-            return false
-        }
+            const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]
+            if (!slot) { return false }
 
-        return slot.name == 'shield'
-    }
-
-    /**
-     * @param {string | number} item
-     */
-    holds(item) {
-        const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-
-        if (!slot) {
-            return false
-        }
-
-        if (typeof item === 'string') {
             return slot.name === item
         } else {
-            return slot.type === item
+            const slot = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
+            if (!slot) { return false }
+
+            return slot.name === item
         }
-    }
-
-    /**
-     * @returns {boolean}
-     */
-    shouldEquipShield() {
-        const shield = this.searchItem('shield')
-        if (!shield) {
-            return false
-        }
-
-        const needShield = this.env.possibleDirectHostileAttack(this)
-        if (!needShield) {
-            return false
-        }
-
-        return true
-    }
-
-    /**
-     * @param {number | string} item
-     * @returns {number}
-     */
-    getChargeTime(item) {
-        if (typeof item === 'number') {
-            item = this.mc.data.items[item]?.name
-        }
-        if (!item) return 0
-
-        switch (item) {
-            case 'bow':
-                return 1200
-            case 'crossbow':
-                return 1300 // 1250
-            default:
-                return 0
-        }
-    }
-
-    /**
-     * @param {Item} item
-     * @returns {boolean}
-     */
-    static isCrossbowCharged(item) {
-        return (
-            item.nbt &&
-            (item.nbt.type === 'compound') &&
-            item.nbt.value['ChargedProjectiles'] &&
-            (item.nbt.value['ChargedProjectiles'].type === 'list') &&
-            (item.nbt.value['ChargedProjectiles'].value.value.length > 0)
-        )
-    }
-
-    /**
-     * @returns {(import('./melee-weapons').MeleeWeapon & { item: Item }) | null}
-     */
-    bestMeleeWeapon() {
-        const weapons = require('./melee-weapons').weapons
-        for (const weapon of weapons) {
-            const item = this.searchItem(weapon.name)
-            if (item) {
-                return {
-                    ...weapon,
-                    item: item,
-                }
-            }
-        }
-        return null
     }
 
     /**
