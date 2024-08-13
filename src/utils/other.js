@@ -517,6 +517,45 @@ function toArray(generator) {
     return result
 }
 
+/**
+ * @param {number} origin
+ * @param {number} d
+ * @returns {Generator<number, void, void>}
+ */
+function* yeah(origin, d) {
+    for (let i = 0; i < d; i++) {
+        yield origin + i
+        yield origin - i
+    }
+}
+
+/**
+ * @overload
+ * @param {ReadonlyArray<{ equals: (other: T) => void; }>} a
+ * @param {ReadonlyArray<{ equals: (other: T) => void; }>} b
+ */
+/**
+ * @template {any} T
+ * @param {ReadonlyArray<T>} a
+ * @param {ReadonlyArray<T>} b
+ */
+function sequenceEquals(a, b) {
+    if (a.length !== b.length) { return false }
+    if (typeof a[0] === 'object' &&
+        'equals' in a[0]) {
+        for (let i = 0; i < a.length; i++) {
+            // @ts-ignore
+            if (!a[i].equals(b[i])) { return false }
+        }
+        return true
+    } else {
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) { return false }
+        }
+        return true
+    }
+}
+
 module.exports = {
     itemsDelta,
     backNForthSort,
@@ -532,4 +571,6 @@ module.exports = {
     NBT2JSON,
     isNBTEquals,
     toArray,
+    yeah,
+    sequenceEquals,
 }

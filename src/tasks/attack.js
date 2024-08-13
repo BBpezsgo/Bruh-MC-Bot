@@ -524,246 +524,250 @@ module.exports = {
             )
         }
 
-        while (true) {
-            yield
-            /**
-             * @type {number}
-             */
-            let targetScore = 0
-            /**
-             * @type {Entity | null}
-             */
-            let target = null
-            if ('target' in args) {
-                target = args.target
-                if (!isAlive(target)) { break }
-                targetScore = calculateScore(target)
-
-                const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
-                label.lockOn(target.id)
-                label.text = { text: `${targetScore}` }
-
-                if (bot.env.entityHurtTimes[target.id] &&
-                    (performance.now() - bot.env.entityHurtTimes[target.id]) < hurtTime) {
-                    continue
-                }
-            } else {
-                const targetIds = Object.keys(args.targets).map(v => Number.parseInt(v))
-                if (targetIds.length === 0) { break }
-                for (const id of targetIds) {
-                    const candidate = args.targets[id]
-                    if (!isAlive(candidate)) {
-                        delete args.targets[id]
+        try {
+            while (true) {
+                yield
+                /**
+                 * @type {number}
+                 */
+                let targetScore = 0
+                /**
+                 * @type {Entity | null}
+                 */
+                let target = null
+                if ('target' in args) {
+                    target = args.target
+                    if (!isAlive(target)) { break }
+                    targetScore = calculateScore(target)
+    
+                    const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
+                    label.lockOn(target.id)
+                    label.text = { text: `${targetScore}` }
+    
+                    if (bot.env.entityHurtTimes[target.id] &&
+                        (performance.now() - bot.env.entityHurtTimes[target.id]) < hurtTime) {
                         continue
                     }
-
-                    if (bot.env.entityHurtTimes[candidate.id] &&
-                        (performance.now() - bot.env.entityHurtTimes[candidate.id]) < hurtTime) {
-                        continue
+                } else {
+                    const targetIds = Object.keys(args.targets).map(v => Number.parseInt(v))
+                    if (targetIds.length === 0) { break }
+                    for (const id of targetIds) {
+                        const candidate = args.targets[id]
+                        if (!isAlive(candidate)) {
+                            delete args.targets[id]
+                            continue
+                        }
+    
+                        if (bot.env.entityHurtTimes[candidate.id] &&
+                            (performance.now() - bot.env.entityHurtTimes[candidate.id]) < hurtTime) {
+                            continue
+                        }
+    
+                        const candidateScore = calculateScore(candidate)
+    
+                        const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
+                        label.lockOn(candidate.id)
+                        label.text = { text: `${candidateScore}` }
+    
+                        if (!target || candidateScore > targetScore) {
+                            targetScore = candidateScore
+                            target = candidate
+                        }
                     }
-
-                    const candidateScore = calculateScore(candidate)
-
-                    const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
-                    label.lockOn(candidate.id)
-                    label.text = { text: `${candidateScore}` }
-
-                    if (!target || candidateScore > targetScore) {
-                        targetScore = candidateScore
-                        target = candidate
-                    }
+    
+                    if (!isAlive(target)) { continue }
                 }
-
-                if (!isAlive(target)) { continue }
-            }
-
-            if (target.name === 'boat') {
-                cooldown = 80
-            } else {
-                cooldown = hurtTime
-            }
-
-            TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore}`, color: 'red' }
-
-            const distance = bot.bot.entity.position.distanceTo(target.position)
-
-            if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
-                if (distance > 6) {
-                    // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                    yield* goto.task(bot, {
-                        point: target.position,
-                        distance: 5,
-                        timeout: 500,
-                    })
-                    reequipMeleeWeapon = true
-                    continue
+    
+                if (target.name === 'boat') {
+                    cooldown = 80
+                } else {
+                    cooldown = hurtTime
                 }
-
-                stopMoving(target)
-
-                if (reequipMeleeWeapon) {
-                    // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
-                    shield = bot.searchItem('shield')
-                    yield* equipMeleeWeapon()
-                    // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
-                    reequipMeleeWeapon = false
-                }
-
-                if (shield) {
-                    if (!bot.holds('shield', true)) {
-                        yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
-                    }
-                    yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
-                }
-
-                const now = performance.now()
-                if (now - lastPunch > cooldown) {
-                    if (deactivateShield(shield)) {
-                        yield
-                    }
-
-                    bot.bot.attack(target)
-                    lastPunch = now
-                    bot.env.entityHurtTimes[target.id] = performance.now()
-
-                    yield
-
-                    activateShield(shield)
-                }
-
-                continue
-            }
-
-            const saveMyArrow = () => {
-                const arrow = bot.bot.nearestEntity((/** @type {Entity} */ v) => {
-                    if (v.name !== 'arrow') { return false }
-                    const velocity = v.velocity.clone().normalize()
-                    const dir = v.position.clone().subtract(bot.bot.entity.position).normalize()
-                    const dot = velocity.dot(dir)
-                    if (dot < 0) { return false }
-                    return true
-                })
-                if (arrow) {
-                    // console.log(`[Bot "${bot.username}"] Arrow saved`)
-                    bot.memory.myArrows.push(arrow.id)
-                }
-            }
-
-            if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
-                stopMoving(target)
-                deactivateShield(shield)
-
-                const weapon = searchRangeWeapon(bot)
-
-                const getGrade = () => {
-                    return bot.bot.hawkEye.getMasterGrade({
-                        isValid: false,
-                        position: target.position.offset(0, target.height / 2, 0),
-                    }, new Vec3(0, 0, 0), weapon.weapon)
-                }
-
-                if (weapon && weapon.ammo > 0) {
-                    let grade = getGrade()
-                    if (!grade || grade.blockInTrayect) {
+    
+                TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore}`, color: 'red' }
+    
+                const distance = bot.bot.entity.position.distanceTo(target.position)
+    
+                if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
+                    if (distance > 6) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
                             point: target.position,
-                            distance: distance - 2,
-                            timeout: 1000,
-                            ignoreOthers: true,
+                            distance: 5,
+                            timeout: 500,
+                            sprint: true,
                         })
                         reequipMeleeWeapon = true
                         continue
                     }
-
-                    yield* wrap(bot.bot.equip(weapon.item, 'hand'))
-
-                    if (weapon.weapon === Weapons.crossbow) {
-                        const isCharged =
-                            weapon.item.nbt &&
-                            weapon.item.nbt.type === 'compound' &&
-                            weapon.item.nbt.value['ChargedProjectiles'] &&
-                            weapon.item.nbt.value['ChargedProjectiles'].type === 'list' &&
-                            weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
-
-                        if (!isCharged) {
-                            // console.log(`[Bot "${bot.username}"] Charging crossbow`)
-                            bot.activateHand('right')
-                            const chargeTime = getChargeTime(weapon.weapon)
-                            yield* sleepG(Math.max(100, chargeTime))
-                            bot.deactivateHand()
-                            // console.log(`[Bot "${bot.username}"] Crossbow charged`)
+    
+                    stopMoving(target)
+    
+                    if (reequipMeleeWeapon) {
+                        // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
+                        shield = bot.searchItem('shield')
+                        yield* equipMeleeWeapon()
+                        // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
+                        reequipMeleeWeapon = false
+                    }
+    
+                    if (shield) {
+                        if (!bot.holds('shield', true)) {
+                            yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
                         }
-
-                        grade = getGrade()
+                        yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
+                    }
+    
+                    const now = performance.now()
+                    if (now - lastPunch > cooldown) {
+                        if (deactivateShield(shield)) {
+                            yield
+                        }
+    
+                        bot.bot.attack(target)
+                        lastPunch = now
+                        bot.env.entityHurtTimes[target.id] = performance.now()
+    
+                        yield
+    
+                        activateShield(shield)
+                    }
+    
+                    continue
+                }
+    
+                const saveMyArrow = () => {
+                    const arrow = bot.bot.nearestEntity((/** @type {Entity} */ v) => {
+                        if (v.name !== 'arrow') { return false }
+                        const velocity = v.velocity.clone().normalize()
+                        const dir = v.position.clone().subtract(bot.bot.entity.position).normalize()
+                        const dot = velocity.dot(dir)
+                        if (dot < 0) { return false }
+                        return true
+                    })
+                    if (arrow) {
+                        // console.log(`[Bot "${bot.username}"] Arrow saved`)
+                        bot.memory.myArrows.push(arrow.id)
+                    }
+                }
+    
+                if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
+                    stopMoving(target)
+                    deactivateShield(shield)
+    
+                    const weapon = searchRangeWeapon(bot)
+    
+                    const getGrade = () => {
+                        return bot.bot.hawkEye.getMasterGrade({
+                            isValid: false,
+                            position: target.position.offset(0, target.height / 2, 0),
+                        }, new Vec3(0, 0, 0), weapon.weapon)
+                    }
+    
+                    if (weapon && weapon.ammo > 0) {
+                        let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
-                            console.log(`[Bot "${bot.username}"] Trajectory changed while charging crossbow`)
+                            // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                            yield* goto.task(bot, {
+                                point: target.position,
+                                distance: distance - 2,
+                                timeout: 1000,
+                                ignoreOthers: true,
+                                sprint: true,
+                            })
                             reequipMeleeWeapon = true
                             continue
                         }
-                        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
-
-                        if (target && target.isValid) {
+    
+                        yield* wrap(bot.bot.equip(weapon.item, 'hand'))
+    
+                        if (weapon.weapon === Weapons.crossbow) {
+                            const isCharged =
+                                weapon.item.nbt &&
+                                weapon.item.nbt.type === 'compound' &&
+                                weapon.item.nbt.value['ChargedProjectiles'] &&
+                                weapon.item.nbt.value['ChargedProjectiles'].type === 'list' &&
+                                weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
+    
+                            if (!isCharged) {
+                                // console.log(`[Bot "${bot.username}"] Charging crossbow`)
+                                bot.activateHand('right')
+                                const chargeTime = getChargeTime(weapon.weapon)
+                                yield* sleepG(Math.max(100, chargeTime))
+                                bot.deactivateHand()
+                                // console.log(`[Bot "${bot.username}"] Crossbow charged`)
+                            }
+    
+                            grade = getGrade()
+                            if (!grade || grade.blockInTrayect) {
+                                console.log(`[Bot "${bot.username}"] Trajectory changed while charging crossbow`)
+                                reequipMeleeWeapon = true
+                                continue
+                            }
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+    
+                            if (target && target.isValid) {
+                                bot.activateHand('right')
+                                yield* sleepTicks()
+                                bot.deactivateHand()
+                                yield* sleepTicks(2)
+                                saveMyArrow()
+                            }
+                        } else if (weapon.weapon === Weapons.egg ||
+                            weapon.weapon === Weapons.snowball) {
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+                            if (bot.bot.supportFeature('useItemWithOwnPacket')) {
+                                bot.bot._client.write('use_item', {
+                                    hand: 0
+                                })
+                            }
+                            bot.env.entityHurtTimes[target.id] = performance.now() - 50 - 50
+                        } else if (weapon.weapon === Weapons.bow) {
+                            // console.log(`[Bot "${bot.username}"] Pulling bow`)
                             bot.activateHand('right')
-                            yield* sleepTicks()
+                            const chargeTime = getChargeTime(weapon.weapon)
+                            yield* sleepG(Math.max(hurtTime, chargeTime))
+    
+                            if (!target || !target.isValid) {
+                                if (!(yield* bot.clearMainHand())) {
+                                    console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
+                                }
+                            }
+    
+                            grade = getGrade()
+                            if (!grade || grade.blockInTrayect) {
+                                // console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
+                                if (!(yield* bot.clearMainHand())) {
+                                    console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
+                                }
+                                reequipMeleeWeapon = true
+                                continue
+                            }
+    
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
                             bot.deactivateHand()
                             yield* sleepTicks(2)
                             saveMyArrow()
+                        } else {
+                            console.warn(`[Bot "${bot.username}"] Unknown range weapon ${weapon.weapon}`)
                         }
-                    } else if (weapon.weapon === Weapons.egg ||
-                        weapon.weapon === Weapons.snowball) {
-                        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
-                        if (bot.bot.supportFeature('useItemWithOwnPacket')) {
-                            bot.bot._client.write('use_item', {
-                                hand: 0
-                            })
-                        }
-                        bot.env.entityHurtTimes[target.id] = performance.now() - 50 - 50
-                    } else if (weapon.weapon === Weapons.bow) {
-                        // console.log(`[Bot "${bot.username}"] Pulling bow`)
-                        bot.activateHand('right')
-                        const chargeTime = getChargeTime(weapon.weapon)
-                        yield* sleepG(Math.max(hurtTime, chargeTime))
-
-                        if (!target || !target.isValid) {
-                            if (!(yield* bot.clearMainHand())) {
-                                console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
-                            }
-                        }
-
-                        grade = getGrade()
-                        if (!grade || grade.blockInTrayect) {
-                            // console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
-                            if (!(yield* bot.clearMainHand())) {
-                                console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
-                            }
-                            reequipMeleeWeapon = true
-                            continue
-                        }
-
-                        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
-                        bot.deactivateHand()
-                        yield* sleepTicks(2)
-                        saveMyArrow()
-                    } else {
-                        console.warn(`[Bot "${bot.username}"] Unknown range weapon ${weapon.weapon}`)
+                        continue
                     }
+                }
+    
+                if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
+                    console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
                     continue
                 }
+    
+                if (target && target.isValid) {
+                    startMoving(target)
+                }
             }
-
-            if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
-                console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
-                continue
+        } finally {
+            if (bot.isLeftHandActive) {
+                bot.deactivateHand()
             }
-
-            if (target && target.isValid) {
-                startMoving(target)
-            }
-        }
-
-        if (bot.isLeftHandActive) {
-            bot.deactivateHand()
         }
     },
     id: function(args) {

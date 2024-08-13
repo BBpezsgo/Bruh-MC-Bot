@@ -437,6 +437,13 @@ module.exports = class MC {
         },
     }
 
+    /**
+     * @readonly
+     * @type {ReadonlyArray<number>}
+     */
+    cropBlockIds
+
+
     // iron_golem, llama, polar_bear, trader_llama, vex, wither
 
     /**
@@ -457,271 +464,273 @@ module.exports = class MC {
      *   };
      * }>>}
      */
-    static get hostiles() { return ({
-        'shulker': {
-            rangeAttack: {
-                range: 16,
-                damage: 4,
-            },
-            rangeOfSight: 16,
-        },
-        'blaze': {
-            meleeAttack: {
-                range: 1,
-                damage: { easy: 4, normal: 6, hard: 9 },
-            },
-            rangeAttack: {
-                range: 48,
-                damage: 5,
-            },
-            rangeOfSight: 48,
-        },
-        'drowned': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2.5, normal: 3, hard: 4.5 },
-            },
-            rangeOfSight: 24,
-        },
-        'illusioner': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 5, normal: 5, hard: 5 }
-            },
-            rangeOfSight: 16,
-        },
-        'phantom': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 }
-            },
-            rangeOfSight: 64,
-        },
-        'warden': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 16, normal: 30, hard: 45 },
-            },
-            rangeAttack: {
-                range: 20,
-                damage: { easy: 6, normal: 10, hard: 15 },
-            },
-            rangeOfSight: 16,
-        },
-        'evoker': {
-            meleeAttack: {
-                range: 2,
-                damage: 24,
-            },
-            rangeOfSight: 12,
-        },
-        'creeper': {
-            meleeAttack: {
-                range: 3,
-                damage: { easy: 22, normal: 43, hard: 64 },
-            },
-            rangeOfSight: 15,
-        },
-        'skeleton': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 }
-            },
-            rangeAttack: {
-                range: 15,
-                damage: { easy: 4, normal: 4, hard: 5 },
-            },
-            rangeOfSight: 16,
-        },
-        'cave_spider': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 },
-            },
-            rangeOfSight: 16,
-        },
-        'endermite': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 },
-            },
-            rangeOfSight: 16,
-        },
-        'hoglin': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 5, normal: 8, hard: 12 },
-            },
-            rangeOfSight: 16,
-        },
-        'magma_cube': {
-            meleeAttack: {
-                range: 2,
-                damage: function(entity) {
-                    /** @type {number} */ //@ts-ignore
-                    const size = entity.metadata[16]
-                    switch (size) {
-                        case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
-                        case 1: return { easy: 3, normal: 5, hard: 6 }
-                        case 2: return { easy: 4, normal: 6, hard: 9 }
-                        default: return { easy: 4, normal: 6, hard: 9 }
-                    }
+    static get hostiles() {
+        return ({
+            'shulker': {
+                rangeAttack: {
+                    range: 16,
+                    damage: 4,
                 },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 16,
-        },
-        'slime': {
-            meleeAttack: {
-                range: 2,
-                damage: function(entity) {
-                    /** @type {number} */ //@ts-ignore
-                    const size = entity.metadata[16]
-                    switch (size) {
-                        case 0: return { easy: 0, normal: 0, hard: 0 }
-                        case 1: return { easy: 2, normal: 2, hard: 3 }
-                        case 2: return { easy: 3, normal: 4, hard: 6 }
-                        default: return { easy: 3, normal: 4, hard: 6 }
-                    }
+            'blaze': {
+                meleeAttack: {
+                    range: 1,
+                    damage: { easy: 4, normal: 6, hard: 9 },
                 },
+                rangeAttack: {
+                    range: 48,
+                    damage: 5,
+                },
+                rangeOfSight: 48,
             },
-            rangeOfSight: 16,
-        },
-        'wither_skeleton': {
-            meleeAttack: {
-                range: 2,
-                // armed
-                damage: { easy: 5, normal: 8, hard: 12 },
+            'drowned': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                },
+                rangeOfSight: 24,
             },
-            rangeOfSight: 16,
-        },
-        'witch': {
-            rangeAttack: {
-                range: 8,
-                damage: 6, // harming potion
+            'illusioner': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5, normal: 5, hard: 5 }
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 16,
-        },
-        'spider': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 },
+            'phantom': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 }
+                },
+                rangeOfSight: 64,
             },
-            rangeOfSight: 16,
-        },
-        'stray': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2, normal: 2, hard: 3 },
+            'warden': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 16, normal: 30, hard: 45 },
+                },
+                rangeAttack: {
+                    range: 20,
+                    damage: { easy: 6, normal: 10, hard: 15 },
+                },
+                rangeOfSight: 16,
             },
-            rangeAttack: {
-                range: 15,
-                // 3 - 5
-                damage: { easy: 5, normal: 5, hard: 5 },
+            'evoker': {
+                meleeAttack: {
+                    range: 2,
+                    damage: 24,
+                },
+                rangeOfSight: 12,
             },
-            // also has tipped arrows
-            rangeOfSight: 16,
-        },
-        'ravager': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 7, normal: 12, hard: 18 },
+            'creeper': {
+                meleeAttack: {
+                    range: 3,
+                    damage: { easy: 22, normal: 43, hard: 64 },
+                },
+                rangeOfSight: 15,
             },
-            // roar: 6
-            rangeOfSight: 32,
-        },
-        'husk': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            'skeleton': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 }
+                },
+                rangeAttack: {
+                    range: 15,
+                    damage: { easy: 4, normal: 4, hard: 5 },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 35,
-        },
-        'zombie_villager': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            'cave_spider': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 35,
-        },
-        'zombie': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 2.5, normal: 3, hard: 4.5 },
+            'endermite': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 35,
-        },
-        'piglin': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 5, normal: 8, hard: 12 },
+            'hoglin': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                },
+                rangeOfSight: 16,
             },
-            rangeAttack: {
-                range: 16, // ?
-                damage: { easy: 5, normal: 5, hard: 5 },
+            'magma_cube': {
+                meleeAttack: {
+                    range: 2,
+                    damage: function(entity) {
+                        /** @type {number} */ //@ts-ignore
+                        const size = entity.metadata[16]
+                        switch (size) {
+                            case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
+                            case 1: return { easy: 3, normal: 5, hard: 6 }
+                            case 2: return { easy: 4, normal: 6, hard: 9 }
+                            default: return { easy: 4, normal: 6, hard: 9 }
+                        }
+                    },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 16,
-        },
-        'piglin_brute': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 7.5, normal: 13, hard: 19.5 },
+            'slime': {
+                meleeAttack: {
+                    range: 2,
+                    damage: function(entity) {
+                        /** @type {number} */ //@ts-ignore
+                        const size = entity.metadata[16]
+                        switch (size) {
+                            case 0: return { easy: 0, normal: 0, hard: 0 }
+                            case 1: return { easy: 2, normal: 2, hard: 3 }
+                            case 2: return { easy: 3, normal: 4, hard: 6 }
+                            default: return { easy: 3, normal: 4, hard: 6 }
+                        }
+                    },
+                },
+                rangeOfSight: 16,
             },
-            // also can be unarmed
-            rangeOfSight: 16,
-        },
-        'pillager': {
-            rangeAttack: {
-                range: 8,
-                damage: { easy: 3.5, normal: 4, hard: 4.5 },
+            'wither_skeleton': {
+                meleeAttack: {
+                    range: 2,
+                    // armed
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 64,
-        },
-        'silverfish': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 1, normal: 1, hard: 1.5 },
+            'witch': {
+                rangeAttack: {
+                    range: 8,
+                    damage: 6, // harming potion
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 16,
-        },
-        'zoglin': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 5, normal: 8, hard: 12 },
+            'spider': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 },
+                },
+                rangeOfSight: 16,
             },
-            rangeOfSight: 16,
-        },
-        'vindicator': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 7.5, normal: 13, hard: 19.5 },
+            'stray': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2, normal: 2, hard: 3 },
+                },
+                rangeAttack: {
+                    range: 15,
+                    // 3 - 5
+                    damage: { easy: 5, normal: 5, hard: 5 },
+                },
+                // also has tipped arrows
+                rangeOfSight: 16,
             },
-            // also can be unarmed
-            rangeOfSight: 16,
-        },
-        'enderman': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 4.5, normal: 7, hard: 10.5 },
+            'ravager': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 7, normal: 12, hard: 18 },
+                },
+                // roar: 6
+                rangeOfSight: 32,
             },
-            rangeOfSight: 64,
-        },
-        'zombified_piglin': {
-            meleeAttack: {
-                range: 2,
-                damage: { easy: 5, normal: 8, hard: 12 },
+            'husk': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                },
+                rangeOfSight: 35,
             },
-            // also can be unarmed
-            rangeOfSight: 55,
-        },
-        'ghast': {
-            rangeAttack: {
-                range: 64,
-                damage: 6,
-                // + explosion
+            'zombie_villager': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                },
+                rangeOfSight: 35,
             },
-            rangeOfSight: 64,
-        },
-    }) }
+            'zombie': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                },
+                rangeOfSight: 35,
+            },
+            'piglin': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                },
+                rangeAttack: {
+                    range: 16, // ?
+                    damage: { easy: 5, normal: 5, hard: 5 },
+                },
+                rangeOfSight: 16,
+            },
+            'piglin_brute': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 7.5, normal: 13, hard: 19.5 },
+                },
+                // also can be unarmed
+                rangeOfSight: 16,
+            },
+            'pillager': {
+                rangeAttack: {
+                    range: 8,
+                    damage: { easy: 3.5, normal: 4, hard: 4.5 },
+                },
+                rangeOfSight: 64,
+            },
+            'silverfish': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 1, normal: 1, hard: 1.5 },
+                },
+                rangeOfSight: 16,
+            },
+            'zoglin': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                },
+                rangeOfSight: 16,
+            },
+            'vindicator': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 7.5, normal: 13, hard: 19.5 },
+                },
+                // also can be unarmed
+                rangeOfSight: 16,
+            },
+            'enderman': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 4.5, normal: 7, hard: 10.5 },
+                },
+                rangeOfSight: 64,
+            },
+            'zombified_piglin': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                },
+                // also can be unarmed
+                rangeOfSight: 55,
+            },
+            'ghast': {
+                rangeAttack: {
+                    range: 64,
+                    damage: 6,
+                    // + explosion
+                },
+                rangeOfSight: 64,
+            },
+        })
+    }
 
     /**
      * @param {string} blockName
@@ -765,6 +774,28 @@ module.exports = class MC {
     constructor(version, jarPath) {
         this.data = getMcData(version)
         this.data2 = new MinecraftData(jarPath)
+
+        /** @type {Array<number>} */
+        const cropBlockIds = []
+        for (const cropName in MC.cropsByBlockName) {
+            const crop = MC.cropsByBlockName[cropName]
+            switch (crop.type) {
+                case 'tree':
+                    cropBlockIds.push(this.data.blocksByName[crop.log].id)
+                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    break
+                case 'grows_block':
+                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    if (crop.attachedCropName) {
+                        cropBlockIds.push(this.data.blocksByName[crop.attachedCropName].id)
+                    }
+                    break
+                default:
+                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    break
+            }
+        }
+        this.cropBlockIds = cropBlockIds
 
         for (const key in this.data2.compost) {
             if (!this.data.itemsByName[key]) {

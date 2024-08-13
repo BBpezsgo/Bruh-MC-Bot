@@ -1,17 +1,17 @@
-const { Vec3 } = require("vec3")
+const { Vec3 } = require('vec3')
 const path = require('path')
 const fs = require('fs')
-const { replacer, reviver } = require("./serializing")
-const { wrap, sleepG } = require("./utils/tasks")
-const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require("./utils/other")
-const { Block } = require("prismarine-block")
-const { Item } = require("prismarine-item")
-const MC = require("./mc")
-const goto = require("./tasks/goto")
-const { Chest } = require("mineflayer")
-const { goals } = require("mineflayer-pathfinder")
-const Vec3Dimension = require("./vec3-dimension")
-const { EntityPose } = require("./entity-metadata")
+const { replacer, reviver } = require('./serializing')
+const { wrap, sleepG } = require('./utils/tasks')
+const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require('./utils/other')
+const { Block } = require('prismarine-block')
+const { Item } = require('prismarine-item')
+const MC = require('./mc')
+const goto = require('./tasks/goto')
+const { Chest } = require('mineflayer')
+const { goals } = require('mineflayer-pathfinder')
+const Vec3Dimension = require('./vec3-dimension')
+const { EntityPose } = require('./entity-metadata')
 
 /**
  * @typedef {{
@@ -57,6 +57,13 @@ const { EntityPose } = require("./entity-metadata")
 
 /**
  * @typedef {`${number}-${number}-${number}-${import('mineflayer').Dimension}`} PositionHash
+ */
+
+/**
+ * @typedef {{
+ *   positions: Array<Vec3>;
+ *   mobs: Record<number, import('prismarine-entity').Entity>;
+ * }} Fencing
  */
 
 class ItemRequest {
@@ -176,7 +183,7 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {Record<number, import("prismarine-entity").Entity>}
+     * @type {Record<number, import('prismarine-entity').Entity>}
      */
     entityOwners
 
@@ -213,7 +220,7 @@ module.exports = class Environment {
      * @private
      * @param {import('./bruh-bot')} bot
      * @param {import('mineflayer').Player} player
-     * @param {import("mineflayer").Dimension} dimension
+     * @param {import('mineflayer').Dimension} dimension
      */
     __playerUpdated(bot, player, dimension) {
         if (!player.entity?.position) { return }
@@ -225,7 +232,7 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      * @param {Block | null} oldBlock
      * @param {Block} newBlock
-     * @param {import("mineflayer").Dimension} dimension
+     * @param {import('mineflayer').Dimension} dimension
      */
     __blockUpdate(bot, oldBlock, newBlock, dimension) {
         const isPlace = (!oldBlock || oldBlock.name === 'air')
@@ -280,7 +287,7 @@ module.exports = class Environment {
     /**
      * @private
      * @param {import('./bruh-bot')} bot
-     * @param {import("prismarine-entity").Entity} entity
+     * @param {import('prismarine-entity').Entity} entity
      */
     __entityDead(bot, entity) {
         delete this.entitySpawnTimes[entity.id]
@@ -297,7 +304,7 @@ module.exports = class Environment {
     /**
      * @private
      * @param {import('./bruh-bot')} bot
-     * @param {import("prismarine-entity").Entity} entity
+     * @param {import('prismarine-entity').Entity} entity
      */
     __entityGone(bot, entity) {
         delete this.entityOwners[entity.id]
@@ -312,7 +319,7 @@ module.exports = class Environment {
     /**
      * @private
      * @param {import('./bruh-bot')} bot
-     * @param {import("prismarine-entity").Entity} entity
+     * @param {import('prismarine-entity').Entity} entity
      */
     __entitySpawn(bot, entity) {
         this.entitySpawnTimes[entity.id] = performance.now()
@@ -389,7 +396,7 @@ module.exports = class Environment {
 
     /**
      * @param {import('./bruh-bot')} bot
-     * @param {import("prismarine-entity").Entity} entity
+     * @param {import('prismarine-entity').Entity} entity
      */
     __entityHurt(bot, entity) {
         this.entityHurtTimes[entity.id] = performance.now()
@@ -771,6 +778,127 @@ module.exports = class Environment {
     }
 
     /**
+     * @private
+     * @param {import('./bruh-bot')} bot
+     * @param {boolean} grown
+     * @param {Block} block
+     * @param {Array<Vec3>} mushrooms
+     */
+    cropFilter(bot, grown, block, mushrooms) {
+        /** @type {boolean} */
+        let isGrown = false
+        const cropInfo = MC.resolveCrop(block.name)
+        if (!cropInfo) {
+            console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
+            return false
+        }
+
+        switch (cropInfo.type) {
+            case 'seeded':
+            case 'simple': {
+                const age = block.getProperties()?.['age']
+                if (typeof age !== 'number') { return false }
+                isGrown = age >= cropInfo.grownAge
+                break
+            }
+            case 'grows_block': {
+                let fruitBlock = null
+                for (const neighbor of directBlockNeighbors(block.position, 'side')) {
+                    const neighborBlock = bot.bot.blockAt(neighbor)
+                    if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
+                        fruitBlock = neighborBlock
+                        break
+                    }
+                }
+                isGrown = !!fruitBlock
+                break
+            }
+            case 'grows_fruit': {
+                switch (block.name) {
+                    case 'cave_vines':
+                    case 'cave_vines_plant':
+                        const berries = block.getProperties()?.['berries']
+                        if (typeof berries !== 'boolean') { return false }
+                        isGrown = berries
+                        break
+                    case 'sweet_berry_bush':
+                        const age = block.getProperties()?.['age']
+                        if (typeof age !== 'number') { return false }
+                        isGrown = age >= 3
+                        break
+                    default:
+                        console.warn(`Unimplemented fruit crop "${block.name}"`)
+                        return false
+                }
+                break
+            }
+            case 'tree': {
+                if (!this.crops.find(v => v.position.equals(block.position))) {
+                    return false
+                }
+                if (block.name === cropInfo.log) {
+                    isGrown = true
+                } else {
+                    isGrown = false
+                }
+                break
+            }
+            case 'spread': {
+                isGrown = true
+                break
+            }
+            default: {
+                return false
+            }
+        }
+
+        if (cropInfo.cropName === 'brown_mushroom' ||
+            cropInfo.cropName === 'red_mushroom') {
+            let nearby = 0
+            let neighbors = 0
+            if (false) {
+                // for (let x = -4; x <= 4; x++) {
+                //     for (let y = -1; y <= 1; y++) {
+                //         for (let z = -4; z <= 4; z++) {
+                //             const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                //             if (!other || other.name !== cropInfo.cropName) { continue }
+                //             if (bruh.find(v => v.equals(other.position))) { continue }
+                //             nearby++
+                //             if (isDirectNeighbor(block.position, other.position)) {
+                //                 neighbors++
+                //             }
+                //         }
+                //     }
+                // }
+            } else {
+                for (let x = -1; x <= 1; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -1; z <= 1; z++) {
+                            const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                            if (!other || other.name !== cropInfo.cropName) { continue }
+                            if (mushrooms.find(v => v.equals(other.position))) { continue }
+                            if (isDirectNeighbor(block.position, other.position)) {
+                                neighbors++
+                            }
+                        }
+                    }
+                }
+            }
+
+            isGrown = !!neighbors || nearby >= 5
+            mushrooms.push(block.position.clone())
+        }
+
+        if (isGrown) {
+            bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [0, 1, 0])
+        } else {
+            bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [1, 0, 0])
+        }
+
+        return grown === isGrown
+    }
+
+    /**
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} farmPosition
      * @param {boolean} grown
@@ -779,148 +907,40 @@ module.exports = class Environment {
      * @returns {Array<Vec3>}
      */
     getCrops(bot, farmPosition, grown, count = 1, maxDistance = undefined) {
-        const cropBlockIds = []
-        for (const cropName in MC.cropsByBlockName) {
-            const crop = MC.cropsByBlockName[cropName]
-            switch (crop.type) {
-                case 'tree':
-                    cropBlockIds.push(bot.mc.data.blocksByName[crop.log].id)
-                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
-                    break
-                case 'grows_block':
-                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
-                    if (crop.attachedCropName) {
-                        cropBlockIds.push(bot.mc.data.blocksByName[crop.attachedCropName].id)
-                    }
-                    break
-                default:
-                    cropBlockIds.push(bot.mc.data.blocksByName[cropName].id)
-                    break
-            }
-        }
-
         /**
          * @type {Array<Vec3>}
          */
-        const bruh = []
+        const mushrooms = []
 
         return bot.bot.findBlocks({
-            matching: cropBlockIds,
-            useExtraInfo: (/** @type {Block} */ block) => {
-                /** @type {boolean} */
-                let isGrown = false
-                const cropInfo = MC.resolveCrop(block.name)
-                if (!cropInfo) {
-                    console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
-                    return false
-                }
-
-                switch (cropInfo.type) {
-                    case 'seeded':
-                    case 'simple': {
-                        const age = block.getProperties()?.['age']
-                        if (typeof age !== 'number') { return false }
-                        isGrown = age >= cropInfo.grownAge
-                        break
-                    }
-                    case 'grows_block': {
-                        let fruitBlock = null
-                        for (const neighbor of directBlockNeighbors(block.position, 'side')) {
-                            const neighborBlock = bot.bot.blockAt(neighbor)
-                            if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
-                                fruitBlock = neighborBlock
-                                break
-                            }
-                        }
-                        isGrown = !!fruitBlock
-                        break
-                    }
-                    case 'grows_fruit': {
-                        switch (block.name) {
-                            case 'cave_vines':
-                            case 'cave_vines_plant':
-                                const berries = block.getProperties()?.['berries']
-                                if (typeof berries !== 'boolean') { return false }
-                                isGrown = berries
-                                break
-                            case 'sweet_berry_bush':
-                                const age = block.getProperties()?.['age']
-                                if (typeof age !== 'number') { return false }
-                                isGrown = age >= 3
-                                break
-                            default:
-                                console.warn(`Unimplemented fruit crop "${block.name}"`)
-                                return false
-                        }
-                        break
-                    }
-                    case 'tree': {
-                        if (!this.crops.find(v => v.position.equals(block.position))) {
-                            return false
-                        }
-                        if (block.name === cropInfo.log) {
-                            isGrown = true
-                        } else {
-                            isGrown = false
-                        }
-                        break
-                    }
-                    case 'spread': {
-                        isGrown = true
-                        break
-                    }
-                    default: {
-                        return false
-                    }
-                }
-
-                if (cropInfo.cropName === 'brown_mushroom' ||
-                    cropInfo.cropName === 'red_mushroom') {
-                    let nearby = 0
-                    let neighbors = 0
-                    if (false) {
-                        // for (let x = -4; x <= 4; x++) {
-                        //     for (let y = -1; y <= 1; y++) {
-                        //         for (let z = -4; z <= 4; z++) {
-                        //             const other = bot.bot.blockAt(block.position.offset(x, y, z))
-                        //             if (!other || other.name !== cropInfo.cropName) { continue }
-                        //             if (bruh.find(v => v.equals(other.position))) { continue }
-                        //             nearby++
-                        //             if (isDirectNeighbor(block.position, other.position)) {
-                        //                 neighbors++
-                        //             }
-                        //         }
-                        //     }
-                        // }
-                    } else {
-                        for (let x = -1; x <= 1; x++) {
-                            for (let y = -1; y <= 1; y++) {
-                                for (let z = -1; z <= 1; z++) {
-                                    const other = bot.bot.blockAt(block.position.offset(x, y, z))
-                                    if (!other || other.name !== cropInfo.cropName) { continue }
-                                    if (bruh.find(v => v.equals(other.position))) { continue }
-                                    if (isDirectNeighbor(block.position, other.position)) {
-                                        neighbors++
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    isGrown = !!neighbors || nearby >= 5
-                    bruh.push(block.position.clone())
-                }
-
-                if (isGrown) {
-                    bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [0, 1, 0])
-                } else {
-                    bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [1, 0, 0])
-                }
-
-                return grown === isGrown
-            },
+            // @ts-ignore
+            matching: bot.mc.cropBlockIds,
+            useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
             count: count,
+            maxDistance: maxDistance,
+        })
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot
+     * @param {Vec3} farmPosition
+     * @param {boolean} grown
+     * @param {number} [maxDistance]
+     * @returns {Block | null}
+     */
+    getCrop(bot, farmPosition, grown, maxDistance = undefined) {
+        /**
+         * @type {Array<Vec3>}
+         */
+        const mushrooms = []
+
+        return bot.bot.findBlock({
+            // @ts-ignore
+            matching: bot.mc.cropBlockIds,
+            useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
+            point: farmPosition,
+            count: 1,
             maxDistance: maxDistance,
         })
     }
@@ -935,7 +955,7 @@ module.exports = class Environment {
      *   evenIfFull?: boolean;
      *   minLifetime?: number;
      * }} args
-     * @returns {import('./result').Result<import("prismarine-entity").Entity>}
+     * @returns {import("prismarine-entity").Entity | null}
      */
     getClosestItem(bot, filter, args = {}) {
         if (!args) { args = {} }
@@ -959,12 +979,12 @@ module.exports = class Environment {
             }
             return true
         })
-        if (!nearestEntity) { return { error: `No items found` } }
+        if (!nearestEntity) { return null }
 
         const distance = nearestEntity.position.distanceTo(args.point)
-        if (distance > args.maxDistance) { return { error: `No items nearby` } }
+        if (distance > args.maxDistance) { return null }
 
-        return { result: nearestEntity }
+        return nearestEntity
     }
 
     /**
@@ -1265,5 +1285,93 @@ module.exports = class Environment {
             locks.push(lock)
         }
         return locks
+    }
+
+    /**
+     * @param {Vec3} position
+     */
+    blockAt(position) {
+        for (const bot of this.bots) {
+            const block = bot.bot.blockAt(position)
+            if (block) { return block }
+        }
+        return null
+    }
+
+    /**
+     * @param {{ x: number; y: number; z: number; }} origin
+     * @returns {import("./task").Task<Fencing>}
+     */
+    *scanFencing(origin) {
+        if (!origin) { return { positions: [], mobs: {} } }
+
+        /** @type {Array<{ p: Vec3; v: boolean; }>} */
+        const visited = []
+        /** @type {Array<Vec3>} */
+        const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).rounded()]
+
+        const isEmpty = (/** @type {import("prismarine-block").Block} */ block) => {
+            return (
+                this.bots[0].bot.pathfinder.movements.emptyBlocks.has(block.type) ||
+                this.bots[0].bot.pathfinder.movements.carpets.has(block.type) ||
+                this.bots[0].bot.pathfinder.movements.liquids.has(block.type)
+            )
+        }
+
+        const visit = (/** @type {Vec3} */ p) => {
+            if (!p) { return }
+            const block = this.blockAt(p)
+            if (!block) { return }
+            if (visited.find(other => other.p.equals(p))) { return }
+            const node = { p: p, v: false }
+            visited.push(node)
+            this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 0, 1])
+            if (isEmpty(block)) { return }
+            const above = this.blockAt(p.offset(0, 1, 0))
+            if (!isEmpty(above)) { return }
+            mustVisit.push(p.offset(-1, 0, 0))
+            mustVisit.push(p.offset(1, 0, 0))
+            mustVisit.push(p.offset(0, 0, -1))
+            mustVisit.push(p.offset(0, 0, 1))
+            this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 1, 0])
+            node.v = true
+        }
+
+        while (mustVisit.length > 0) {
+            const n = mustVisit.length
+            for (let i = 0; i < n; i++) {
+                yield
+                visit(mustVisit[i])
+            }
+            mustVisit.splice(0, n)
+        }
+
+        /**
+         * @type {Record<number, import("prismarine-entity").Entity>}
+         */
+        const mobs = {}
+        const fencing = visited.filter(v => v.v).map(v => v.p.offset(0, 1, 0))
+
+        for (const bot of this.bots) {
+            for (const entity of Object.values(bot.bot.entities)) {
+                yield
+                if (!entity.isValid) { continue }
+                let isIncluded = false
+                const entityPosition = entity.position.rounded()
+                for (const fencingPosition of fencing) {
+                    if (fencingPosition.equals(entityPosition)) {
+                        isIncluded = true
+                        break
+                    }
+                }
+                if (!isIncluded) { continue }
+                mobs[entity.id] = entity
+            }
+        }
+
+        return {
+            positions: fencing,
+            mobs: mobs,
+        }
     }
 }

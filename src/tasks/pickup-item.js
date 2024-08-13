@@ -1,16 +1,22 @@
-const goto = require("./goto")
+const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<void, { inAir?: boolean; maxDistance?: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; } | { item: import("prismarine-entity").Entity }>}
+ * @typedef {{ inAir?: boolean; maxDistance?: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; } | { item: import('prismarine-entity').Entity }} Args
+ */
+
+/**
+ * @type {import('../task').TaskDef<void, Args> & { can: (bot: import('../bruh-bot'), args: Args) => boolean; }}
  */
 module.exports = {
     task: function*(bot, args) {
         const nearest = (() => {
             if ('item' in args) { return args.item }
-            const nearest = bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
-            if ('error' in nearest) { throw nearest.error }
-            return nearest.result
+            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
         })()
+
+        if (!nearest) {
+            throw `No items nearby`
+        }
 
         const item = nearest.getDroppedItem()
 
@@ -25,26 +31,8 @@ module.exports = {
         yield* goto.task(bot, {
             point: nearest.position,
             distance: 0,
+            savePathError: true,
         })
-
-        // if (item &&
-        //     this.harvestedSaplings && (
-        //         item.name === 'oak_sapling' ||
-        //         item.name === 'spruce_sapling' ||
-        //         item.name === 'birch_sapling' ||
-        //         item.name === 'jungle_sapling' ||
-        //         item.name === 'acacia_sapling' ||
-        //         // item.name === 'dark_oak_sapling' ||
-        //         item.name === 'mangrove_propagule' ||
-        //         item.name === 'cherry_sapling' ||
-        //         item.name === 'azalea' ||
-        //         item.name === 'flowering_azalea')
-        //     ) {
-        //     this.harvestedSaplings.push({
-        //         position: nearest.result.position.clone(),
-        //         item: item.name,
-        //     })
-        // }
     },
     id: function(args) {
         if ('item' in args) {
@@ -60,4 +48,29 @@ module.exports = {
             return `Picking up items`
         }
     },
+    can: function(bot, args) {
+        const nearest = (() => {
+            if ('item' in args) { return args.item }
+            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
+        })()
+        if (!nearest) { return false }
+
+        const item = nearest.getDroppedItem()
+        if (!item) { return false }
+
+        if (bot.isInventoryFull(item.type)) { return false }
+
+        const goals = goto.getGoal(bot, {
+            point: nearest.position,
+            distance: 0,
+            savePathError: true,
+        })
+
+        for (const goal of goals) {
+            if ('dimension' in goal) { continue }
+            if (bot.memory.isGoalUnreachable(goal)) { return false }
+        }
+
+        return true
+    }
 }

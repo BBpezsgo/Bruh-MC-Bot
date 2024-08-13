@@ -186,7 +186,7 @@ function* doCampfire(bot, campfire, recipe, count) {
 
         yield* sleepG(500)
 
-        if ('result' in bot.env.getClosestItem(bot, null, itemFilter)) {
+        if (bot.env.getClosestItem(bot, null, itemFilter)) {
             console.log(`[Bot: "${bot.username}"] Picking up item`)
             yield* pickupItem.task(bot, itemFilter)
         }

@@ -2,6 +2,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const Vec3Dimension = require('./vec3-dimension')
+const { goals } = require('mineflayer-pathfinder')
 
 // @ts-ignore
 module.exports = class Memory {
@@ -46,6 +47,15 @@ module.exports = class Memory {
     myArrows
 
     /**
+     * @private @readonly
+     * @type {Array<{
+     *   goal: goals.Goal;
+     *   time: number;
+     * }>}
+     */
+    _unreachableGoals
+
+    /**
      * @param {import('./bruh-bot')} bot
      * @param {string} filePath
      */
@@ -69,6 +79,8 @@ module.exports = class Memory {
         this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
+        this._unreachableGoals = []
+
         console.log(`[Memory] Loaded`)
     }
 
@@ -82,5 +94,35 @@ module.exports = class Memory {
             mlgJunkBlocks: this.mlgJunkBlocks,
             myArrows: this.myArrows,
         }, replacer, ' '))
+    }
+
+    /**
+     * @param {goals.Goal} goal
+     */
+    theGoalIsUnreachable(goal) {
+        this._unreachableGoals.push({
+            goal: goal,
+            time: performance.now(),
+        })
+    }
+
+    /**
+     * @param {goals.Goal} goal
+     */
+    isGoalUnreachable(goal) {
+        for (let i = this._unreachableGoals.length - 1; i > 0; i--) {
+            if ((performance.now() - this._unreachableGoals[i].time) > 30000) {
+                this._unreachableGoals.splice(i, 1)
+            }
+        }
+
+        const jsonA = JSON.stringify(goal)
+        for (const unreachableGoal of this._unreachableGoals) {
+            const jsonB = JSON.stringify(unreachableGoal.goal)
+            if (jsonA === jsonB) {
+                return true
+            }
+        }
+        return false
     }
 }

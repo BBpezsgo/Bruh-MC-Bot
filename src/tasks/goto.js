@@ -80,9 +80,18 @@ class GoalHawkeye extends goals.Goal {
 
 /**
  * @exports @typedef {{
+ *   goal: goals.Goal;
+ *   options: GeneralArgs;
+ * }} GoalArgs
+ */
+
+/**
+ * @exports @typedef {{
  *   timeout?: number;
  *   searchRadius?: number;
  *   movements?: Readonly<Movements>;
+ *   savePathError?: boolean;
+ *   sprint?: boolean;
  * }} GeneralArgs
  */
 
@@ -132,30 +141,159 @@ class GoalHawkeye extends goals.Goal {
  */
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'here', (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs, Error>}
+ * @param {import('../bruh-bot')} bot
+ * @param {(GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs} args
+ * @returns {Generator<goals.Goal | GotoDimensionArgs, void, void>}
+ */
+function* getGoal(bot, args) {
+    if ('hawkeye' in args) {
+        yield new GoalHawkeye(args.hawkeye, args.weapon, (from, to, weapon) => {
+            const savedBotPosition = bot.bot.entity.position
+            bot.bot.entity.position = from
+            const masterGrade = bot.bot.hawkEye.getMasterGrade({
+                position: to,
+                isValid: false,
+            }, new Vec3(0, 0, 0), weapon)
+            bot.bot.entity.position = savedBotPosition
+            return masterGrade
+        })
+    } else if ('dimension' in args) {
+        throw new Error(`There is not a concrete goal for traveling between dimensions`)
+    } else if ('point' in args) {
+        if ('dimension' in args.point) {
+            yield { dimension: args.point.dimension }
+        }
+
+        if (!args.ignoreOthers &&
+            bot.env.isDestinationOccupied(bot.username, new Vec3(args.point.x, args.point.y, args.point.z))) {
+            let found = false
+            for (let d = 1; d < 3; d++) {
+                if (found) { break }
+                for (let x = -1; x < 1; x++) {
+                    if (found) { break }
+                    for (let z = -1; z < 1; z++) {
+                        if (found) { break }
+                        const currentDestination = (new Vec3(args.point.x, args.point.y, args.point.z)).translate(x * d, 0, z * d)
+                        if (bot.env.isDestinationOccupied(bot.username, currentDestination)) {
+                            continue
+                        }
+                        if ('dimension' in args.point) {
+                            args.point = new Vec3Dimension(currentDestination, args.point.dimension)
+                        } else {
+                            args.point = currentDestination
+                        }
+                        found = true
+                        break
+                    }
+                }
+            }
+        }
+
+        yield new goals.GoalNear(args.point.x, args.point.y, args.point.z, args.distance ?? 2)
+    } else if ('block' in args) {
+        if ('dimension' in args.block) {
+            yield { dimension: args.block.dimension }
+        }
+
+        // yield new goals.GoalNear(args.block.x, args.block.y, args.block.z, 2)
+        yield new GoalBlockSimple(new Vec3(args.block.x, args.block.y, args.block.z), {
+            reach: args.reach,
+        })
+        // yield new goals.GoalLookAtBlock(args.block.clone(), bot.bot.world, {
+        //     reach: args.reach ? args.reach : 3,
+        // })
+    } else if ('place' in args) {
+        if ('dimension' in args.place) {
+            yield { dimension: args.place.dimension }
+        }
+
+        yield new goals.GoalPlaceBlock(new Vec3(args.place.x, args.place.y, args.place.z), bot.bot.world, {
+            range: 5,
+            LOS: args.LOS ?? false,
+            facing: args.facing,
+            faces: args.faces,
+            // @ts-ignore
+            half: args.half,
+        })
+    } else if ('flee' in args) {
+        yield new goals.GoalInvert(new goals.GoalNear(args.flee.x, args.flee.y, args.flee.z, args.distance))
+    } else {
+        throw `What?`
+    }
+}
+
+/**
+ * @param {import('../bruh-bot')} bot
+ * @param {GeneralArgs} args
+ */
+function setOptions(bot, args) {
+    if (args.timeout !== null && args.timeout !== undefined) {
+        bot.bot.pathfinder.thinkTimeout = args.timeout
+    } else {
+        bot.bot.pathfinder.thinkTimeout = 5000
+    }
+    if (args.searchRadius !== null && args.searchRadius !== undefined) {
+        bot.bot.pathfinder.searchRadius = args.searchRadius
+    } else {
+        bot.bot.pathfinder.searchRadius = -1
+    }
+
+    const originalMovements = args.movements ?? bot.restrictedMovements
+    const newMovements = new Movements(bot.bot)
+
+    newMovements.blocksCanBreakAnyway = originalMovements.blocksCanBreakAnyway
+    newMovements.blocksCantBreak = originalMovements.blocksCantBreak
+    newMovements.blocksToAvoid = originalMovements.blocksToAvoid
+    newMovements.entitiesToAvoid = originalMovements.entitiesToAvoid
+
+    newMovements.carpets = originalMovements.carpets
+    newMovements.climbables = originalMovements.climbables
+    newMovements.emptyBlocks = originalMovements.emptyBlocks
+    newMovements.fences = originalMovements.fences
+    newMovements.gravityBlocks = originalMovements.gravityBlocks
+    newMovements.interactableBlocks = originalMovements.interactableBlocks
+    newMovements.liquids = originalMovements.liquids
+    newMovements.openable = originalMovements.openable
+    newMovements.passableEntities = originalMovements.passableEntities
+    newMovements.replaceables = originalMovements.replaceables
+    newMovements.scafoldingBlocks = originalMovements.scafoldingBlocks
+
+    newMovements.digCost = originalMovements.digCost
+    newMovements.entityCost = originalMovements.entityCost
+    newMovements.liquidCost = originalMovements.liquidCost
+    newMovements.placeCost = originalMovements.placeCost
+
+    newMovements.entityIntersections = originalMovements.entityIntersections
+    newMovements.exclusionAreasBreak = originalMovements.exclusionAreasBreak
+    newMovements.exclusionAreasPlace = originalMovements.exclusionAreasPlace
+    newMovements.exclusionAreasStep = originalMovements.exclusionAreasStep
+
+    newMovements.allow1by1towers = originalMovements.allow1by1towers && !bot.quietMode
+    newMovements.allowEntityDetection = originalMovements.allowEntityDetection
+    newMovements.allowFreeMotion = originalMovements.allowFreeMotion
+    newMovements.allowParkour = originalMovements.allowParkour
+    newMovements.allowSprinting = originalMovements.allowSprinting && !bot.quietMode && args.sprint
+    newMovements.canDig = originalMovements.canDig && !bot.quietMode
+    newMovements.canOpenDoors = originalMovements.canOpenDoors && !bot.quietMode
+    newMovements.dontCreateFlow = originalMovements.dontCreateFlow
+    newMovements.dontMineUnderFallingBlock = originalMovements.dontMineUnderFallingBlock
+    newMovements.infiniteLiquidDropdownDistance = originalMovements.infiniteLiquidDropdownDistance && !bot.quietMode
+    newMovements.maxDropDown = originalMovements.maxDropDown
+    newMovements.sneak = originalMovements.sneak || bot.quietMode
+
+    bot.bot.pathfinder.setMovements(newMovements)
+    bot.bot.pathfinder.tickTimeout = 10
+}
+
+/**
+ * @type {import('../task').TaskDef<'ok' | 'here', ((GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs) | GoalArgs, Error> & { getGoal: getGoal; }}
  */
 module.exports = {
     /**
      * @throws {Error} `NoPath`, `Timeout`, `GoalChanged`, `PathStopped`
      */
     task: function*(bot, args) {
-        /**
-         * @type {goals.Goal | null}
-         */
-        let goal = null
-
-        if ('hawkeye' in args) {
-            goal = new GoalHawkeye(args.hawkeye, args.weapon, (from, to, weapon) => {
-                const savedBotPosition = bot.bot.entity.position
-                bot.bot.entity.position = from
-                const masterGrade = bot.bot.hawkEye.getMasterGrade({
-                    position: to,
-                    isValid: false,
-                }, new Vec3(0, 0, 0), weapon)
-                bot.bot.entity.position = savedBotPosition
-                return masterGrade
-            })
-        } else if ('dimension' in args) {
+        if ('dimension' in args) {
             let remainingTravels = 3
             while (true) {
                 remainingTravels--
@@ -309,132 +447,44 @@ module.exports = {
                     console.warn(error)
                 }
             }
-        } else if ('point' in args) {
-            if ('dimension' in args.point) {
-                yield* this.task(bot, { dimension: args.point.dimension })
+        } else if ('goal' in args) {
+            if (args.goal.isEnd(bot.bot.entity.position)) { return 'here' }
+
+            if (bot.memory.isGoalUnreachable(args.goal)) { throw `If I remember correctly I can't get there` }
+
+            setOptions(bot, args.options)
+
+            if (args.options.savePathError) {
+                try {
+                    yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                } catch (error) {
+                    if (error.name === 'NoPath') {
+                        bot.memory.theGoalIsUnreachable(args.goal)
+                    }
+                    throw error
+                }
+            } else {
+                yield* wrap(bot.bot.pathfinder.goto(args.goal))
             }
 
-            if (!args.ignoreOthers &&
-                bot.env.isDestinationOccupied(bot.username, new Vec3(args.point.x, args.point.y, args.point.z))) {
-                let found = false
-                for (let d = 1; d < 3; d++) {
-                    if (found) { break }
-                    for (let x = -1; x < 1; x++) {
-                        if (found) { break }
-                        for (let z = -1; z < 1; z++) {
-                            if (found) { break }
-                            const currentDestination = (new Vec3(args.point.x, args.point.y, args.point.z)).translate(x * d, 0, z * d)
-                            if (bot.env.isDestinationOccupied(bot.username, currentDestination)) {
-                                continue
-                            }
-                            if ('dimension' in args.point) {
-                                args.point = new Vec3Dimension(currentDestination, args.point.dimension)
-                            } else {
-                                args.point = currentDestination
-                            }
-                            found = true
-                            break
-                        }
-                    }
+            return 'ok'
+        } else {
+            let result
+            const _goals = getGoal(bot, args)
+
+            for (const _goal of _goals) {
+                if ('dimension' in _goal) {
+                    result = yield* this.task(bot, _goal)
+                } else {
+                    result = yield* this.task(bot, {
+                        goal: _goal,
+                        options: args,
+                    })
                 }
             }
-            goal = new goals.GoalNear(args.point.x, args.point.y, args.point.z, args.distance ?? 2)
-        } else if ('block' in args) {
-            if ('dimension' in args.block) {
-                yield* this.task(bot, { dimension: args.block.dimension })
-            }
 
-            // goal = new goals.GoalNear(args.block.x, args.block.y, args.block.z, 2)
-            goal = new GoalBlockSimple(new Vec3(args.block.x, args.block.y, args.block.z), {
-                reach: args.reach,
-            })
-            // goal = new goals.GoalLookAtBlock(args.block.clone(), bot.bot.world, {
-            //     reach: args.reach ? args.reach : 3,
-            // })
-        } else if ('place' in args) {
-            if ('dimension' in args.place) {
-                yield* this.task(bot, { dimension: args.place.dimension })
-            }
-
-            goal = new goals.GoalPlaceBlock(new Vec3(args.place.x, args.place.y, args.place.z), bot.bot.world, {
-                range: 5,
-                LOS: args.LOS ?? false,
-                facing: args.facing,
-                faces: args.faces,
-                // @ts-ignore
-                half: args.half,
-            })
-        } else if ('flee' in args) {
-            goal = new goals.GoalInvert(new goals.GoalNear(args.flee.x, args.flee.y, args.flee.z, args.distance))
+            return result
         }
-
-        if (!goal) {
-            throw `What?`
-        }
-
-        if (goal.isEnd(bot.bot.entity.position.floored())) {
-            return 'here'
-        }
-
-        if (args.timeout !== null && args.timeout !== undefined) {
-            bot.bot.pathfinder.thinkTimeout = args.timeout
-        } else {
-            bot.bot.pathfinder.thinkTimeout = 5000
-        }
-        if (args.searchRadius !== null && args.searchRadius !== undefined) {
-            bot.bot.pathfinder.searchRadius = args.searchRadius
-        } else {
-            bot.bot.pathfinder.searchRadius = -1
-        }
-
-        const originalMovements = args.movements ?? bot.restrictedMovements
-        const newMovements = new Movements(bot.bot)
-
-        newMovements.blocksCanBreakAnyway = originalMovements.blocksCanBreakAnyway
-        newMovements.blocksCantBreak = originalMovements.blocksCantBreak
-        newMovements.blocksToAvoid = originalMovements.blocksToAvoid
-        newMovements.entitiesToAvoid = originalMovements.entitiesToAvoid
-
-        newMovements.carpets = originalMovements.carpets
-        newMovements.climbables = originalMovements.climbables
-        newMovements.emptyBlocks = originalMovements.emptyBlocks
-        newMovements.fences = originalMovements.fences
-        newMovements.gravityBlocks = originalMovements.gravityBlocks
-        newMovements.interactableBlocks = originalMovements.interactableBlocks
-        newMovements.liquids = originalMovements.liquids
-        newMovements.openable = originalMovements.openable
-        newMovements.passableEntities = originalMovements.passableEntities
-        newMovements.replaceables = originalMovements.replaceables
-        newMovements.scafoldingBlocks = originalMovements.scafoldingBlocks
-
-        newMovements.digCost = originalMovements.digCost
-        newMovements.entityCost = originalMovements.entityCost
-        newMovements.liquidCost = originalMovements.liquidCost
-        newMovements.placeCost = originalMovements.placeCost
-
-        newMovements.entityIntersections = originalMovements.entityIntersections
-        newMovements.exclusionAreasBreak = originalMovements.exclusionAreasBreak
-        newMovements.exclusionAreasPlace = originalMovements.exclusionAreasPlace
-        newMovements.exclusionAreasStep = originalMovements.exclusionAreasStep
-
-        newMovements.allow1by1towers = originalMovements.allow1by1towers && !bot.quietMode
-        newMovements.allowEntityDetection = originalMovements.allowEntityDetection
-        newMovements.allowFreeMotion = originalMovements.allowFreeMotion
-        newMovements.allowParkour = originalMovements.allowParkour
-        newMovements.allowSprinting = originalMovements.allowSprinting && !bot.quietMode
-        newMovements.canDig = originalMovements.canDig && !bot.quietMode
-        newMovements.canOpenDoors = originalMovements.canOpenDoors && !bot.quietMode
-        newMovements.dontCreateFlow = originalMovements.dontCreateFlow
-        newMovements.dontMineUnderFallingBlock = originalMovements.dontMineUnderFallingBlock
-        newMovements.infiniteLiquidDropdownDistance = originalMovements.infiniteLiquidDropdownDistance && !bot.quietMode
-        newMovements.maxDropDown = originalMovements.maxDropDown
-        newMovements.sneak = originalMovements.sneak || bot.quietMode
-
-        bot.bot.pathfinder.setMovements(newMovements)
-        bot.bot.pathfinder.tickTimeout = 10
-
-        yield* wrap(bot.bot.pathfinder.goto(goal))
-        return 'ok'
     },
     id: function(args) {
         if ('point' in args) {
@@ -466,4 +516,5 @@ module.exports = {
             return `Goto somewhere`
         }
     },
+    getGoal: getGoal,
 }

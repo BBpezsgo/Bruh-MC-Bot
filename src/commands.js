@@ -1,7 +1,7 @@
 module.exports = class Commands {
     /**
      * @private @readonly
-     * @type {import("mineflayer").Bot}
+     * @type {import('mineflayer').Bot}
      */
     _bot
 
@@ -24,7 +24,7 @@ module.exports = class Commands {
     _waitForResponse
 
     /**
-     * @param {import("mineflayer").Bot} bot
+     * @param {import('mineflayer').Bot} bot
      */
     constructor(bot) {
         this._bot = bot

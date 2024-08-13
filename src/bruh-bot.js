@@ -342,7 +342,7 @@ module.exports = class BruhBot {
         this.env.addBot(this)
 
         this.chatAwaits = []
-        this._quietMode = true
+        this._quietMode = false
         this.userQuiet = false
         this._isLeftHandActive = false
         this._isRightHandActive = false
@@ -555,14 +555,16 @@ module.exports = class BruhBot {
         }
 
         const tick = () => {
-            if (_path) {
-                for (let i = 0; i < _path.path.length; i++) {
-                    this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
+            if (Debug.enabled) {
+                if (_path) {
+                    for (let i = 0; i < _path.path.length; i++) {
+                        this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
+                    }
                 }
+                this.debug.tick()
             }
 
             TextDisplay.tick(this)
-            this.debug.tick()
 
             for (let i = 0; i < 10; i++) {
                 this.commands.tick()
@@ -645,6 +647,7 @@ module.exports = class BruhBot {
                             flee: creeper.position,
                             distance: 8,
                             timeout: 300,
+                            sprint: true,
                         }, priorities.critical)
                         return
                     }
@@ -656,6 +659,7 @@ module.exports = class BruhBot {
                         flee: creeper.position,
                         distance: 8,
                         timeout: 300,
+                        sprint: true,
                     }, priorities.critical)
                     return
                 }
@@ -689,6 +693,7 @@ module.exports = class BruhBot {
                             distance: 0,
                             searchRadius: 3,
                             timeout: 500,
+                            sprint: true,
                         }, priorities.critical - 2)
                     } else {
                         this.tasks.push(this, tasks.goto, {
@@ -696,6 +701,7 @@ module.exports = class BruhBot {
                             distance: 0,
                             searchRadius: 3,
                             timeout: 500,
+                            sprint: true,
                         }, priorities.critical - 2)
                     }
                     break
@@ -721,6 +727,7 @@ module.exports = class BruhBot {
                         distance: 0,
                         searchRadius: 3,
                         timeout: 500,
+                        sprint: true,
                     }, priorities.critical - 1)
                     break
                 }
@@ -920,7 +927,7 @@ module.exports = class BruhBot {
                 }, {}, priorities.cleanup)
             }
 
-            if ('result' in this.env.getClosestItem(this, null, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
+            if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
                 this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 20, minLifetime: 5000 }, priorities.unnecessary)
             }
 
@@ -929,7 +936,7 @@ module.exports = class BruhBot {
             }
 
             if (this.tryAutoHarvestInterval?.is()) {
-                if (this.env.getCrops(this, this.bot.entity.position.clone(), true).length > 0) {
+                if (this.env.getCrop(this, this.bot.entity.position.clone(), true)) {
                     const harvestTask = this.tasks.push(this, tasks.harvest, {}, priorities.unnecessary)
                     if (harvestTask) {
                         harvestTask.wait()
@@ -1210,6 +1217,33 @@ module.exports = class BruhBot {
             command: (sender, message, respond) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
+                        /**
+                         * @type {Array<import('./environment').Fencing>}
+                         */
+                        const fencings = []
+                        const farmAnimals = Object.values(bot.bot.entities)
+                            .filter(v => (
+                                v.name === 'chicken' ||
+                                v.name === 'cow' ||
+                                v.name === 'pig' ||
+                                v.name === 'sheep' ||
+                                v.name === 'turtle'
+                            ))
+                        for (const farmAnimal of farmAnimals) {
+                            yield
+                            if (!farmAnimal.isValid) { continue }
+                            let isAdded = false
+                            for (const fencing of fencings) {
+                                if (fencing.mobs[farmAnimal.id]) {
+                                    isAdded = true
+                                    break
+                                }
+                            }
+                            if (isAdded) { continue }
+                            const fencing = yield* bot.env.scanFencing(farmAnimal.position)
+                            fencings.push(fencing)
+                        }
+                        console.log(fencings)
                     },
                     id: function(args) { return 'test' },
                     humanReadableId: function(args) { return 'test' },
@@ -1617,7 +1651,7 @@ module.exports = class BruhBot {
             match: 'come',
             command: (sender, message, respond) => {
                 const task = this.tasks.push(this, {
-                    /** @type {import('./task').SimpleTaskDef<void, { player: string; }>} */
+                    /** @type {import('./task').SimpleTaskDef<'ok' | 'here', { player: string; }>} */
                     task: function*(bot, args) {
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
@@ -1633,7 +1667,7 @@ module.exports = class BruhBot {
                                 throw `I can't find you`
                             }
                         }
-                        yield* tasks.goto.task(bot, {
+                        return yield* tasks.goto.task(bot, {
                             point: location,
                             distance: 1,
                             timeout: 30000,
@@ -1651,7 +1685,7 @@ module.exports = class BruhBot {
                 if (task) {
                     respond(`Okay`)
                     task.wait()
-                        .then(() => respond(`I'm here`))
+                        .then(result => (result === 'ok') ? respond(`I'm here`) : respond(`I'm already here`))
                         .catch(error => error === 'cancelled' || respond(error))
                 } else {
                     respond(`I'm already coming to you`)

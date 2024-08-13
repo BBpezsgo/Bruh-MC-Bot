@@ -118,7 +118,7 @@ class ManagedTask {
      * @param {import('./task-manager').Priority<TArgs>} priority
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
-     * @param {import("./task").TaskDef<TResult, TArgs, TError>} def
+     * @param {import('./task').TaskDef<TResult, TArgs, TError>} def
      */
     constructor(
         priority,

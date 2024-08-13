@@ -1,9 +1,13 @@
 const { Vec3 } = require('vec3')
 
 const lineMinDistance = 0.8
-const enabled = true
 
 module.exports = class Debug {
+    /**
+     * @readonly
+     */
+    static enabled = false
+
     /**
      * @typedef {[number, number, number]} Color
      */
@@ -33,7 +37,7 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawPoint(position, color) {
-        if (!enabled) { return }
+        if (!Debug.enabled) { return }
         this._pointQueue.push({
             position: position,
             color: color,
@@ -49,7 +53,7 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawBox(position, size, color) {
-        if (!enabled) { return }
+        if (!Debug.enabled) { return }
         const step = 0.5
         for (let x = 0; x <= size.x; x += step) {
             this.drawPoint(position.offset(x, 0, 0), color)
@@ -77,7 +81,7 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawLine(a, b, color) {
-        if (!enabled) { return }
+        if (!Debug.enabled) { return }
         const offset = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z)
         const length = Math.sqrt((offset.x * offset.x) + (offset.y * offset.y) + (offset.z * offset.z))
         offset.normalize()
@@ -91,14 +95,14 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawLines(points, color) {
-        if (!enabled) { return }
+        if (!Debug.enabled) { return }
         for (let i = 1; i < points.length; i++) {
             this.drawLine(points[i - 1], points[i], color)
         }
     }
 
     tick() {
-        if (!enabled) { return }
+        if (!Debug.enabled) { return }
         const n = Math.min(10, this._pointQueue.length)
         for (let i = 0; i < n; i++) {
             const point = this._pointQueue.shift()

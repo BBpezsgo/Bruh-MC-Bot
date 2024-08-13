@@ -1,6 +1,6 @@
-const { Vec3 } = require("vec3")
+const { Vec3 } = require('vec3')
 const { sleepG } = require('../utils/tasks')
-const goto = require("./goto")
+const goto = require('./goto')
 
 /**
  * @type {import('../task').TaskDef<void, { maxDistance?: number; point?: Vec3; }>}

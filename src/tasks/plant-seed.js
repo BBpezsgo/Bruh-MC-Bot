@@ -11,7 +11,7 @@ const Vec3Dimension = require('../vec3-dimension')
  * @param {import('../bruh-bot')} bot
  * @param {Block} placeOn
  * @param {Vec3} placeVector
- * @param {import("prismarine-item").Item} seedItem
+ * @param {import('prismarine-item').Item} seedItem
  */
 function* plant(bot, placeOn, placeVector, seedItem) {
     const above = bot.bot.blockAt(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
