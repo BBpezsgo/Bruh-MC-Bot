@@ -56,6 +56,12 @@ module.exports = class Memory {
     _unreachableGoals
 
     /**
+     * @readonly
+     * @type {Record<string, { lastTime: number; successCount: number; }>}
+     */
+    successfulGatherings
+
+    /**
      * @param {import('./bruh-bot')} bot
      * @param {string} filePath
      */
@@ -68,6 +74,8 @@ module.exports = class Memory {
         this.mlgJunkBlocks = []
         this.myArrows = []
         this.hurtBy = {}
+        this.successfulGatherings = {}
+        this._unreachableGoals = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Memory] File not found at "${this.filePath}"`)
@@ -79,7 +87,7 @@ module.exports = class Memory {
         this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
-        this._unreachableGoals = []
+        this.successfulGatherings = data.successfulGatherings ?? this.successfulGatherings
 
         console.log(`[Memory] Loaded`)
     }
@@ -93,6 +101,7 @@ module.exports = class Memory {
             myChests: this.myChests,
             mlgJunkBlocks: this.mlgJunkBlocks,
             myArrows: this.myArrows,
+            successfulGatherings: this.successfulGatherings,
         }, replacer, ' '))
     }
 

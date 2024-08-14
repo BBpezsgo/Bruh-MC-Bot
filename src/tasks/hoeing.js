@@ -33,6 +33,23 @@ module.exports = {
         ]
         let n = 0
 
+        {
+            let hasHoe = false
+            for (const hoe of hoes) {
+                const hoeItem = bot.searchItem(bot.mc.data.items[hoe].name)
+                if (hoeItem) {
+                    hasHoe = true
+                    break
+                } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoe) {
+                    hasHoe = true
+                    break
+                }
+            }
+            if (!hasHoe) {
+                throw `I don't have a hoe`
+            }
+        }
+
         const equipHoe = function*() {
             for (const hoe of hoes) {
                 const hoeItem = bot.searchItem(bot.mc.data.items[hoe].name)

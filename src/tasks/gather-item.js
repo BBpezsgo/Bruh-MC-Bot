@@ -87,7 +87,6 @@ const giveTo = require('./give-to')
  * @typedef {{
  *   depth: number;
  *   recursiveItems: Array<string>;
- *   cachedPlans: Record<string, ReadonlyArray<PlanStep>>;
  * }} PlanningContext
  */
 
@@ -379,14 +378,41 @@ const planners = [
 
         const recipes = bot.bot.recipesAll(bot.mc.data.itemsByName[item].id, null, true)
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
+        const scoredRecipes = recipes.map(v => {
+            let score = 0
+            for (const delta of v.delta) {
+                if (delta.count > 0) { continue }
+                const item = bot.mc.data.items[delta.id].name
+                const successfulGathering = bot.memory.successfulGatherings[item]
+                if (!successfulGathering) { continue }
+                // if ((Date.now() - successfulGathering.lastTime) > 120_000) {
+                //     delete bot.memory.successfulGatherings[item]
+                //     continue
+                // }
+                score += successfulGathering.successCount
+            }
+            return {
+                ...v,
+                score: score,
+            }
+        })
+        yield
+        scoredRecipes.sort((a, b) => b.score - a.score)
+        yield
+        const previousSuccessfulRecipes = scoredRecipes.filter(v => v.score)
+        yield
+        const previousUnsuccessfulRecipes = scoredRecipes.filter(v => !v.score)
+        yield
         /**
          * @type {{ plan: Array<ReadonlyArray<PlanStep>>; recipe: Recipe; } | null}
          */
         let bestRecipe = null
-        let bestRecipeCost = 9999999
-        for (const recipe of recipes) {
-            yield
-            let notGood = false
+        let bestRecipeCost = Infinity
+
+        /**
+         * @param {scoredRecipes[0]} recipe
+         */
+        const visitRecipe = function*(recipe) {
             /**
              * @type {Array<ReadonlyArray<PlanStep>>}
              */
@@ -404,20 +430,15 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
-                    cachedPlans: context.cachedPlans,
                 })
-                context.cachedPlans[`${ingredient.id}-${ingredientCount}`] = subplan.flat()
                 const subplanResult = planResult(subplan, bot.mc.data.items[ingredient.id].name)
                 if (subplanResult < ingredientCount) {
-                    notGood = true
-                    break
+                    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
+                    return null
                 }
                 ingredientPlans.push(subplan.flat())
             }
-            if (notGood) {
-                if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
-                continue
-            }
+
             /**
              * @type {Array<ReadonlyArray<PlanStep>>}
              */
@@ -427,12 +448,26 @@ const planners = [
                 multipliedIngredientPaths.push(...ingredientPlans)
             }
             const thisPlanCost = normalizePlanCost(planCost(multipliedIngredientPaths))
-            if (!bestRecipe || bestRecipeCost > thisPlanCost) {
+            if (thisPlanCost < bestRecipeCost) {
                 bestRecipe = {
                     plan: multipliedIngredientPaths,
                     recipe: recipe,
                 }
                 bestRecipeCost = thisPlanCost
+            }
+
+            return ingredientPlans
+        }
+
+        for (const recipe of previousSuccessfulRecipes) {
+            yield
+            yield* visitRecipe(recipe)
+        }
+
+        if (!bestRecipe) {
+            for (const recipe of previousUnsuccessfulRecipes) {
+                yield
+                yield* visitRecipe(recipe)
             }
         }
 
@@ -464,9 +499,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
-                    cachedPlans: context.cachedPlans,
                 })
-                context.cachedPlans[`${'crafting_table'}-${1}`] = tablePlan.flat()
                 if (planResult(tablePlan, 'crafting_table') <= 0) {
                     if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Can't gather crafting table, recipe is not good`)
                     bestRecipe = null
@@ -480,6 +513,8 @@ const planners = [
                 })
             }
         }
+
+        if (!bestRecipe) { return null }
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Recipe found`)
 
@@ -510,7 +545,6 @@ const planners = [
                     ...permissions,
                     force: false,
                 }, {
-                    cachedPlans: context.cachedPlans,
                     depth: context.depth + 1,
                     recursiveItems: [
                         ...context.recursiveItems,
@@ -523,7 +557,6 @@ const planners = [
                     ...permissions,
                     force: false,
                 }, {
-                    cachedPlans: context.cachedPlans,
                     depth: context.depth + 1,
                     recursiveItems: [
                         ...context.recursiveItems,
@@ -605,11 +638,6 @@ const planners = [
  * @returns {import('../task').Task<Plan>}
  */
 function* plan(bot, item, count, permissions, context) {
-    const cachedPlan = context.cachedPlans[`${item}-${count}`]
-    if (context.cachedPlans[`${item}-${count}`]) {
-        return cachedPlan
-    }
-
     const _depthPrefix = ' '.repeat(context.depth)
     if (context.recursiveItems.includes(item)) {
         if (planningLogs) console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
@@ -652,6 +680,23 @@ function* plan(bot, item, count, permissions, context) {
         }
         if (!bestPlan) { break }
         result.push(bestPlan)
+    }
+
+    if (count &&
+        (planResult(result, item) >= count) &&
+        !result.flat().find(v => v.type === 'request-from-anyone')) {
+        const existing = bot.memory.successfulGatherings[item]
+        if (existing) {
+            bot.memory.successfulGatherings[item].lastTime = Date.now()
+            bot.memory.successfulGatherings[item].successCount++
+        } else {
+            bot.memory.successfulGatherings[item] = {
+                lastTime: Date.now(),
+                successCount: 1,
+            }
+        }
+    } else {
+        // delete bot.memory.successfulGatherings[item]
     }
 
     return result
@@ -1041,33 +1086,64 @@ const def = {
         if (typeof args.item === 'string') args.item = [args.item]
 
         /**
-         * @type {Array<{ item: string; plan: Plan; planCost: number; planResult: number; }>}
+         * @type {{ item: string; plan: Plan; planCost: number; planResult: number; } | null}
          */
-        const itemsAndPlans = []
+        let bestPlan = null
 
-        for (const item of args.item) {
+        /**
+         * @param {string} item
+         */
+        const visitItem = function*(item) {
             const itemPlan = yield* plan(bot, item, args.count, args, {
                 depth: 0,
                 recursiveItems: [],
-                cachedPlans: {},
             })
-            itemsAndPlans.push({
+            const _itemPlan = {
                 item: item,
                 plan: itemPlan,
                 planCost: normalizePlanCost(planCost(itemPlan)),
                 planResult: planResult(itemPlan, item),
-            })
+            }
+            if (!bestPlan) {
+                bestPlan = _itemPlan
+                return
+            }
+            if (!_itemPlan.planResult) { return }
+            const bestIsGood = bestPlan.planResult >= args.count
+            const currentIsGood = _itemPlan.planResult >= args.count
+            if (bestIsGood && !currentIsGood) { return }
+            if (!bestIsGood && currentIsGood) {
+                bestPlan = _itemPlan
+                return
+            }
+            if (_itemPlan.planCost < bestPlan.planCost) {
+                bestPlan = _itemPlan
+                return
+            }
         }
 
-        itemsAndPlans.sort((a, b) => {
-            const aGood = a.planResult >= args.count
-            const bGood = b.planResult >= args.count
-            if (aGood && !bGood) { return -1 }
-            if (!aGood && bGood) { return 1 }
-            return a.planCost - b.planCost
-        })
+        const scoredItems = args.item.map(v => ({
+            item: v,
+            score: bot.memory.successfulGatherings[v]?.successCount ?? 0,
+        }))
+        yield
+        scoredItems.sort((a, b) => (b.score - a.score))
+        yield
+        const lastSuccessfulItems = scoredItems.filter(v => v.score)
+        yield
+        const lastFailedItems = scoredItems.filter(v => !v.score)
 
-        const bestPlan = itemsAndPlans[0]
+        for (const item of lastSuccessfulItems) {
+            yield* visitItem(item.item)
+        }
+
+        if (!bestPlan || (bestPlan.planResult < args.count)) {
+            for (const item of lastFailedItems) {
+                yield* visitItem(item.item)
+            }
+        }
+
+        yield
 
         const _organizedPlan = organizePlan(bestPlan.plan)
         const _planResult = planResult(_organizedPlan, bestPlan.item)
@@ -1084,21 +1160,31 @@ const def = {
             let builder = ''
             const future = new PredictedEnvironment(_organizedPlan, bot.mc.data)
 
-            builder += 'Inventory:\n'
+            let inventoryBuilder = ''
             for (const name in future.inventory) {
                 const delta = future.inventory[name]
-                builder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
             }
-            builder += 'Chests:\n'
+            if (inventoryBuilder) {
+                builder += 'Inventory:\n'
+                builder += inventoryBuilder
+            }
+            
+            let chestsBuilder = ''
             for (const position in future.chests) {
                 /** @type {Record<string, number>} */ // @ts-ignore
                 const chest = future.chests[position]
-                builder += `  at ${position}`
+                chestsBuilder += `  at ${position}`
                 for (const name in chest) {
                     const delta = chest[name]
-                    builder += `    ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                    chestsBuilder += `    ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
                 }
             }
+            if (chestsBuilder) {
+                builder += 'Chests:\n'
+                builder += chestsBuilder
+            }
+
             console.log(builder)
         }
         yield* evaluatePlan(bot, _organizedPlan)

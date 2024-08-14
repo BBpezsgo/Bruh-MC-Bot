@@ -541,9 +541,9 @@ module.exports = class BruhBot {
             // console.log(`[Bot "${this.username}"] Defend against ${hazard.name}`)
             if (!this.defendMyselfGoal || (
                 this.defendMyselfGoal.status !== 'running' &&
-                this.defendMyselfGoal.status !== 'queued' ) ||
+                this.defendMyselfGoal.status !== 'queued') ||
                 !this.tasks.has(this.defendMyselfGoal.id)) {
-                    console.log(`[Bot "${this.username}"] New attack task`)
+                console.log(`[Bot "${this.username}"] New attack task`)
                 this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
                     targets: { [hazard.id]: hazard },
                     useBow: true,
@@ -781,8 +781,7 @@ module.exports = class BruhBot {
 
                 if (distance > _hostile.rangeOfSight) { return false }
 
-                if (false)
-                {
+                if (false) {
                     const myPosition = this.bot.entity.position.offset(0, 1.6, 0)
                     const entityPosition = v.position.offset(0, v.height ?? 0.5, 0)
 
@@ -837,7 +836,7 @@ module.exports = class BruhBot {
                                 canAttack = false
                             }
                             if (!canAttack) {
-                                console.warn(`Can't attack ${by}`)
+                                console.warn(`Can't attack ${entity.name}`)
                                 delete this.memory.hurtBy[by]
                             } else if (entity.position.distanceTo(this.bot.entity.position) < 4) {
                                 this.bot.attack(entity)
@@ -1315,15 +1314,22 @@ module.exports = class BruhBot {
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /get\W+([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
+                let items
                 const itemName = message[1]
-                let item = this.mc.data.itemsByName[itemName.toLowerCase()]
-                if (!item) {
-                    item = this.mc.data.itemsArray.find(v => v.displayName.toLowerCase() === itemName.toLowerCase())
+                if (itemName === 'food') {
+                    items = this.mc.getGoodFoods(false).map(v => v.name)
+                } else {
+                    let item = this.mc.data.itemsByName[itemName.toLowerCase()]
+                    if (!item) {
+                        item = this.mc.data.itemsArray.find(v => v.displayName.toLowerCase() === itemName.toLowerCase())
+                    }
+                    if (!item) {
+                        respond(`I don't know what ${itemName} is`)
+                        return
+                    }
+                    items = [item.name]
                 }
-                if (!item) {
-                    respond(`I don't know what ${itemName} is`)
-                    return
-                }
+
                 this.tasks.push(this, tasks.gatherItem, {
                     canCraft: true,
                     canDig: false,
@@ -1331,7 +1337,7 @@ module.exports = class BruhBot {
                     canUseChests: true,
                     canUseInventory: true,
                     count: 1,
-                    item: item.name,
+                    item: items,
                     onStatusMessage: respond,
                     canRequestFromPlayers: false,
                 }, priorities.user)
@@ -1356,7 +1362,6 @@ module.exports = class BruhBot {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
                         const plan = yield* tasks.gatherItem.plan(bot, args.item, args.count, args, {
-                            cachedPlans: {},
                             depth: 0,
                             recursiveItems: [],
                         })
