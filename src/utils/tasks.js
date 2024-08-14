@@ -99,6 +99,74 @@ function* finished(result) {
     return result
 }
 
+/**
+ * @param {ReadonlyArray<import('../task').Task<any>>} tasks
+ * @returns {import('../task').Task<Array<any>>}
+ */
+function* parallelAll(...tasks) {
+    /**
+     * @type {ReadonlyArray<{
+     *   task: import('../task').Task<any>;
+     *   value: IteratorResult<any, any> | null;
+     * }>}
+     */
+    const context = tasks.map(v => ({
+        task: v,
+        value: null,
+    }))
+    while (true) {
+        yield
+        let isDone = true
+        for (const item of context) {
+            if (item.value?.done) { continue }
+            isDone = false
+            item.value = item.task.next()
+        }
+        if (isDone) { break }
+    }
+    return context.map(v => v.value.value)
+}
+
+/**
+ * @template T
+ * @typedef {{
+ *   task: import('../task').Task<T>;
+ *   callback: (result: T) => void;
+ * }} TaskInParallel
+ */
+
+/**
+ * @param {ReadonlyArray<TaskInParallel<any>>} tasks
+ * @returns {import('../task').Task<void>}
+ */
+function* parallel(tasks) {
+    /**
+     * @type {ReadonlyArray<{
+     *   task: import('../task').Task<any>;
+     *   value: IteratorResult<any, any> | null;
+     *   callback: (result: any) => void;
+     * }>}
+     */
+    const context = tasks.map(v => ({
+        task: v.task,
+        callback: v.callback,
+        value: null,
+    }))
+    while (true) {
+        yield
+        let isDone = true
+        for (const item of context) {
+            if (item.value?.done) { continue }
+            isDone = false
+            item.value = item.task.next()
+            if (item.value.done) {
+                item.callback(item.value.value)
+            }
+        }
+        if (isDone) { break }
+    }
+}
+
 module.exports = {
     sleepG,
     sleep,
@@ -107,4 +175,6 @@ module.exports = {
     finished,
     waitForEvent,
     sleepTicks,
+    parallelAll,
+    parallel,
 }

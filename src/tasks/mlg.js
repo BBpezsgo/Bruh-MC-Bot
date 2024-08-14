@@ -28,7 +28,7 @@ module.exports = {
         if (neighbor &&
             bot.mc.data2.mlg.vehicles.includes(neighbor.name) &&
             bot.bot.entity.position.distanceTo(neighbor.position) < 6) {
-            console.log(`[Bot "${bot.username}"] MLG: Mounting "${neighbor.name}" ...`)
+            console.log(`[Bot "${bot.username}"] [MLG] Mounting "${neighbor.name}" ...`)
             bot.bot.mount(neighbor)
             didMLG = true
             yield* sleepG(100)
@@ -58,11 +58,11 @@ module.exports = {
                 }
     
                 if (!haveMlgItem) {
-                    console.warn(`[Bot "${bot.username}"] MLG: No suitable item found`)
+                    console.warn(`[Bot "${bot.username}"] [MLG] No suitable item found`)
                     return 'failed'
                 }
     
-                console.log(`[Bot "${bot.username}"] MLG: Will use ${bot.bot.heldItem?.name ?? 'null'} ...`)
+                console.log(`[Bot "${bot.username}"] [MLG] Will use ${bot.bot.heldItem?.name ?? 'null'} ...`)
     
                 yield* wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
 
@@ -70,7 +70,7 @@ module.exports = {
 
                 const reference = bot.bot.blockAtCursor()
                 if (!reference) {
-                    console.warn(`[Bot "${bot.username}"] MLG: No reference block`)
+                    console.warn(`[Bot "${bot.username}"] [MLG] No reference block`)
                     return 'failed'
                 }
 
@@ -79,19 +79,19 @@ module.exports = {
                 }
 
                 if (!bot.bot.heldItem) {
-                    console.warn(`[Bot "${bot.username}"] MLG: Not holding anything`)
+                    console.warn(`[Bot "${bot.username}"] [MLG] Not holding anything`)
                     return 'failed'
                 }
                 
                 if (bot.bot.heldItem.name === 'bucket') {
-                    console.warn(`[Bot "${bot.username}"] MLG: This is a bucket`)
+                    console.warn(`[Bot "${bot.username}"] [MLG] This is a bucket`)
                     return 'failed'
                 }
     
-                console.log(`[Bot "${bot.username}"] MLG: Using "${bot.bot.heldItem.name ?? 'null'}" ...`)
+                console.log(`[Bot "${bot.username}"] [MLG] Using "${bot.bot.heldItem.name ?? 'null'}" ...`)
     
                 if (bot.bot.heldItem.name === 'water_bucket') {
-                    console.log(`[Bot "${bot.username}"] MLG: Placing water ...`)
+                    console.log(`[Bot "${bot.username}"] [MLG] Placing water ...`)
                     bot.bot.activateItem(false)
                     didMLG = true
     
@@ -99,27 +99,27 @@ module.exports = {
                     
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
                     if (junkBlock) {
-                        console.log(`[Bot "${bot.username}"] MLG: Junk water saved`)
+                        console.log(`[Bot "${bot.username}"] [MLG] Junk water saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'water',
                             position: new Vec3Dimension(junkBlock.position, bot.dimension),
                         })
                     } else {
-                        console.log(`[Bot "${bot.username}"] MLG: Possible junk water saved`)
+                        console.log(`[Bot "${bot.username}"] [MLG] Possible junk water saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'water',
                             position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
                         })
                     }
                 } else if (bot.mc.data2.mlg.boats.includes(bot.bot.heldItem.name)) {
-                    console.log(`[Bot "${bot.username}"] MLG: Activating item ...`)
+                    console.log(`[Bot "${bot.username}"] [MLG] Activating item ...`)
                     bot.bot.activateItem()
     
                     yield* sleepTicks(2)
     
                     const junkBoat = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.name === 'boat')
                     if (junkBoat) {
-                        console.log(`[Bot "${bot.username}"] MLG: Junk boat saved`)
+                        console.log(`[Bot "${bot.username}"] [MLG] Junk boat saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'boat',
                             id: junkBoat.id,
@@ -127,7 +127,7 @@ module.exports = {
                         })
                     }
                 } else {
-                    console.log(`[Bot "${bot.username}"] MLG: Placing block ...`)
+                    console.log(`[Bot "${bot.username}"] [MLG] Placing block ...`)
                     yield* wrap(bot.bot.placeBlock(reference, new Vec3(0, 1, 0)))
                     didMLG = true
     
@@ -135,14 +135,14 @@ module.exports = {
                     
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
                     if (junkBlock) {
-                        console.log(`[Bot "${bot.username}"] MLG: Junk block saved`)
+                        console.log(`[Bot "${bot.username}"] [MLG] Junk block saved`)
                         bot.memory.mlgJunkBlocks.push({
                             type: 'block',
                             blockName: junkBlock.name,
                             position: new Vec3Dimension(junkBlock.position, bot.dimension),
                         })
                     } else {
-                        console.warn(`[Bot "${bot.username}"] MLG: No junk block saved`)
+                        console.warn(`[Bot "${bot.username}"] [MLG] No junk block saved`)
                     }
                 }
             } catch (error) {

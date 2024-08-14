@@ -7,6 +7,8 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
+const { parseYesNoH, parseLocationH, toArray, Interval } = require('../utils/other')
+const giveTo = require('./give-to')
 
 /**
  * @typedef {PermissionArgs & {
@@ -26,6 +28,7 @@ const bundle = require('../utils/bundle')
 *   canKill: boolean;
 *   canCraft: boolean;
 *   canUseChests: boolean;
+*   canRequestFromPlayers: boolean;
 * }} PermissionArgs
 */
 
@@ -56,6 +59,10 @@ const bundle = require('../utils/bundle')
  *   count: number;
  * } | {
  *   type: 'bundle-out';
+ *   item: string;
+ *   count: number;
+ * } | {
+ *   type: 'request-from-anyone';
  *   item: string;
  *   count: number;
  * }} PlanStep
@@ -206,6 +213,10 @@ function planCost(plan) {
                     cost.other += 10
                     break
                 }
+                case 'request-from-anyone': {
+                    cost.other += 1000
+                    break
+                }
                 default:
                     break
             }
@@ -239,6 +250,11 @@ function planResult(plan, item) {
                     if (lock.item !== item) { continue }
                     count += lock.count
                 }
+                continue
+            }
+            if (step.type === 'request-from-anyone' &&
+                step.item === item) {
+                count += step.count
                 continue
             }
             if (step.type === 'bundle-out' &&
@@ -567,6 +583,17 @@ const planners = [
             count: items[0].count,
         }
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        // const _depthPrefix = ' '.repeat(context.depth)
+
+        if (!permissions.canRequestFromPlayers) { return null }
+
+        return {
+            type: 'request-from-anyone',
+            item: item,
+            count: count,
+        }
+    },
 ]
 
 /**
@@ -707,7 +734,7 @@ function* evaluatePlan(bot, plan) {
                                 throw `I have no crafting table`
                             }
                             yield* placeBlock.task(bot, {
-                                item: tableItem.type,
+                                item: tableItem.name,
                                 clearGrass: true,
                             })
                             tableBlock = bot.bot.findBlock({
@@ -778,6 +805,120 @@ function* evaluatePlan(bot, plan) {
 
                     continue
                 }
+                case 'request-from-anyone': {
+                    let requestPlayer
+                    let response
+                    try {
+                        const _response = yield* bot.ask(
+                            (step.count === 1) ?
+                                `Can someone give me a ${step.item}?` :
+                                `Can someone give me ${step.count} ${step.item}?`,
+                            bot.bot.chat,
+                            null,
+                            30000)
+                        response = parseYesNoH(_response.message)
+                        requestPlayer = _response.sender
+                    } catch (error) {
+                        throw `:(`
+                    }
+                    if (!response) { throw `:(` }
+
+                    bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${step.item}`)
+
+                    let location = bot.env.getPlayerPosition(requestPlayer, 10000)
+                    if (!location) {
+                        try {
+                            const response = yield* bot.ask(`Where are you?`, v => bot.bot.whisper(requestPlayer, v), requestPlayer, 30000)
+                            location = parseLocationH(response.message)
+                        } catch (error) {
+
+                        }
+                        if (location) {
+                            bot.bot.whisper(requestPlayer, `${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
+                        } else {
+                            throw `I can't find you`
+                        }
+                    }
+
+                    yield* goto.task(bot, {
+                        point: location,
+                        distance: 1,
+                        timeout: 30000,
+                    })
+
+                    bot.bot.whisper(requestPlayer, `Please give me ${step.count} ${step.item}`)
+
+                    /** @type {Record<string, number>} */
+                    const originalItems = {}
+                    toArray(bot.items()).forEach(item => {
+                        originalItems[item.name] ??= 0
+                        originalItems[item.name] += item.count
+                    })
+
+                    const interval = new Interval(20000)
+                    const timeout = new Interval(60000)
+
+                    while (true) {
+                        yield* sleepG(100)
+                        /** @type {Record<string, number>} */
+                        const newItems = {}
+                        toArray(bot.items()).forEach(item => {
+                            newItems[item.name] ??= 0
+                            newItems[item.name] += item.count
+                        })
+
+                        /** @type {Record<string, number>} */
+                        const delta = { ...newItems }
+                        for (const key in originalItems) {
+                            delta[key] ??= 0
+                            delta[key] -= originalItems[key]
+                            if (delta[key] === 0) { delete delta[key] }
+                        }
+                        let done = false
+                        for (const key in delta) {
+                            if (key === step.item &&
+                                delta[key] >= step.count) {
+                                done = true
+                                if (delta[key] > step.count) {
+                                    bot.bot.whisper(requestPlayer, `Too much`)
+                                    yield* giveTo.task(bot, {
+                                        player: requestPlayer,
+                                        items: [{ name: key, count: step.count - delta[key] }],
+                                    })
+                                }
+                            } else if (delta[key] > 0) {
+                                bot.bot.whisper(requestPlayer, `This aint a ${step.item}`)
+                                yield* giveTo.task(bot, {
+                                    player: requestPlayer,
+                                    items: [{ name: key, count: delta[key] }],
+                                })
+                            }
+                        }
+
+                        if (done) {
+                            bot.bot.whisper(requestPlayer, `Thanks`)
+                            break
+                        }
+
+                        if (timeout.is()) {
+                            for (const key in delta) {
+                                if (delta[key] > 0) {
+                                    yield* giveTo.task(bot, {
+                                        player: requestPlayer,
+                                        items: [{ name: key, count: delta[key] }],
+                                    })
+                                }
+                            }
+                            throw `${requestPlayer} didn't give me ${step.count} ${step.item}`
+                        }
+
+                        if (interval.is()) {
+                            bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta[step.item] ?? 0)} ${step.item}`)
+                        }
+                    }
+
+                    continue
+                }
 
                 default: debugger
             }
@@ -843,6 +984,10 @@ function stringifyPlan(bot, plan) {
                 builder += `I have a bundle with ${step.count} ${step.item} in it\n`
                 break
             }
+            case 'request-from-anyone': {
+                builder += `Request ${step.count} ${step.item} from anyone\n`
+                break
+            }
             default: {
                 builder += `<unknown>\n`
                 break
@@ -866,11 +1011,13 @@ function organizePlan(plan) {
             result.push(...step)
         }
     }
+    const userRequestSteps = result.filter(v => v.type === 'smelt')
     const inventorySteps = result.filter(v => v.type === 'inventory')
     const chestSteps = result.filter(v => v.type === 'chest')
     const requestSteps = result.filter(v => v.type === 'request')
     const otherSteps = result.filter(v => (v.type !== 'inventory') && (v.type !== 'chest') && (v.type !== 'request'))
     return [
+        ...userRequestSteps,
         ...inventorySteps,
         ...chestSteps,
         ...requestSteps,

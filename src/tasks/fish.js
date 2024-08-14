@@ -67,7 +67,7 @@ module.exports = {
                     throw `No`
                 }
 
-                bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
+                // bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
 
                 if (grade.blockInTrayect) {
                     throw `Block ${grade.blockInTrayect.displayName} is in the way`

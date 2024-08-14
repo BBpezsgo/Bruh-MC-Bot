@@ -153,7 +153,6 @@ module.exports = class TextDisplay {
      */
     constructor(commands, uuid = null) {
         this._commands = commands
-        this._entity = null
         this._nonce = uuid ?? nonce(8)
         this._lastEvent = performance.now()
         this._lockOn = null
@@ -191,11 +190,13 @@ module.exports = class TextDisplay {
     }
 
     /**
+     * @private
      * @type {Vec3}
      */
     _position
 
     /**
+     * @private
      * @type {number | null}
      */
     _lockOn

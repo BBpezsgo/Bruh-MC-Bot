@@ -31,7 +31,7 @@ class GoalBlockSimple extends goals.Goal {
      * @param {Vec3} node
      */
     isEnd(node) {
-        if (node.distanceTo(this.pos.offset(0, this.entityHeight, 0)) > this.reach) return false
+        if (node.floored().offset(0, this.entityHeight, 0).distanceTo(this.pos) > this.reach) return false
         return true
     }
 }
@@ -78,6 +78,88 @@ class GoalHawkeye extends goals.Goal {
     }
 }
 
+class GoalEntity extends goals.Goal {
+    /**
+     * @private
+     * @type {import('prismarine-entity').Entity}
+     */
+    entity
+    /**
+     * @private
+     * @type {number}
+     */
+    rangeSq
+    /**
+     * @private
+     * @type {boolean}
+     */
+    isFlee
+    /**
+     * @private
+     * @type {number}
+     */
+    x
+    /**
+     * @private
+     * @type {number}
+     */
+    y
+    /**
+     * @private
+     * @type {number}
+     */
+    z
+
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     * @param {number} range
+     */
+    constructor(entity, range) {
+        super()
+        this.entity = entity
+        this.x = Math.floor(entity.position.x)
+        this.y = Math.floor(entity.position.y)
+        this.z = Math.floor(entity.position.z)
+        this.rangeSq = range * range
+        this.isFlee = range < 0
+    }
+
+    /**
+     * @param {Vec3} node
+     */
+    heuristic(node) {
+        const dx = this.x - node.x
+        const dy = this.y - node.y
+        const dz = this.z - node.z
+        return (Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)) * (this.isFlee ? -1 : 1)
+    }
+
+    /**
+     * @param {Vec3} node
+     */
+    isEnd(node) {
+        const p = this.entity.position
+        const dx = p.x - node.x
+        const dy = p.y - node.y
+        const dz = p.z - node.z
+        if (this.isFlee) {
+            return (dx * dx + dy * dy + dz * dz) > this.rangeSq
+        } else {
+            return (dx * dx + dy * dy + dz * dz) <= this.rangeSq
+        }
+    }
+
+    /** @override */
+    hasChanged() {
+        const d = this.entity.position.distanceTo(new Vec3(this.x, this.y, this.z))
+        return d > 1
+    }
+
+    /** @override */
+    isValid() { return this.entity && this.entity.isValid }
+}
+
 /**
  * @exports @typedef {{
  *   goal: goals.Goal;
@@ -92,6 +174,7 @@ class GoalHawkeye extends goals.Goal {
  *   movements?: Readonly<Movements>;
  *   savePathError?: boolean;
  *   sprint?: boolean;
+ *   excludeStep?: ReadonlyArray<Vec3>;
  * }} GeneralArgs
  */
 
@@ -128,7 +211,7 @@ class GoalHawkeye extends goals.Goal {
 
 /**
  * @exports @typedef {{
- *   flee: Readonly<Vec3>;
+ *   flee: Readonly<Vec3> | import('prismarine-entity').Entity;
  *   distance: number;
  * }} FleeArgs
  */
@@ -141,8 +224,15 @@ class GoalHawkeye extends goals.Goal {
  */
 
 /**
+ * @exports @typedef {{
+ *   entity: import('prismarine-entity').Entity;
+ *   distance?: number;
+ * }} GotoEntityArgs
+ */
+
+/**
  * @param {import('../bruh-bot')} bot
- * @param {(GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs} args
+ * @param {(GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs) & GeneralArgs} args
  * @returns {Generator<goals.Goal | GotoDimensionArgs, void, void>}
  */
 function* getGoal(bot, args) {
@@ -216,7 +306,13 @@ function* getGoal(bot, args) {
             half: args.half,
         })
     } else if ('flee' in args) {
-        yield new goals.GoalInvert(new goals.GoalNear(args.flee.x, args.flee.y, args.flee.z, args.distance))
+        if ('isValid' in args.flee) {
+            yield new goals.GoalInvert(new GoalEntity(args.flee, args.distance))
+        } else {
+            yield new goals.GoalInvert(new goals.GoalNear(args.flee.x, args.flee.y, args.flee.z, args.distance))
+        }
+    } else if ('entity' in args) {
+        yield new GoalEntity(args.entity, args.distance)
     } else {
         throw `What?`
     }
@@ -253,7 +349,43 @@ function setOptions(bot, args) {
     newMovements.gravityBlocks = originalMovements.gravityBlocks
     newMovements.interactableBlocks = originalMovements.interactableBlocks
     newMovements.liquids = originalMovements.liquids
-    newMovements.openable = originalMovements.openable
+    newMovements.openable = new Set([
+        bot.mc.data.blocksByName['oak_door'].id,
+        bot.mc.data.blocksByName['spruce_door'].id,
+        bot.mc.data.blocksByName['birch_door'].id,
+        bot.mc.data.blocksByName['jungle_door'].id,
+        bot.mc.data.blocksByName['acacia_door'].id,
+        bot.mc.data.blocksByName['dark_oak_door'].id,
+        bot.mc.data.blocksByName['mangrove_door'].id,
+        bot.mc.data.blocksByName['cherry_door'].id,
+        bot.mc.data.blocksByName['bamboo_door'].id,
+        bot.mc.data.blocksByName['crimson_door'].id,
+        bot.mc.data.blocksByName['warped_door'].id,
+
+        bot.mc.data.blocksByName['oak_fence_gate'].id,
+        bot.mc.data.blocksByName['spruce_fence_gate'].id,
+        bot.mc.data.blocksByName['birch_fence_gate'].id,
+        bot.mc.data.blocksByName['jungle_fence_gate'].id,
+        bot.mc.data.blocksByName['acacia_fence_gate'].id,
+        bot.mc.data.blocksByName['dark_oak_fence_gate'].id,
+        bot.mc.data.blocksByName['mangrove_fence_gate'].id,
+        bot.mc.data.blocksByName['cherry_fence_gate'].id,
+        bot.mc.data.blocksByName['bamboo_fence_gate'].id,
+        bot.mc.data.blocksByName['crimson_fence_gate'].id,
+        bot.mc.data.blocksByName['warped_fence_gate'].id,
+
+        // bot.mc.data.blocksByName['oak_trapdoor'].id,
+        // bot.mc.data.blocksByName['spruce_trapdoor'].id,
+        // bot.mc.data.blocksByName['birch_trapdoor'].id,
+        // bot.mc.data.blocksByName['jungle_trapdoor'].id,
+        // bot.mc.data.blocksByName['acacia_trapdoor'].id,
+        // bot.mc.data.blocksByName['dark_oak_trapdoor'].id,
+        // bot.mc.data.blocksByName['mangrove_trapdoor'].id,
+        // bot.mc.data.blocksByName['cherry_trapdoor'].id,
+        // bot.mc.data.blocksByName['bamboo_trapdoor'].id,
+        // bot.mc.data.blocksByName['crimson_trapdoor'].id,
+        // bot.mc.data.blocksByName['warped_trapdoor'].id,
+    ])
     newMovements.passableEntities = originalMovements.passableEntities
     newMovements.replaceables = originalMovements.replaceables
     newMovements.scafoldingBlocks = originalMovements.scafoldingBlocks
@@ -274,216 +406,277 @@ function setOptions(bot, args) {
     newMovements.allowParkour = originalMovements.allowParkour
     newMovements.allowSprinting = originalMovements.allowSprinting && !bot.quietMode && args.sprint
     newMovements.canDig = originalMovements.canDig && !bot.quietMode
-    newMovements.canOpenDoors = originalMovements.canOpenDoors && !bot.quietMode
+    newMovements.canOpenDoors = true && !bot.quietMode
     newMovements.dontCreateFlow = originalMovements.dontCreateFlow
     newMovements.dontMineUnderFallingBlock = originalMovements.dontMineUnderFallingBlock
     newMovements.infiniteLiquidDropdownDistance = originalMovements.infiniteLiquidDropdownDistance && !bot.quietMode
     newMovements.maxDropDown = originalMovements.maxDropDown
     newMovements.sneak = originalMovements.sneak || bot.quietMode
 
+    if (args.excludeStep && args.excludeStep.length > 0) {
+        newMovements.exclusionAreasStep = [...newMovements.exclusionAreasStep]
+        for (const excludeStep of args.excludeStep) {
+            newMovements.exclusionAreasStep.push(block => {
+                if (excludeStep.equals(block.position)) {
+                    return Infinity
+                }
+                return 0
+            })
+        }
+    }
+
     bot.bot.pathfinder.setMovements(newMovements)
     bot.bot.pathfinder.tickTimeout = 10
 }
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'here', ((GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs) & GeneralArgs) | GoalArgs, Error> & { getGoal: getGoal; }}
+ * @param {Movements} movements
+ * @param {import('mineflayer-pathfinder').PartiallyComputedPath} path
+ */
+function getTime(movements, path) {
+    let time = 0
+    for (let i = 1; i < path.path.length; i++) {
+        const a = path.path[i - 1]
+        const b = path.path[i]
+        const distance = a.distanceTo(b)
+        if (movements.allowSprinting) {
+            time += (distance / 4.317) * 1000
+        } else {
+            time += (distance / 5.612) * 1000
+        }
+    }
+    return time
+}
+
+/**
+ * @type {import('../task').TaskDef<'ok' | 'here',
+ * (
+ *   (
+ *     (
+ *       GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs
+ *     ) & GeneralArgs
+ *   ) | GoalArgs
+ * ) & {
+ *   onPathUpdated?: (path: import('mineflayer-pathfinder').PartiallyComputedPath) => void;
+ *   onPathReset?: (reason: 'goal_updated' | 'movements_updated' | 'block_updated' | 'chunk_loaded' | 'goal_moved' | 'dig_error' | 'no_scaffolding_blocks' | 'place_error' | 'stuck') => void;
+ * }, Error> & {
+ *   getGoal: getGoal;
+ *   getTime: getTime;
+ *   GoalBlockSimple: typeof GoalBlockSimple;
+ *   GoalHawkeye: typeof GoalHawkeye;
+ *   GoalEntity: typeof GoalEntity;
+ * }}
  */
 module.exports = {
     /**
      * @throws {Error} `NoPath`, `Timeout`, `GoalChanged`, `PathStopped`
      */
     task: function*(bot, args) {
-        if ('dimension' in args) {
-            let remainingTravels = 3
-            while (true) {
-                remainingTravels--
-                if (remainingTravels <= 0) { throw `I lost :(` }
+        if (args.onPathUpdated) { bot.bot.on('path_update', args.onPathUpdated) }
+        if (args.onPathReset) { bot.bot.on('path_reset', args.onPathReset) }
+        try {
+            if ('dimension' in args) {
+                let remainingTravels = 3
+                while (true) {
+                    remainingTravels--
+                    if (remainingTravels <= 0) { throw `I lost :(` }
 
-                try {
-                    switch (args.dimension) {
-                        case 'the_end':
-                            switch (bot.dimension) {
-                                case 'the_nether': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['nether_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the nether portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
-                                    break
+                    try {
+                        switch (args.dimension) {
+                            case 'the_end':
+                                switch (bot.dimension) {
+                                    case 'the_nether': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
+                                        break
+                                    }
+                                    case 'overworld': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'the_end' && !timeout.done()) { yield }
+                                        break
+                                    }
+                                    case 'the_end': {
+                                        return 'here'
+                                    }
                                 }
-                                case 'overworld': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['end_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the end portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'the_end' && !timeout.done()) { yield }
-                                    break
+                                break
+                            case 'the_nether':
+                                switch (bot.dimension) {
+                                    case 'the_nether': {
+                                        return 'here'
+                                    }
+                                    case 'overworld': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'the_nether' && !timeout.done()) { yield }
+                                        break
+                                    }
+                                    case 'the_end': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
+                                        break
+                                    }
                                 }
-                                case 'the_end': {
-                                    return 'here'
+                                break
+                            case 'overworld':
+                                switch (bot.dimension) {
+                                    case 'the_nether': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
+                                        break
+                                    }
+                                    case 'overworld': {
+                                        return 'here'
+                                    }
+                                    case 'the_end': {
+                                        const portal = bot.bot.findBlock({
+                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            count: 1,
+                                            maxDistance: 128,
+                                        })
+                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        const movements = new Movements(bot.bot)
+                                        bot.mc.setRestrictedMovements(movements)
+                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        yield* this.task(bot, {
+                                            point: portal.position,
+                                            distance: 0,
+                                            movements: movements,
+                                        })
+                                        const timeout = new Timeout(10000)
+                                        // @ts-ignore
+                                        while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
+                                        break
+                                    }
                                 }
-                            }
-                            break
-                        case 'the_nether':
-                            switch (bot.dimension) {
-                                case 'the_nether': {
-                                    return 'here'
-                                }
-                                case 'overworld': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['nether_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the nether portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'the_nether' && !timeout.done()) { yield }
-                                    break
-                                }
-                                case 'the_end': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['end_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the end portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
-                                    break
-                                }
-                            }
-                            break
-                        case 'overworld':
-                            switch (bot.dimension) {
-                                case 'the_nether': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['nether_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the nether portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
-                                    break
-                                }
-                                case 'overworld': {
-                                    return 'here'
-                                }
-                                case 'the_end': {
-                                    const portal = bot.bot.findBlock({
-                                        matching: bot.mc.data.blocksByName['end_portal'].id,
-                                        count: 1,
-                                        maxDistance: 128,
-                                    })
-                                    if (!portal) { throw `I couldn't find the end portal` }
-                                    const movements = new Movements(bot.bot)
-                                    bot.mc.setRestrictedMovements(movements)
-                                    movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
-                                    yield* this.task(bot, {
-                                        point: portal.position,
-                                        distance: 0,
-                                        movements: movements,
-                                    })
-                                    const timeout = new Timeout(10000)
-                                    // @ts-ignore
-                                    while (bot.dimension !== 'overworld' && !timeout.done()) { yield }
-                                    break
-                                }
-                            }
-                            break
+                                break
+                        }
+                    } catch (error) {
+                        console.warn(error)
                     }
-                } catch (error) {
-                    console.warn(error)
                 }
-            }
-        } else if ('goal' in args) {
-            if (args.goal.isEnd(bot.bot.entity.position)) { return 'here' }
+            } else if ('goal' in args) {
+                if (args.goal.isEnd(bot.bot.entity.position)) { return 'here' }
 
-            if (bot.memory.isGoalUnreachable(args.goal)) { throw `If I remember correctly I can't get there` }
-
-            setOptions(bot, args.options)
-
-            if (args.options.savePathError) {
-                try {
-                    yield* wrap(bot.bot.pathfinder.goto(args.goal))
-                } catch (error) {
-                    if (error.name === 'NoPath') {
-                        bot.memory.theGoalIsUnreachable(args.goal)
+                if (args.goal instanceof goals.GoalNear) {
+                    const distanceSq = bot.bot.entity.position.distanceSquared(new Vec3(args.goal.x, args.goal.y, args.goal.z))
+                    if (distanceSq <= args.goal.rangeSq) {
+                        return 'here'
                     }
-                    throw error
                 }
-            } else {
-                yield* wrap(bot.bot.pathfinder.goto(args.goal))
-            }
 
-            return 'ok'
-        } else {
-            let result
-            const _goals = getGoal(bot, args)
+                if (bot.memory.isGoalUnreachable(args.goal)) { throw `If I remember correctly I can't get there` }
 
-            for (const _goal of _goals) {
-                if ('dimension' in _goal) {
-                    result = yield* this.task(bot, _goal)
+                setOptions(bot, args.options)
+
+                if (args.options.savePathError) {
+                    try {
+                        yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                    } catch (error) {
+                        if (error.name === 'NoPath') {
+                            bot.memory.theGoalIsUnreachable(args.goal)
+                        }
+                        throw error
+                    }
                 } else {
-                    result = yield* this.task(bot, {
-                        goal: _goal,
-                        options: args,
-                    })
+                    yield* wrap(bot.bot.pathfinder.goto(args.goal))
                 }
-            }
 
-            return result
+                return 'ok'
+            } else {
+                let result
+                const _goals = getGoal(bot, args)
+
+                for (const _goal of _goals) {
+                    if ('dimension' in _goal) {
+                        result = yield* this.task(bot, _goal)
+                    } else {
+                        result = yield* this.task(bot, {
+                            goal: _goal,
+                            options: args,
+                        })
+                    }
+                }
+
+                return result
+            }
+        } finally {
+            if (args.onPathUpdated) { bot.bot.off('path_update', args.onPathUpdated) }
+            if (args.onPathReset) { bot.bot.off('path_reset', args.onPathReset) }
         }
     },
     id: function(args) {
@@ -494,7 +687,11 @@ module.exports = {
         } else if ('place' in args) {
             return `goto-place-${Math.round(args.place.x)}-${Math.round(args.place.y)}-${Math.round(args.place.z)}`
         } else if ('flee' in args) {
-            return `flee-${Math.round(args.flee.x)}-${Math.round(args.flee.y)}-${Math.round(args.flee.z)}`
+            if ('isValid' in args.flee) {
+                return `flee-${args.flee.id}`
+            } else {
+                return `flee-${Math.round(args.flee.x)}-${Math.round(args.flee.y)}-${Math.round(args.flee.z)}`
+            }
         } else if ('dimension' in args) {
             return `dimension-${args.dimension}`
         } else {
@@ -509,7 +706,11 @@ module.exports = {
         } else if ('place' in args) {
             return `Goto block ${Math.round(args.place.x)} ${Math.round(args.place.y)} ${Math.round(args.place.z)}`
         } else if ('flee' in args) {
-            return `Flee from ${Math.round(args.flee.x)} ${Math.round(args.flee.y)} ${Math.round(args.flee.z)}`
+            if ('isValid' in args.flee) {
+                return `Flee from ${args.flee}`
+            } else {
+                return `Flee from ${Math.round(args.flee.x)} ${Math.round(args.flee.y)} ${Math.round(args.flee.z)}`
+            }
         } else if ('dimension' in args) {
             return `Goto ${args.dimension}`
         } else {
@@ -517,4 +718,8 @@ module.exports = {
         }
     },
     getGoal: getGoal,
+    getTime: getTime,
+    GoalBlockSimple: GoalBlockSimple,
+    GoalHawkeye: GoalHawkeye,
+    GoalEntity: GoalEntity,
 }

@@ -15,7 +15,7 @@ const levenshtein = require('damerau-levenshtein')
 
 const TaskManager = require('./task-manager')
 const MC = require('./mc')
-const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout, NBT2JSON } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const Environment = require('./environment')
@@ -25,6 +25,8 @@ const TextDisplay = require('./text-display')
 const Commands = require('./commands')
 const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
+const { Vec3 } = require('vec3')
+const BlockDisplay = require('./block-display')
 
 //#endregion
 
@@ -536,9 +538,12 @@ module.exports = class BruhBot {
         let tickInterval = null
 
         const defendAgainst = (/** @type {import("prismarine-entity").Entity} */ hazard) => {
-            if (!this.defendMyselfGoal ||
-                this.defendMyselfGoal.isDone ||
+            // console.log(`[Bot "${this.username}"] Defend against ${hazard.name}`)
+            if (!this.defendMyselfGoal || (
+                this.defendMyselfGoal.status !== 'running' &&
+                this.defendMyselfGoal.status !== 'queued' ) ||
                 !this.tasks.has(this.defendMyselfGoal.id)) {
+                    console.log(`[Bot "${this.username}"] New attack task`)
                 this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
                     targets: { [hazard.id]: hazard },
                     useBow: true,
@@ -547,6 +552,7 @@ module.exports = class BruhBot {
                 }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2),)
             } else {
                 if ('targets' in this.defendMyselfGoal.args) {
+                    // console.log(`[Bot "${this.username}"] Add hazard`)
                     this.defendMyselfGoal.args.targets[hazard.id] = hazard
                 } else {
                     throw new Error(`Invalid task for defending myself`)
@@ -565,6 +571,7 @@ module.exports = class BruhBot {
             }
 
             TextDisplay.tick(this)
+            BlockDisplay.tick(this)
 
             for (let i = 0; i < 10; i++) {
                 this.commands.tick()
@@ -644,7 +651,7 @@ module.exports = class BruhBot {
                         return
                     } else {
                         this.tasks.push(this, tasks.goto, {
-                            flee: creeper.position,
+                            flee: creeper,
                             distance: 8,
                             timeout: 300,
                             sprint: true,
@@ -656,7 +663,7 @@ module.exports = class BruhBot {
                 creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
                 if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
                     this.tasks.push(this, tasks.goto, {
-                        flee: creeper.position,
+                        flee: creeper,
                         distance: 8,
                         timeout: 300,
                         sprint: true,
@@ -673,7 +680,7 @@ module.exports = class BruhBot {
                         continue
                     }
                     // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
-                    this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
+                    // this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
 
                     const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
 
@@ -720,7 +727,7 @@ module.exports = class BruhBot {
                     if (dot <= 0) { continue }
 
                     console.log(`[Bot "${this.username}"] Incoming projectile`)
-                    this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+                    // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
 
                     this.tasks.push(this, tasks.goto, {
                         point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
@@ -749,25 +756,32 @@ module.exports = class BruhBot {
                     return false
                 }
 
-                if ((typeof v.metadata[15] === 'number') &&
-                    !(v.metadata[15] & 0x04)) { // Not aggressive
-                    return false
-                }
-
-                if ((typeof v.metadata[15] === 'number') &&
-                    !(v.metadata[15] & 0x01)) { // Has no AI
-                    return false
-                }
-
                 const _hostile = MC.hostiles[v.name]
                 if (!_hostile) { return false }
 
                 if (!_hostile.rangeOfSight) { return false }
 
+                if (!_hostile.alwaysAngry) {
+                    if (v.name === 'enderman') {
+                        // Isn't screaming
+                        if (!v.metadata[17]) { return false }
+                    } else if ((typeof v.metadata[15] === 'number') &&
+                        !(v.metadata[15] & 0x04)) { // Not aggressive
+                        console.log(v.name)
+                        return false
+                    }
+                }
+
+                if ((typeof v.metadata[15] === 'number') &&
+                    (v.metadata[15] & 0x01)) { // Has no AI
+                    return false
+                }
+
                 const distance = v.position.distanceTo(this.bot.entity.position)
 
                 if (distance > _hostile.rangeOfSight) { return false }
 
+                if (false)
                 {
                     const myPosition = this.bot.entity.position.offset(0, 1.6, 0)
                     const entityPosition = v.position.offset(0, v.height ?? 0.5, 0)
@@ -1017,6 +1031,7 @@ module.exports = class BruhBot {
                                 canUseChests: true,
                                 canUseInventory: true,
                                 force: true,
+                                canRequestFromPlayers: item.priority === 'must',
                             }, priorities.low)
                             break
                         }
@@ -1030,6 +1045,7 @@ module.exports = class BruhBot {
                                 canKill: false,
                                 canUseChests: true,
                                 canUseInventory: true,
+                                canRequestFromPlayers: item.priority === 'must',
                             }, priorities.unnecessary)
                             break
                         }
@@ -1043,6 +1059,7 @@ module.exports = class BruhBot {
                                 canKill: false,
                                 canUseChests: true,
                                 canUseInventory: true,
+                                canRequestFromPlayers: item.priority === 'must',
                             }, priorities.unnecessary)
                             break
                         }
@@ -1060,14 +1077,14 @@ module.exports = class BruhBot {
             )
             ) {
                 if (this.moveAwayInterval?.is()) {
-                    const roundedSelfPosition = this.bot.entity.position.clone().round()
+                    const roundedSelfPosition = this.bot.entity.position.rounded()
                     for (const playerName in this.bot.players) {
                         if (playerName === this.username) { continue }
                         const playerEntity = this.bot.players[playerName].entity
                         if (!playerEntity) { continue }
                         if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
                             this.tasks.push(this, tasks.goto, {
-                                flee: roundedSelfPosition,
+                                flee: playerEntity,
                                 distance: 2,
                             }, priorities.unnecessary)
                             return
@@ -1123,7 +1140,7 @@ module.exports = class BruhBot {
                 return
             }
 
-            console.error(`[Bot "${this.username}"] Kicked:`, reason)
+            console.error(`[Bot "${this.username}"] Kicked:`, JSON.stringify(reason))
         })
 
         this.bot.on('error', (error) => {
@@ -1260,7 +1277,7 @@ module.exports = class BruhBot {
                         if (!location) {
                             try {
                                 const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
-                                location = parseLocationH(response)
+                                location = parseLocationH(response.message)
                             } catch (error) {
 
                             }
@@ -1316,6 +1333,7 @@ module.exports = class BruhBot {
                     count: 1,
                     item: item.name,
                     onStatusMessage: respond,
+                    canRequestFromPlayers: false,
                 }, priorities.user)
                     .wait()
                     .then(() => respond(`Done`))
@@ -1390,6 +1408,7 @@ module.exports = class BruhBot {
                     count: 1,
                     item: item.name,
                     onStatusMessage: respond,
+                    canRequestFromPlayers: false,
                 }, priorities.user)
                     .wait()
                     .then(() => respond(`Done`))
@@ -1607,7 +1626,7 @@ module.exports = class BruhBot {
                     onNoPlayer: function*(bot) {
                         try {
                             const response = yield* bot.ask(`I lost you. Where are you?`, respond, sender, 30000)
-                            const location = parseLocationH(response)
+                            const location = parseLocationH(response.message)
                             if (location) {
                                 respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                             }
@@ -1657,7 +1676,7 @@ module.exports = class BruhBot {
                         if (!location) {
                             try {
                                 const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
-                                location = parseLocationH(response)
+                                location = parseLocationH(response.message)
                             } catch (error) {
 
                             }
@@ -1667,10 +1686,40 @@ module.exports = class BruhBot {
                                 throw `I can't find you`
                             }
                         }
+
+                        const startedAt = performance.now()
+                        let accumulatedTime = 0
+
                         return yield* tasks.goto.task(bot, {
                             point: location,
                             distance: 1,
                             timeout: 30000,
+                            onPathUpdated: (path) => {
+                                const delta = performance.now() - startedAt
+                                const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
+                                accumulatedTime += time
+                                respond(`I'm here in ${Math.round((accumulatedTime - delta) / 100) / 10} seconds`)
+                            },
+                            onPathReset: (reason) => {
+                                switch (reason) {
+                                    case 'dig_error': {
+                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Dig error`)
+                                        break
+                                    }
+                                    case 'no_scaffolding_blocks': {
+                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] No scaffolding blocks`)
+                                        break
+                                    }
+                                    case 'place_error': {
+                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Place error`)
+                                        break
+                                    }
+                                    case 'stuck': {
+                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Stuck`)
+                                        break
+                                    }
+                                }
+                            },
                         })
                     },
                     id: function(args) {
@@ -1751,6 +1800,25 @@ module.exports = class BruhBot {
             }
         }))
 
+        handlers.push(/** @type {StringChatHandler} */({
+            match: 'give trash',
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, tasks.giveTo, {
+                    player: sender,
+                    items: this.getTrashItems(),
+                    onStatusMessage: respond,
+                }, priorities.user)
+                if (task) {
+                    respond(`Okay`)
+                    task.wait()
+                        .then(() => respond(`There it is`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already on my way`)
+                }
+            }
+        }))
+
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /give\W+([0-9]*)\W*([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
@@ -1791,25 +1859,6 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
-            match: 'give trash',
-            command: (sender, message, respond) => {
-                const task = this.tasks.push(this, tasks.giveTo, {
-                    player: sender,
-                    items: this.getTrashItems(),
-                    onStatusMessage: respond,
-                }, priorities.user)
-                if (task) {
-                    respond(`Okay`)
-                    task.wait()
-                        .then(() => respond(`There it is`))
-                        .catch(error => error === 'cancelled' || respond(error))
-                } else {
-                    respond(`I'm already on my way`)
-                }
-            }
-        }))
-
-        handlers.push(/** @type {StringChatHandler} */({
             match: ['stop', 'cancel'],
             command: (sender, message, respond) => {
                 if (!this.tasks.isIdle) {
@@ -1824,12 +1873,23 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: ['stop now', 'abort'],
             command: (sender, message, respond) => {
-                if (this.tasks.isIdle) {
-                    respond(`I don't do anything`)
-                } else {
-                    respond(`Okay`)
+                let didSomething = false
+
+                if (this.bot.pathfinder.goal) {
+                    this.bot.pathfinder.stop()
+                    didSomething = true
+                }
+
+                if (!this.tasks.isIdle) {
+                    didSomething = true
                 }
                 this.tasks.abort()
+
+                if (didSomething) {
+                    respond(`Okay`)
+                } else {
+                    respond(`I don't do anything`)
+                }
             }
         }))
 
@@ -1981,6 +2041,8 @@ module.exports = class BruhBot {
          * @type {import('mineflayer').Player | null}
          */
         let selected = null
+        const lookDuration = 3000
+        const notLookDuration = 2000
 
         for (const playerUsername in this.bot.players) {
             if (playerUsername === this.username) { continue }
@@ -2000,7 +2062,7 @@ module.exports = class BruhBot {
             } else {
                 const p = this.lookAtPlayers[playerUsername]
                 if (p.startedLookingAt) {
-                    if (performance.now() - p.startedLookingAt < 3000) {
+                    if (performance.now() - p.startedLookingAt < lookDuration) {
                         selected = this.bot.players[playerUsername]
                         break
                     } else if (!p.endedLookingAt) {
@@ -2010,7 +2072,7 @@ module.exports = class BruhBot {
                     }
                 }
                 if (p.endedLookingAt) {
-                    if (performance.now() - p.endedLookingAt < 7000) {
+                    if (performance.now() - p.endedLookingAt < notLookDuration) {
                         continue
                     } else if (!p.startedLookingAt) {
                         p.endedLookingAt = 0
@@ -2161,17 +2223,19 @@ module.exports = class BruhBot {
      * @param {(message: string) => void} send
      * @param {string} [player]
      * @param {number} [timeout]
-     * @returns {Generator<void, string, void>}
+     * @returns {Generator<void, { message: string; sender: string; }, void>}
      */
     *ask(message, send, player, timeout) {
-        /** @type {string | null} */
+        while (this.chatAwaits.length > 0) { yield }
+        /** @type {{ message: string; sender: string; } | null} */
         let response = null
+        send(message)
         this.chatAwaits.push((/** @type {string} */ username, /** @type {string} */ message) => {
             if (player && username !== player) { return false }
-            response = message
+            if (!player && username === this.username) { return false }
+            response = { message: message, sender: username }
             return true
         })
-        send(message)
         const timeoutAt = timeout ? (performance.now() + timeout) : null
         while (true) {
             if (response) {

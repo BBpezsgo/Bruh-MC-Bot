@@ -7,7 +7,7 @@ const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeig
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const MC = require('./mc')
-const goto = require('./tasks/goto')
+const Tasks = require('./tasks')
 const { Chest } = require('mineflayer')
 const { goals } = require('mineflayer-pathfinder')
 const Vec3Dimension = require('./vec3-dimension')
@@ -482,7 +482,7 @@ module.exports = class Environment {
         console.log(`[Bot "${bot.username}"] Found ${chestPositions.length} chests`)
         for (const chestPosition of chestPositions) {
             try {
-                yield* goto.task(bot, {
+                yield* Tasks.goto.task(bot, {
                     block: chestPosition,
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
@@ -548,7 +548,7 @@ module.exports = class Environment {
         for (const villager of villagers) {
             try {
                 if (!villager.isValid) { continue }
-                yield* goto.task(bot, {
+                yield* Tasks.goto.task(bot, {
                     point: villager.position,
                     distance: 2,
                 })
@@ -889,11 +889,11 @@ module.exports = class Environment {
             mushrooms.push(block.position.clone())
         }
 
-        if (isGrown) {
-            bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [0, 1, 0])
-        } else {
-            bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [1, 0, 0])
-        }
+        // if (isGrown) {
+        //     bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [0, 1, 0])
+        // } else {
+        //     bot.debug.drawPoint(block.position.offset(0, 0.5, 0), [1, 0, 0])
+        // }
 
         return grown === isGrown
     }
@@ -1325,7 +1325,7 @@ module.exports = class Environment {
             if (visited.find(other => other.p.equals(p))) { return }
             const node = { p: p, v: false }
             visited.push(node)
-            this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 0, 1])
+            // this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 0, 1])
             if (isEmpty(block)) { return }
             const above = this.blockAt(p.offset(0, 1, 0))
             if (!isEmpty(above)) { return }
@@ -1333,7 +1333,7 @@ module.exports = class Environment {
             mustVisit.push(p.offset(1, 0, 0))
             mustVisit.push(p.offset(0, 0, -1))
             mustVisit.push(p.offset(0, 0, 1))
-            this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 1, 0])
+            // this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 1, 0])
             node.v = true
         }
 

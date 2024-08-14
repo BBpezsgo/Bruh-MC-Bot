@@ -457,11 +457,14 @@ module.exports = class MC {
      *   meleeAttack?: {
      *     range: number;
      *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *     cooldown?: number;
      *   };
      *   rangeAttack?: {
      *     range: number;
      *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *     cooldown: number;
      *   };
+     *   alwaysAngry: boolean;
      * }>>}
      */
     static get hostiles() {
@@ -470,51 +473,67 @@ module.exports = class MC {
                 rangeAttack: {
                     range: 16,
                     damage: 4,
+                    cooldown: 1000, // 1000 - 5500
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'blaze': {
                 meleeAttack: {
                     range: 1,
                     damage: { easy: 4, normal: 6, hard: 9 },
+                    cooldown: 1000,
                 },
                 rangeAttack: {
                     range: 48,
                     damage: 5,
+                    cooldown: 5000, // burstCooldown: 300
                 },
                 rangeOfSight: 48,
+                alwaysAngry: true,
             },
             'drowned': {
                 meleeAttack: {
                     range: 2,
                     damage: { easy: 2.5, normal: 3, hard: 4.5 },
                 },
+                rangeAttack: {
+                    range: 20,
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                    cooldown: 1500,
+                },
                 rangeOfSight: 24,
+                alwaysAngry: true,
             },
             'illusioner': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 5, hard: 5 }
+                    damage: { easy: 5, normal: 5, hard: 5 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'phantom': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 }
+                    damage: { easy: 2, normal: 2, hard: 3 },
                 },
                 rangeOfSight: 64,
+                alwaysAngry: true,
             },
             'warden': {
                 meleeAttack: {
                     range: 2,
                     damage: { easy: 16, normal: 30, hard: 45 },
+                    cooldown: 900,
                 },
                 rangeAttack: {
                     range: 20,
                     damage: { easy: 6, normal: 10, hard: 15 },
+                    cooldown: 5,
                 },
                 rangeOfSight: 16,
+                alwaysAngry: false,
             },
             'evoker': {
                 meleeAttack: {
@@ -522,6 +541,7 @@ module.exports = class MC {
                     damage: 24,
                 },
                 rangeOfSight: 12,
+                alwaysAngry: true,
             },
             'creeper': {
                 meleeAttack: {
@@ -529,6 +549,7 @@ module.exports = class MC {
                     damage: { easy: 22, normal: 43, hard: 64 },
                 },
                 rangeOfSight: 15,
+                alwaysAngry: true,
             },
             'skeleton': {
                 meleeAttack: {
@@ -538,8 +559,10 @@ module.exports = class MC {
                 rangeAttack: {
                     range: 15,
                     damage: { easy: 4, normal: 4, hard: 5 },
+                    cooldown: 2000, // hard: 1000
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'cave_spider': {
                 meleeAttack: {
@@ -547,6 +570,7 @@ module.exports = class MC {
                     damage: { easy: 2, normal: 2, hard: 3 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: false,
             },
             'endermite': {
                 meleeAttack: {
@@ -554,6 +578,7 @@ module.exports = class MC {
                     damage: { easy: 2, normal: 2, hard: 3 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'hoglin': {
                 meleeAttack: {
@@ -561,6 +586,7 @@ module.exports = class MC {
                     damage: { easy: 5, normal: 8, hard: 12 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: false,
             },
             'magma_cube': {
                 meleeAttack: {
@@ -577,6 +603,7 @@ module.exports = class MC {
                     },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'slime': {
                 meleeAttack: {
@@ -593,6 +620,7 @@ module.exports = class MC {
                     },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'wither_skeleton': {
                 meleeAttack: {
@@ -601,13 +629,16 @@ module.exports = class MC {
                     damage: { easy: 5, normal: 8, hard: 12 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'witch': {
                 rangeAttack: {
                     range: 8,
                     damage: 6, // harming potion
+                    cooldown: 3000,
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'spider': {
                 meleeAttack: {
@@ -615,6 +646,7 @@ module.exports = class MC {
                     damage: { easy: 2, normal: 2, hard: 3 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: false,
             },
             'stray': {
                 meleeAttack: {
@@ -625,9 +657,11 @@ module.exports = class MC {
                     range: 15,
                     // 3 - 5
                     damage: { easy: 5, normal: 5, hard: 5 },
+                    cooldown: 2, // ?
                 },
                 // also has tipped arrows
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'ravager': {
                 meleeAttack: {
@@ -636,6 +670,7 @@ module.exports = class MC {
                 },
                 // roar: 6
                 rangeOfSight: 32,
+                alwaysAngry: true,
             },
             'husk': {
                 meleeAttack: {
@@ -643,6 +678,7 @@ module.exports = class MC {
                     damage: { easy: 2.5, normal: 3, hard: 4.5 },
                 },
                 rangeOfSight: 35,
+                alwaysAngry: true,
             },
             'zombie_villager': {
                 meleeAttack: {
@@ -650,6 +686,7 @@ module.exports = class MC {
                     damage: { easy: 2.5, normal: 3, hard: 4.5 },
                 },
                 rangeOfSight: 35,
+                alwaysAngry: true,
             },
             'zombie': {
                 meleeAttack: {
@@ -657,6 +694,7 @@ module.exports = class MC {
                     damage: { easy: 2.5, normal: 3, hard: 4.5 },
                 },
                 rangeOfSight: 35,
+                alwaysAngry: true,
             },
             'piglin': {
                 meleeAttack: {
@@ -666,8 +704,10 @@ module.exports = class MC {
                 rangeAttack: {
                     range: 16, // ?
                     damage: { easy: 5, normal: 5, hard: 5 },
+                    cooldown: 2,
                 },
                 rangeOfSight: 16,
+                alwaysAngry: false,
             },
             'piglin_brute': {
                 meleeAttack: {
@@ -676,13 +716,16 @@ module.exports = class MC {
                 },
                 // also can be unarmed
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'pillager': {
                 rangeAttack: {
                     range: 8,
                     damage: { easy: 3.5, normal: 4, hard: 4.5 },
+                    cooldown: 2, // ?
                 },
                 rangeOfSight: 64,
+                alwaysAngry: true,
             },
             'silverfish': {
                 meleeAttack: {
@@ -690,6 +733,7 @@ module.exports = class MC {
                     damage: { easy: 1, normal: 1, hard: 1.5 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'zoglin': {
                 meleeAttack: {
@@ -697,6 +741,7 @@ module.exports = class MC {
                     damage: { easy: 5, normal: 8, hard: 12 },
                 },
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'vindicator': {
                 meleeAttack: {
@@ -705,6 +750,7 @@ module.exports = class MC {
                 },
                 // also can be unarmed
                 rangeOfSight: 16,
+                alwaysAngry: true,
             },
             'enderman': {
                 meleeAttack: {
@@ -712,6 +758,7 @@ module.exports = class MC {
                     damage: { easy: 4.5, normal: 7, hard: 10.5 },
                 },
                 rangeOfSight: 64,
+                alwaysAngry: false,
             },
             'zombified_piglin': {
                 meleeAttack: {
@@ -720,14 +767,16 @@ module.exports = class MC {
                 },
                 // also can be unarmed
                 rangeOfSight: 55,
+                alwaysAngry: false,
             },
             'ghast': {
                 rangeAttack: {
                     range: 64,
-                    damage: 6,
-                    // + explosion
+                    damage: 6, // + explosion
+                    cooldown: 3000
                 },
                 rangeOfSight: 64,
+                alwaysAngry: true,
             },
         })
     }

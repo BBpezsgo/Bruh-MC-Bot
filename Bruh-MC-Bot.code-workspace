@@ -11,6 +11,11 @@
 		}
 	],
 	"settings": {
+		"files.exclude": {
+			"node_modules": true,
+			"package-lock.json": true,
+			"bun.lockb": true,
+		},
 		"material-icon-theme.files.associations": {
 			"template.js": "template",
 			"config.js": "settings"
@@ -19,10 +24,6 @@
 			"worlds": "environment"
 		},
 		"bun.runtime": "~/.bun/bun",
-		"bun.debugTerminal": {
-			"enabled": true,
-			"stopOnEntry": false,
-		},
 		"files.readonlyInclude": {
 			"node_modules/**": true
 		},

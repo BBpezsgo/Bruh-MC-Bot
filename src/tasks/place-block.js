@@ -4,8 +4,213 @@ const MC = require('../mc')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
+const interactableBlocks = [
+    'acacia_door',
+    'acacia_fence_gate',
+    'acacia_button',
+    'acacia_trapdoor',
+    'anvil',
+    'armor_stand',
+    'barrel',
+    'beacon',
+    'bed_block',
+    'bell',
+    'birch_boat',
+    'birch_button',
+    'birch_door',
+    'birch_fence_gate',
+    'birch_trapdoor',
+    'black_bed',
+    'black_shulker_box',
+    'blast_furnace',
+    'blue_bed',
+    'blue_shulker_box',
+    'brewing_stand',
+    'brown_bed',
+    'brown_shulker_box',
+    'campfire',
+    'cauldron',
+    'chest',
+    'chest_minecart',
+    'chipped_anvil',
+    'command',
+    'command_block',
+    'command_block_minecart',
+    'comparator',
+    'composter',
+    'crafting_table',
+    'cyan_bed',
+    'cyan_shulker_box',
+    'damaged_anvil',
+    'dark_oak_boat',
+    'dark_oak_button',
+    'dark_oak_fence_gate',
+    'dark_oak_trapdoor',
+    'dark_oak_door',
+    'daylight_detector',
+    'daylight_detector_inverted',
+    'diode',
+    'diode_block_off',
+    'diode_block_on',
+    'dispenser',
+    'door',
+    'dragon_egg',
+    'dropper',
+    'enchanting_table',
+    'enchantment_table',
+    'end_crystal',
+    'end_portal_frame',
+    'ender_portal_frame',
+    'ender_chest',
+    'explosive_minecart',
+    'farmland',
+    'fletching_table',
+    'flower_pot',
+    'furnace',
+    'furnace_minecart',
+    'gray_bed',
+    'gray_shulker_box',
+    'green_bed',
+    'green_shulker_box',
+    'hopper',
+    'hopper_minecart',
+    'iron_door',
+    'iron_trapdoor',
+    'item_frame',
+    'jukebox',
+    'jungle_button',
+    'jungle_boat',
+    'jungle_door',
+    'jungle_fence_gate',
+    'jungle_trapdoor',
+    'lever',
+    'light_blue_bed',
+    'light_blue_shulker_box',
+    'light_gray_bed',
+    'light_gray_shulker_box',
+    'lime_bed',
+    'lime_shulker_box',
+    'magenta_bed',
+    'magenta_shulker_box',
+    'minecart',
+    'note_block',
+    'oak_boat',
+    'oak_button',
+    'oak_door',
+    'oak_fence_gate',
+    'oak_trapdoor',
+    'orange_bed',
+    'orange_shulker_box',
+    'pink_bed',
+    'pink_shulker_box',
+    'powered_minecart',
+    'purple_bed',
+    'purple_shulker_box',
+    'red_bed',
+    'red_shulker_box',
+    'redstone_ore',
+    'redstone_comparator_off',
+    'redstone_comparator_on',
+    'repeating_command_block',
+    'repeater',
+    'powered_repeater',
+    'unpowered_repeater',
+    'redstone_torch',
+    'saddle',
+    'shulker_box',
+    'sign',
+    'sign_post',
+    'smithing_table',
+    'smoker',
+    'spruce_boat',
+    'spruce_button',
+    'spruce_door',
+    'spruce_fence_gate',
+    'stonecutter',
+    'stone_button',
+    'storage_minecart',
+    'tnt_minecart',
+    'tnt',
+    'trap_door',
+    'trapped_chest',
+    'white_bed',
+    'white_shulker_box',
+    'wood_button',
+    'yellow_bed',
+    'yellow_shulker_box'
+]
+
+/** @type {Readonly<Record<string, string>>} */
+const blockToItem = {
+    'wall_torch': 'torch',
+}
+
+const mirroredBlocks = [
+    'chest',
+    'furnace',
+    'stone_button',
+    'polished_blackstone_button',
+    'iron_door',
+
+    'oak_trapdoor',
+    'spruce_trapdoor',
+    'birch_trapdoor',
+    'jungle_trapdoor',
+    'acacia_trapdoor',
+    'dark_oak_trapdoor',
+    'mangrove_trapdoor',
+    'cherry_trapdoor',
+    'bamboo_trapdoor',
+    'crimson_trapdoor',
+    'warped_trapdoor',
+
+    'oak_button',
+    'spruce_button',
+    'birch_button',
+    'jungle_button',
+    'acacia_button',
+    'dark_oak_button',
+    'mangrove_button',
+    'cherry_button',
+    'bamboo_button',
+    'crimson_button',
+    'warped_button',
+]
+
 /**
- * @type {import('../task').TaskDef<void, { item: number; clearGrass: boolean; }>}
+ * @param {string} blockName
+ */
+function getCorrectItem(blockName) {
+    return blockToItem[blockName] ?? blockName
+}
+
+/**
+ * @param {string} itemName
+ */
+function getCorrectBlock(itemName) {
+    const result = []
+    for (const blockName in blockToItem) {
+        if (blockToItem[blockName] === itemName) {
+            result.push(blockName)
+        }
+    }
+    return result
+}
+
+/**
+ * @type {import('../task').TaskDef<void, ({
+ *   item: string;
+ * } | {
+ *   block: string;
+ * }) & {
+ *   clearGrass?: boolean;
+ * } & ({} | {
+ *   position: Vec3;
+ *   properties?: object;
+ * })> & {
+ *   getCorrectItem: getCorrectItem;
+ *   getCorrectBlock: getCorrectBlock;
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -13,75 +218,269 @@ module.exports = {
             throw `Can't place block in quiet mode`
         }
 
-        const searchRadius = 5
-        const searchHeight = 1
-        const faceVector = new Vec3(0, 1, 0)
+        const item = ('item' in args) ? args.item : getCorrectItem(args.block)
+        const block = ('block' in args) ? args.block : getCorrectBlock(args.item)[0]
 
-        /** @type {Vec3 | null} */
-        let target = null
-        for (let x = -searchRadius; x <= searchRadius; x++) {
-            for (let y = -searchHeight; y <= searchHeight; y++) {
-                for (let z = -searchRadius; z <= searchRadius; z++) {
-                    if (x === 0 &&
-                        z === 0) {
-                        continue
+        if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+
+        /**
+         * @param {Vec3} target
+         */
+        const findBestReferenceBlock = (target) => {
+            let validFaceVectors = [
+                new Vec3(1, 0, 0),
+                new Vec3(0, 1, 0),
+                new Vec3(0, 0, 1),
+                new Vec3(-1, 0, 0),
+                new Vec3(0, -1, 0),
+                new Vec3(0, 0, -1),
+            ]
+
+            if ('properties' in args && args.properties) {
+                if ('axis' in args.properties) {
+                    switch (args.properties['axis']) {
+                        case 'x':
+                            validFaceVectors = [
+                                new Vec3(-1, 0, 0),
+                                new Vec3(1, 0, 0),
+                            ]
+                            break
+                        case 'y':
+                            validFaceVectors = [
+                                new Vec3(0, -1, 0),
+                                new Vec3(0, 1, 0),
+                            ]
+                            break
+                        case 'z':
+                            validFaceVectors = [
+                                new Vec3(0, 0, -1),
+                                new Vec3(0, 0, 1),
+                            ]
+                            break
+                        default:
+                            debugger
+                            break
                     }
+                } else if ('facing' in args.properties) {
+                    /*
+                    switch (args.properties['facing']) {
+                        case 'east':
+                            validFaceVectors = [
+                                new Vec3(-1, 0, 0),
+                            ]
+                            break
+                        case 'west':
+                            validFaceVectors = [
+                                new Vec3(1, 0, 0),
+                            ]
+                            break
+                        case 'south':
+                            validFaceVectors = [
+                                new Vec3(0, 0, -1),
+                            ]
+                            break
+                        case 'north':
+                            validFaceVectors = [
+                                new Vec3(0, 0, 1),
+                            ]
+                            break
+                        default:
+                            debugger
+                            break
+                    }
+                    */
+                }
+            }
 
-                    const current = bot.bot.entity.position.offset(x, y, z)
+            for (const faceVector of validFaceVectors) {
+                const referenceBlock = bot.bot.blockAt(target.offset(-faceVector.x, -faceVector.y, -faceVector.z))
+                if (!referenceBlock || MC.replaceableBlocks[referenceBlock.name]) { continue }
+                if (interactableBlocks.includes(referenceBlock.name)) { continue }
+                return { referenceBlock, faceVector }
+            }
 
-                    const above = bot.bot.blockAt(current.offset(faceVector.x, faceVector.y, faceVector.z))
-                    if (MC.replaceableBlocks[above.name]) {
-                        if (!target) {
-                            target = current
-                        } else {
-                            const d1 = target.distanceSquared(bot.bot.entity.position)
-                            const d2 = current.distanceSquared(bot.bot.entity.position)
-                            if (d2 < d1) {
-                                target = current
+            return null
+        }
+
+        /** @type {ReturnType<typeof findBestReferenceBlock>} */
+        let placeInfo = null
+        /** @type {Vec3 | null} */
+        let position = null
+        /** @type {Vec3 | null} */
+        let botFacing = null
+        /** @type {null | 'top' | 'bottom'} */
+        let half = null
+
+        if ('properties' in args && args.properties) {
+            if ('facing' in args.properties) {
+                switch (args.properties['facing']) {
+                    case 'west':
+                        botFacing = new Vec3(-1, 0, 0)
+                        break
+                    case 'east':
+                        botFacing = new Vec3(1, 0, 0)
+                        break
+                    case 'north':
+                        botFacing = new Vec3(0, 0, -1)
+                        break
+                    case 'south':
+                        botFacing = new Vec3(0, 0, 1)
+                        break
+                    default:
+                        debugger
+                        break
+                }
+            }
+            if ('half' in args.properties) {
+                switch (args.properties['half']) {
+                    case 'top':
+                        half = 'top'
+                        break
+                    case 'bottom':
+                        half = 'bottom'
+                        break
+                    default:
+                        debugger
+                        break
+                }
+            }
+        }
+
+        if (mirroredBlocks.includes(block)) {
+            botFacing.x *= -1
+            botFacing.y *= -1
+            botFacing.z *= -1
+        }
+
+        if ('position' in args) {
+            position = args.position
+            placeInfo = findBestReferenceBlock(position)
+        } else {
+            const searchRadius = 5
+            const searchHeight = 1
+
+            for (let x = -searchRadius; x <= searchRadius; x++) {
+                for (let y = -searchHeight; y <= searchHeight; y++) {
+                    for (let z = -searchRadius; z <= searchRadius; z++) {
+                        if (x === 0 && z === 0) { continue }
+
+                        const current = bot.bot.entity.position.floored().offset(x, y, z)
+                        const above = bot.bot.blockAt(current)
+                        const _placeInfo = findBestReferenceBlock(position)
+                        if (!_placeInfo) { continue }
+
+                        if (MC.replaceableBlocks[above.name]) {
+                            if (!position) {
+                                position = current
+                                placeInfo = _placeInfo
+                            } else {
+                                const d1 = position.distanceSquared(bot.bot.entity.position)
+                                const d2 = current.distanceSquared(bot.bot.entity.position)
+                                if (d2 < d1) {
+                                    position = current
+                                    placeInfo = _placeInfo
+                                }
                             }
                         }
                     }
                 }
             }
+
+            if (!position) {
+                throw `Couldn't find a place to place the block`
+            }
         }
 
-        if (!target) {
-            throw `Couldn't find a place to place the block`
+        if (!placeInfo) {
+            throw `Couldn't find a reference block`
         }
 
-        let above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
-        while (above && MC.replaceableBlocks[above.name] === 'break') {
-            if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
+        const referencePosition = position.offset(-placeInfo.faceVector.x, -placeInfo.faceVector.y, -placeInfo.faceVector.z)
+
+        let blockHere = bot.bot.blockAt(position)
+        while (blockHere && MC.replaceableBlocks[blockHere.name] === 'break') {
+            if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(position, bot.dimension), 'dig')) {
                 console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
-                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
-                above = bot.bot.blockAt(target.offset(faceVector.x, faceVector.y, faceVector.z))
+                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(position, bot.dimension), 'dig')
+                blockHere = bot.bot.blockAt(position)
                 continue
             }
 
             if (!args.clearGrass) {
-                throw `Can't replant this: block above is "${above.name}" and I'm not allowed to clear grass`
+                throw `Can't place the block because the block above is "${blockHere.name}" and I'm not allowed to break it`
             }
 
             yield* goto.task(bot, {
-                block: above.position,
+                block: position,
             })
 
-            yield* wrap(bot.bot.dig(above))
+            yield* wrap(bot.bot.dig(blockHere))
         }
 
-        yield* goto.task(bot, {
-            point: target,
-            distance: 2,
-        })
+        for (let i = 3; i >= 0; i--) {
+            yield* goto.task(bot, {
+                block: position,
+            })
 
-        yield* wrap(bot.bot.equip(args.item, 'hand'))
-        const placeOn = bot.bot.blockAt(target)
-        yield* wrap(bot.bot.placeBlock(placeOn, faceVector))
+            let imInTheWay = false
+
+            if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.6) {
+                imInTheWay = true
+            }
+
+            if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.6) {
+                imInTheWay = true
+            }
+
+            if (imInTheWay) {
+                yield* goto.task(bot, {
+                    flee: position,
+                    distance: 1.9,
+                })
+            }
+
+            if (blockHere && MC.replaceableBlocks[blockHere.name] !== 'yes') {
+                throw `There is already a block here: ${blockHere.name}`
+            }
+
+            const referenceBlock = bot.bot.blockAt(referencePosition)
+            if (!referenceBlock || MC.replaceableBlocks[referenceBlock.name]) {
+                throw `Invalid reference block ${referenceBlock.name}`
+            }
+
+            if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+
+            try {
+                yield* wrap(bot.bot.equip(bot.mc.data.itemsByName[item].id, 'hand'))
+                if (botFacing) {
+                    const yaw = Math.atan2(-botFacing.x, -botFacing.z)
+                    const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
+                    const pitch = Math.atan2(botFacing.y, groundDistance)
+                    yield* wrap(bot.bot.look(yaw, pitch, true))
+                }
+                // @ts-ignore
+                yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
+                break
+            } catch (error) {
+                if (i === 0) { throw error }
+                // console.warn(`[Bot "${bot.username}"] Failed to place ${item}, retrying ... (${i})`)
+            }
+        }
     },
     id: function(args) {
-        return `place-block-${args.item}-${args.clearGrass}`
+        if ('item' in args) {
+            return `place-item-${args.item}-${args.clearGrass}`
+        } else {
+            return `place-block-${args.block}-${args.clearGrass}`
+        }
     },
     humanReadableId: function(args) {
-        return `Placing ${args.item}`
+        if ('item' in args) {
+            return `Placing ${args.item}`
+        } else {
+            return `Placing ${args.block}`
+        }
     },
+    getCorrectItem: getCorrectItem,
+    getCorrectBlock: getCorrectBlock,
 }
