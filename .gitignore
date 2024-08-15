@@ -3,5 +3,6 @@
 /worlds
 /package-lock.json
 /bun.lockb
+/src/index.js
 
 **/*.code-workspace
