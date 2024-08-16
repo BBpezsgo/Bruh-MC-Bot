@@ -2,7 +2,7 @@ const { wrap } = require('../utils/tasks')
 const { basicRouteSearch, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
 const plantSeed = require('./plant-seed')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
 const pickupItem = require('./pickup-item')
@@ -46,7 +46,7 @@ module.exports = {
                 if (!cropBlock) { continue }
                 // console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
 
-                const cropInfo = MC.resolveCrop(cropBlock.name)
+                const cropInfo = Minecraft.resolveCrop(cropBlock.name)
                 if (!cropInfo) {
                     console.warn(`[Bot "${bot.username}"] This aint a crop`)
                     continue
@@ -183,7 +183,7 @@ module.exports = {
                 try {
                     // console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
 
-                    const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[cropInfo.seed].id, null, false)
+                    const seed = bot.bot.inventory.findInventoryItem(bot.mc.registry.itemsByName[cropInfo.seed].id, null, false)
                     if (!seed) {
                         throw `Can't replant this: doesn't have "${cropInfo.seed}"`
                     }
@@ -252,9 +252,7 @@ module.exports = {
                     if (j !== -1) {
                         items.splice(j)
                     }
-                } catch (error) {
-                    console.warn(`[Bot ${bot.username}]`, error)
-                }
+                } catch (error) { }
             }
         }
 

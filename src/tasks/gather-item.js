@@ -7,8 +7,11 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
-const { parseYesNoH, parseLocationH, toArray, Interval } = require('../utils/other')
+const { parseYesNoH, parseLocationH, toArray, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
 const giveTo = require('./give-to')
+const { Vec3 } = require('vec3')
+const dig = require('./dig')
+const smelt = require('./smelt')
 
 /**
  * @typedef {PermissionArgs & {
@@ -33,46 +36,69 @@ const giveTo = require('./give-to')
 */
 
 /**
- * @typedef {({
- *   item: string;
- *   count: number;
- * } & ({
- *   type: 'chest';
- *   chest: Vec3Dimension;
- * } | {
- *   type: 'craft';
- *   recipe: Recipe;
- * } | {
- *   type: 'smelt';
- * } | {
- *   type: 'inventory';
- * })) | {
- *   type: 'goto';
- *   destination: Vec3Dimension;
- *   distance: number;
- * } | {
- *   type: 'request';
- *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
- * } | {
- *   type: 'trade';
- *   trade: import('../environment').SavedVillager['trades'][0];
- *   count: number;
- * } | {
- *   type: 'bundle-out';
- *   item: string;
- *   count: number;
- * } | {
- *   type: 'request-from-anyone';
- *   item: string;
- *   count: number;
- * }} PlanStep
+ * @typedef {{
+ *   'chest': {
+ *     type: 'chest';
+ *     item: string;
+ *     count: number;
+ *     chest: Vec3Dimension;
+ *   };
+ *   'craft': {
+ *     type: 'craft';
+ *     item: string;
+ *     count: number;
+ *     recipe: Recipe;
+ *   };
+ *   'smelt': {
+ *     type: 'smelt';
+ *     recipe: import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe;
+ *     count: number;
+ *   };
+ *   'inventory': {
+ *     type: 'inventory';
+ *     item: string;
+ *     count: number;
+ *   };
+ *   'goto': {
+ *     type: 'goto';
+ *     destination: Vec3Dimension;
+ *     distance: number;
+ *   };
+ *   'request': {
+ *     type: 'request';
+ *     locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+ *   };
+ *   'trade': {
+ *     type: 'trade';
+ *     trade: import('../environment').SavedVillager['trades'][0];
+ *     count: number;
+ *   };
+ *   'bundle-out': {
+ *     type: 'bundle-out';
+ *     item: string;
+ *     count: number;
+ *   };
+ *   'request-from-anyone': {
+ *     type: 'request-from-anyone';
+ *     item: string;
+ *     count: number;
+ *   };
+ *   'dig': {
+ *     type: 'dig';
+ *     block: { position: Vec3; name: string; };
+ *     willGet: { item: string; count: number; };
+ *     retryCount: number;
+ *   };
+ * }} PlanSteps
  */
 
 /**
- * @typedef {{
- *   movement: number;
- *   other: number;
- * }} PlanCost
+ * @typedef {keyof PlanSteps} PlanStepType
+ */
+
+/**
+ * @template {PlanStepType} [TType = PlanStepType]
+ * @typedef {PlanSteps[TType]} PlanStep
  */
 
 /**
@@ -104,7 +130,7 @@ class PredictedEnvironment {
 
     /**
      * @param {ReadonlyArray<PlanStep>} steps
-     * @param {import('../mc')['data']} registry
+     * @param {import('../minecraft')['registry']} registry
      */
     constructor(steps, registry) {
         this.inventory = {}
@@ -145,8 +171,8 @@ class PredictedEnvironment {
                     continue
                 }
                 case 'smelt': {
-                    this.inventory[step.item] ??= 0
-                    this.inventory[step.item] += step.count
+                    this.inventory[step.recipe.result] ??= 0
+                    this.inventory[step.recipe.result] += step.count
                     continue
                 }
                 case 'craft': {
@@ -172,16 +198,10 @@ const planningLogs = false
 
 /**
  * @param {Plan} plan
- * @returns {PlanCost}
+ * @returns {number}
  */
 function planCost(plan) {
-    /**
-     * @type {PlanCost}
-     */
-    const cost = {
-        movement: 0,
-        other: 0,
-    }
+    let cost = 0
 
     for (const step of plan) {
         if ('type' in step) {
@@ -190,49 +210,48 @@ function planCost(plan) {
                 case 'inventory':
                 case 'goto':
                     break
+                case 'dig':
+                    cost += 0.1
+                    break
                 case 'craft': {
                     if (step.recipe.requiresTable) {
-                        cost.other += 1
+                        cost += 1
                     }
                     break
                 }
                 case 'bundle-out': {
-                    cost.other += 1
+                    cost += 0.5
                     break
                 }
                 case 'smelt': {
-                    cost.other += 2
+                    if (step.recipe.type === 'campfire') {
+                        cost += 2
+                    } else {
+                        cost += 4
+                    }
                     break
                 }
                 case 'request': {
-                    cost.other += 5
+                    cost += 5
                     break
                 }
                 case 'trade': {
-                    cost.other += 10
+                    cost += 10
                     break
                 }
                 case 'request-from-anyone': {
-                    cost.other += 1000
+                    cost += 1000
                     break
                 }
                 default:
+                    debugger
                     break
             }
         } else {
-            const subCost = planCost(step)
-            cost.movement += subCost.movement;
-            cost.other += subCost.other;
+            cost += planCost(step)
         }
     }
     return cost
-}
-
-/**
- * @param {PlanCost} planCost 
- */
-function normalizePlanCost(planCost) {
-    return planCost.movement + planCost.other
 }
 
 /**
@@ -267,11 +286,22 @@ function planResult(plan, item) {
                 }
                 continue
             }
+            if (step.type === 'dig') {
+                if (step.willGet.item === item) {
+                    count += step.willGet.count
+                }
+                continue
+            }
+            if (step.type === 'smelt') {
+                if (step.recipe.result === item) {
+                    count += step.count
+                }
+                continue
+            }
             if (step.item === item) {
                 switch (step.type) {
                     case 'chest':
-                    case 'inventory':
-                    case 'smelt': {
+                    case 'inventory': {
                         count += step.count
                         break
                     }
@@ -305,7 +335,7 @@ const planners = [
         if (!permissions.canUseInventory) { return null }
         if (permissions.force) { return null }
 
-        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
+        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
@@ -328,7 +358,7 @@ const planners = [
 
         if (!permissions.canUseChests) { return null }
 
-        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.data)
+        const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
@@ -376,13 +406,13 @@ const planners = [
 
         if (!permissions.canCraft) { return null }
 
-        const recipes = bot.bot.recipesAll(bot.mc.data.itemsByName[item].id, null, true)
+        const recipes = bot.bot.recipesAll(bot.mc.registry.itemsByName[item].id, null, true)
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
         const scoredRecipes = recipes.map(v => {
             let score = 0
             for (const delta of v.delta) {
                 if (delta.count > 0) { continue }
-                const item = bot.mc.data.items[delta.id].name
+                const item = bot.mc.registry.items[delta.id].name
                 const successfulGathering = bot.memory.successfulGatherings[item]
                 if (!successfulGathering) { continue }
                 // if ((Date.now() - successfulGathering.lastTime) > 120_000) {
@@ -421,7 +451,7 @@ const planners = [
                 if (ingredient.count >= 0) { continue }
                 yield
                 const ingredientCount = -ingredient.count
-                const subplan = yield* plan(bot, bot.mc.data.items[ingredient.id].name, ingredientCount, {
+                const subplan = yield* plan(bot, bot.mc.registry.items[ingredient.id].name, ingredientCount, {
                     ...permissions,
                     force: false,
                 }, {
@@ -431,7 +461,7 @@ const planners = [
                         item,
                     ],
                 })
-                const subplanResult = planResult(subplan, bot.mc.data.items[ingredient.id].name)
+                const subplanResult = planResult(subplan, bot.mc.registry.items[ingredient.id].name)
                 if (subplanResult < ingredientCount) {
                     if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
                     return null
@@ -447,7 +477,7 @@ const planners = [
             for (let i = 0; i < actualCraftCount; i++) {
                 multipliedIngredientPaths.push(...ingredientPlans)
             }
-            const thisPlanCost = normalizePlanCost(planCost(multipliedIngredientPaths))
+            const thisPlanCost = planCost(multipliedIngredientPaths)
             if (thisPlanCost < bestRecipeCost) {
                 bestRecipe = {
                     plan: multipliedIngredientPaths,
@@ -486,7 +516,7 @@ const planners = [
             if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Plan for crafting table ...`)
             yield
             const tableInWorld = bot.bot.findBlock({
-                matching: bot.mc.data.blocksByName['crafting_table'].id,
+                matching: bot.mc.registry.blocksByName['crafting_table'].id,
                 maxDistance: 32,
             })
             if (!tableInWorld) {
@@ -521,9 +551,136 @@ const planners = [
         result.push(bestRecipe.plan.flat())
         result.push({
             type: 'craft',
-            item: bot.mc.data.items[bestRecipe.recipe.result.id].name,
+            item: bot.mc.registry.items[bestRecipe.recipe.result.id].name,
             count: Math.ceil(count / bestRecipe.recipe.result.count),
             recipe: bestRecipe.recipe,
+        })
+
+        return result
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
+
+        if (!permissions.canCraft) { return null }
+
+        const recipes = []
+
+        for (const recipeId in bot.mc.local.recipes.blasting) {
+            const recipe = bot.mc.local.recipes.blasting[recipeId]
+            if (recipe.result !== item) { continue }
+            recipes.push(recipe)
+        }
+
+        for (const recipeId in bot.mc.local.recipes.smoking) {
+            const recipe = bot.mc.local.recipes.smoking[recipeId]
+            if (recipe.result !== item) { continue }
+            recipes.push(recipe)
+        }
+
+        for (const recipeId in bot.mc.local.recipes.smelting) {
+            const recipe = bot.mc.local.recipes.smelting[recipeId]
+            if (recipe.result !== item) { continue }
+            recipes.push(recipe)
+        }
+
+        for (const recipeId in bot.mc.local.recipes.campfire) {
+            const recipe = bot.mc.local.recipes.campfire[recipeId]
+            if (recipe.result !== item) { continue }
+            recipes.push(recipe)
+        }
+
+        const usableRecipes = smelt.findBestFurnace(bot, recipes, false)
+
+        if (!usableRecipes || usableRecipes.recipes.length === 0) { return null }
+
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
+        yield
+        /**
+         * @type {{
+         *   plan: Array<ReadonlyArray<PlanStep>>;
+         *   recipe: import('../local-minecraft-data').CookingRecipe;
+         * } | null}
+         */
+        let bestRecipe = null
+        let bestRecipeCost = Infinity
+
+        /**
+         * @param {import('../local-minecraft-data').CookingRecipe} recipe
+         */
+        const visitRecipe = function*(recipe) {
+            /**
+             * @type {Array<ReadonlyArray<PlanStep>>}
+             */
+            const ingredientPlans = []
+            for (const ingredient of recipe.ingredient) {
+                yield
+                const subplan = yield* plan(bot, ingredient, 1, {
+                    ...permissions,
+                    force: false,
+                }, {
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                    ],
+                })
+                const subplanResult = planResult(subplan, ingredient)
+                if (subplanResult < 1) {
+                    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
+                    return null
+                }
+                ingredientPlans.push(subplan.flat())
+            }
+
+            /**
+             * @type {Array<ReadonlyArray<PlanStep>>}
+             */
+            const multipliedIngredientPaths = []
+            for (let i = 0; i < count; i++) {
+                multipliedIngredientPaths.push(...ingredientPlans)
+            }
+            const thisPlanCost = planCost(multipliedIngredientPaths)
+            const selfCost = planCost([
+                {
+                    type: 'smelt',
+                    count: count,
+                    recipe: recipe,
+                }
+            ])
+            const totalRecipeCost = thisPlanCost + selfCost
+            if (totalRecipeCost < bestRecipeCost) {
+                bestRecipe = {
+                    plan: multipliedIngredientPaths,
+                    recipe: recipe,
+                }
+                bestRecipeCost = totalRecipeCost
+            }
+
+            return ingredientPlans
+        }
+
+        for (const recipe of usableRecipes.recipes) {
+            yield
+            yield* visitRecipe(recipe)
+        }
+
+        if (!bestRecipe) {
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   No recipe found`)
+            return null
+        }
+
+        /**
+         * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
+         */
+        const result = []
+
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Recipe found`)
+
+        result.push(bestRecipe.plan.flat())
+        result.push({
+            type: 'smelt',
+            recipe: bestRecipe.recipe,
+            count: count,
         })
 
         return result
@@ -627,6 +784,62 @@ const planners = [
             count: count,
         }
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        if (item !== 'cobblestone') { return null }
+
+        if (!permissions.canDig) { return null }
+
+        if (!bot.searchItem(
+            'wooden_pickaxe',
+            'stone_pickaxe',
+            'iron_pickaxe',
+            'golden_pickaxe',
+            'diamond_pickaxe',
+            'netherite_pickaxe',
+        )) { return null }
+
+        /** @type {Vec3} */
+        let found = null
+        bot.bot.findBlock({
+            matching: bot.mc.registry.blocksByName['lava'].id,
+            count: 1,
+            maxDistance: 32,
+            useExtraInfo: (block) => {
+                for (const lavaNeighborPosition of directBlockNeighbors(block.position, 'side')) {
+                    const lavaNeighbor = bot.bot.blockAt(lavaNeighborPosition)
+                    if (!lavaNeighbor || lavaNeighbor.name !== 'cobblestone') { continue }
+
+                    for (const cobblestoneNeighborPosition of directBlockNeighbors(lavaNeighbor.position, 'side')) {
+                        if (cobblestoneNeighborPosition.equals(block.position)) { continue }
+                        const cobblestoneNeighbor = bot.bot.blockAt(cobblestoneNeighborPosition)
+                        if (!cobblestoneNeighbor || cobblestoneNeighbor.name !== 'water') { continue }
+                        const waterLevel = cobblestoneNeighbor.getProperties()['level']
+                        if (!waterLevel) { continue }
+                        if (waterLevel !== 1) { continue }
+                        const blockBelowFlowingWater = bot.bot.blockAt(cobblestoneNeighborPosition.offset(0, -1, 0))
+                        if (!blockBelowFlowingWater) { continue }
+                        if (blockBelowFlowingWater.name !== 'water') { continue }
+                        if (found) {
+                            return false
+                        } else {
+                            found = lavaNeighborPosition
+                        }
+                    }
+                }
+                if (!found) { return false }
+                return true
+            },
+        })
+
+        if (!found) { return null }
+
+        return {
+            type: 'dig',
+            block: bot.bot.blockAt(found),
+            willGet: { item: 'cobblestone', count: 1 },
+            retryCount: 5,
+        }
+    },
 ]
 
 /**
@@ -668,7 +881,7 @@ function* plan(bot, item, count, permissions, context) {
         for (const planner of planners) {
             const _plan = yield* planner(bot, item, need, permissions, context, result)
             if (!_plan) { continue }
-            const _planCost = normalizePlanCost(planCost([_plan].flat(3)))
+            const _planCost = planCost([_plan].flat(3))
             if (_planCost < bestPlanCost) {
                 bestPlan = [_plan].flat(3)
                 bestPlanCost = _planCost
@@ -765,12 +978,12 @@ function* evaluatePlan(bot, plan) {
                         if (ingredient.count >= 0) { continue }
                         const has = bot.bot.inventory.count(ingredient.id, ingredient.metadata)
                         if (has < -ingredient.count) {
-                            throw `Not enough ${bot.mc.data.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${-ingredient.count}`
+                            throw `Not enough ${bot.mc.registry.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${-ingredient.count}`
                         }
                     }
                     if (step.recipe.requiresTable) {
                         let tableBlock = bot.bot.findBlock({
-                            matching: bot.mc.data.blocksByName['crafting_table'].id,
+                            matching: bot.mc.registry.blocksByName['crafting_table'].id,
                             maxDistance: 64,
                         })
                         if (!tableBlock) {
@@ -783,7 +996,7 @@ function* evaluatePlan(bot, plan) {
                                 clearGrass: true,
                             })
                             tableBlock = bot.bot.findBlock({
-                                matching: bot.mc.data.blocksByName['crafting_table'].id,
+                                matching: bot.mc.registry.blocksByName['crafting_table'].id,
                                 maxDistance: 64,
                             })
                             if (!tableBlock) {
@@ -803,7 +1016,11 @@ function* evaluatePlan(bot, plan) {
                     continue
                 }
                 case 'smelt': {
-                    debugger
+                    yield* smelt.task(bot, {
+                        count: step.count,
+                        noFuel: false,
+                        recipes: [ step.recipe ],
+                    })
                     continue
                 }
                 case 'request': {
@@ -843,7 +1060,7 @@ function* evaluatePlan(bot, plan) {
                     if (items.length === 0) { throw `Item disappeared from the bundle` }
                     if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
 
-                    const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.data, bundleItem.slot, items[0].name))
+                    const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name))
 
                     if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
                     if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
@@ -851,6 +1068,7 @@ function* evaluatePlan(bot, plan) {
                     continue
                 }
                 case 'request-from-anyone': {
+                    if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
                     let requestPlayer
                     let response
                     try {
@@ -872,6 +1090,7 @@ function* evaluatePlan(bot, plan) {
 
                     let location = bot.env.getPlayerPosition(requestPlayer, 10000)
                     if (!location) {
+                        if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
                         try {
                             const response = yield* bot.ask(`Where are you?`, v => bot.bot.whisper(requestPlayer, v), requestPlayer, 30000)
                             location = parseLocationH(response.message)
@@ -965,6 +1184,53 @@ function* evaluatePlan(bot, plan) {
                     continue
                 }
 
+                case 'dig': {
+                    for (let i = step.retryCount - 1; i >= 0; i--) {
+                        try {
+                            let block = bot.bot.blockAt(step.block.position)
+                            while (!block || block.name !== step.block.name) {
+                                yield* sleepG(100)
+                                if (!block) {
+                                    yield* goto.task(bot, {
+                                        block: step.block.position,
+                                    })
+                                    block = bot.bot.blockAt(step.block.position)
+                                }
+        
+                                if (!block) { break }
+        
+                                const timeout = new Timeout(5000)
+                                while (!timeout.done() && block && block.name !== step.block.name) {
+                                    yield* sleepG(100)
+                                    block = bot.bot.blockAt(step.block.position)
+                                }
+                            }
+        
+                            if (!block) {
+                                throw `Chunk where I like to dig aint loaded`
+                            }
+        
+                            if (block.name !== step.block.name) {
+                                throw `Unexpected block at ${step.block.position}: expected ${step.block.name}, found ${block.name}`
+                            }
+        
+                            const digResult = yield* dig.task(bot, {
+                                block: block,
+                                alsoTheNeighbors: false,
+                            })
+        
+                            if (digResult.itemsDelta[step.willGet.item] < step.willGet.count) {
+                                throw `Couldn't dig ${step.willGet.count} ${step.willGet.item}: got ${digResult.itemsDelta[step.willGet.item]}`
+                            }
+                            break
+                        } catch (error) {
+                            if (i === 0) { throw error }
+                            console.warn(`[Bot "${bot.username}"]: ${error} (remaining retries: ${i})`)
+                        }
+                    }
+                    continue
+                }
+
                 default: debugger
             }
         }
@@ -1006,7 +1272,7 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'smelt': {
-                builder += `Smelt ${step.count} ${step.item}\n`
+                builder += `Smelt ${step.count} ${step.recipe.result}\n`
                 break
             }
             case 'goto': {
@@ -1033,8 +1299,12 @@ function stringifyPlan(bot, plan) {
                 builder += `Request ${step.count} ${step.item} from anyone\n`
                 break
             }
+            case 'dig': {
+                builder += `Dig ${step.block.name} at ${step.block.position}\n`
+                break
+            }
             default: {
-                builder += `<unknown>\n`
+                debugger
                 break
             }
         }
@@ -1048,25 +1318,60 @@ function stringifyPlan(bot, plan) {
  * @returns {OrganizedPlan}
  */
 function organizePlan(plan) {
-    let result = []
-    for (const step of plan) {
-        if ('type' in step) {
-            result.push(step)
+    const indexedSteps = plan.flat(2).map((v, index) => ({
+        ...v,
+        i: index,
+    }))
+
+    const grouped = indexedSteps.reduce((memo, x) => {
+        if (!memo[x.type]) { memo[x.type] = [] }
+        // @ts-ignore
+        memo[x.type].push(x)
+        return memo
+    }, /** @type {{ [K in PlanStep['type']]: Array<PlanStep<K> & { i: number; }> }} */({}))
+
+    /** @type {ReadonlyArray<PlanStepType>} */ //@ts-ignore
+    const stepTypes = Object.keys(grouped)
+
+    /** @type {readonly ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out']} */
+    const orderedStepTypes = ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out']
+
+    /** @typedef {orderedStepTypes[number]} OrderedStepTypes */
+    /** @typedef {Exclude<PlanStepType, OrderedStepTypes>} UnorderedStepTypes */
+
+    /** @type {Array<PlanStep<OrderedStepTypes> & { i: number; }>} */
+    const orderedSteps = []
+    /** @type {Array<PlanStep<UnorderedStepTypes> & { i: number; }>} */
+    const unorderedSteps = []
+
+    for (const stepType of stepTypes) {
+        const steps = grouped[stepType]
+        // @ts-ignore
+        if (orderedStepTypes.includes(stepType)) {
+            // @ts-ignore
+            orderedSteps.push(...steps)
         } else {
-            result.push(...step)
+            // @ts-ignore
+            unorderedSteps.push(...steps)
         }
     }
-    const userRequestSteps = result.filter(v => v.type === 'smelt')
-    const inventorySteps = result.filter(v => v.type === 'inventory')
-    const chestSteps = result.filter(v => v.type === 'chest')
-    const requestSteps = result.filter(v => v.type === 'request')
-    const otherSteps = result.filter(v => (v.type !== 'inventory') && (v.type !== 'chest') && (v.type !== 'request'))
+
+    /** @type {Record<UnorderedStepTypes, number>} */ //@ts-ignore
+    const unorderedStepPriorities = {}
+        ;[
+            'request-from-anyone',
+            'request',
+            'chest',
+            'inventory',
+            // @ts-ignore
+        ].forEach((value, index) => unorderedStepPriorities[value] = index)
+
+    orderedSteps.sort((a, b) => a.i - b.i)
+    unorderedSteps.sort((a, b) => unorderedStepPriorities[a.type] - unorderedStepPriorities[b.type])
+
     return [
-        ...userRequestSteps,
-        ...inventorySteps,
-        ...chestSteps,
-        ...requestSteps,
-        ...otherSteps,
+        ...orderedSteps,
+        ...unorderedSteps,
     ]
 }
 
@@ -1077,7 +1382,6 @@ function organizePlan(plan) {
  *   plan: plan;
  *   organizePlan: organizePlan;
  *   stringifyPlan: stringifyPlan;
- *   normalizePlanCost: normalizePlanCost;
  *   PredictedEnvironment: typeof PredictedEnvironment,
  * }}
  */
@@ -1101,7 +1405,7 @@ const def = {
             const _itemPlan = {
                 item: item,
                 plan: itemPlan,
-                planCost: normalizePlanCost(planCost(itemPlan)),
+                planCost: planCost(itemPlan),
                 planResult: planResult(itemPlan, item),
             }
             if (!bestPlan) {
@@ -1158,7 +1462,7 @@ const def = {
         console.log(`[Bot "${bot.username}"] Environment in the future:`)
         {
             let builder = ''
-            const future = new PredictedEnvironment(_organizedPlan, bot.mc.data)
+            const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
 
             let inventoryBuilder = ''
             for (const name in future.inventory) {
@@ -1169,7 +1473,7 @@ const def = {
                 builder += 'Inventory:\n'
                 builder += inventoryBuilder
             }
-            
+
             let chestsBuilder = ''
             for (const position in future.chests) {
                 /** @type {Record<string, number>} */ // @ts-ignore
@@ -1196,7 +1500,6 @@ const def = {
         return `Gathering ${args.count} ${args.item}`
     },
     planCost: planCost,
-    normalizePlanCost: normalizePlanCost,
     planResult: planResult,
     plan: plan,
     organizePlan: organizePlan,

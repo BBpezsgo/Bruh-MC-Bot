@@ -1,6 +1,5 @@
 const StreamZip = require('node-stream-zip')
 const Path = require('path')
-const fs = require('fs')
 
 /**
  * @exports
@@ -113,7 +112,7 @@ const fs = require('fs')
  * } RecipeType
  */
 
-module.exports = class MinecraftData {
+module.exports = class LocalMinecraftData {
     /**
      * @readonly
      * @type {{
@@ -128,45 +127,9 @@ module.exports = class MinecraftData {
 
     /**
      * @readonly
-     * @type {{ [item: string]: { time: number; no: boolean; } }}
-     */
-    fuels
-
-    /**
-     * @readonly
-     * @type {Array<{ item: string; time: number; no: boolean; }>}
-     */
-    sortedFuels
-
-    /**
-     * @readonly
-     * @type {{ [item: string]: { chance: number; no: boolean; } }}
-     */
-    compost
-
-    /**
-     * @readonly
-     * @type {{ [item: string]: string }}
-     */
-    compacting
-
-    /**
-     * @readonly
      * @type {any}
      */
     tags
-
-    /**
-     * @readonly
-     * @type {GeneralData}
-     */
-    general
-
-    /**
-     * @readonly
-     * @type {MlgData}
-     */
-    mlg
 
     /**
      * @param {string} path
@@ -180,23 +143,7 @@ module.exports = class MinecraftData {
             smoking: { },
         }
 
-        this.fuels = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'fuels.json'), 'utf8'))
-        this.compost = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'compost.json'), 'utf8'))
-        this.general = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'general.json'), 'utf8'))
-        this.mlg = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'mlg.json'), 'utf8'))
-        this.compacting = JSON.parse(fs.readFileSync(Path.join(__dirname, '..', 'data', 'compacting.json'), 'utf8'))
-
-        this.sortedFuels = [ ]
         this.tags = { }
-
-        for (const item in this.fuels) {
-            this.sortedFuels.push({
-                item: item,
-                time: this.fuels[item].time,
-                no: this.fuels[item].no,
-            })
-        }
-        this.sortedFuels.sort((a, b) => b.time - a.time)
 
         const zip = new StreamZip.async({
             file: path,
@@ -372,19 +319,5 @@ module.exports = class MinecraftData {
         }
         console.warn(`Unknown tag "${tag}"`)
         return [ ]
-    }
-
-    /**
-     * @param {boolean} includeNono
-     */
-    getFuel(includeNono) {
-        for (let i = 0; i < this.sortedFuels.length; i++) {
-            const fuel = this.sortedFuels[i]
-            if (!includeNono && fuel.no) {
-                continue
-            }
-            return fuel
-        }
-        return null
     }
 }

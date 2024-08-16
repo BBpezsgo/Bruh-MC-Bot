@@ -11,6 +11,14 @@
 		}
 	],
 	"settings": {
+		"typescript.tsserver.experimental.enableProjectDiagnostics": true,
+		"javascript.referencesCodeLens.enabled": true,
+		"javascript.referencesCodeLens.showOnAllFunctions": true,
+		"files.watcherExclude": {
+			"**/.git**": true,
+			"**/node_modules/*/**": true,
+			"**/.hg/**": true
+		},
 		"files.exclude": {
 			"node_modules": true,
 			"package-lock.json": true,
@@ -95,5 +103,31 @@
 		],
 		"javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
 		"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false
-	}
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Node",
+				"program": "${workspaceFolder}/src/index.js",
+				"type": "node",
+				"request": "launch",
+				"skipFiles": [
+					"<node_internals>/**"
+				]
+			},
+			{
+				"name": "Bun",
+				"program": "./src/index.js",
+				"type": "bun",
+				"request": "launch",
+				"args": [
+					"run"
+				],
+				"stopOnEntry": false,
+				"internalConsoleOptions": "openOnSessionStart",
+				"runtime": "bun",
+			}
+		]
+	},
 }

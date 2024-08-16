@@ -34,10 +34,10 @@ module.exports = {
             }
 
             let water = bot.bot.findBlock({
-                matching: bot.mc.data.blocksByName['water'].id,
+                matching: bot.mc.registry.blocksByName['water'].id,
                 maxDistance: 32,
                 useExtraInfo: (/** @type {Block} */ water) => {
-                    if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.data.blocksByName['air'].id) {
+                    if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
                         return false
                     }
                     return true
@@ -55,11 +55,11 @@ module.exports = {
                     distance: 4,
                 })
                 yield* goto.task(bot, {
-                    hawkeye: water.position.offset(0, 0.5, 0),
+                    hawkeye: water.position.offset(0.5, 0.5, 0.5),
                     weapon: Weapons.bobber,
                 })
                 const grade = bot.bot.hawkEye.getMasterGrade({
-                    position: water.position.offset(0, 0.5, 0),
+                    position: water.position.offset(0.5, 0.5, 0.5),
                     isValid: false,
                 }, new Vec3(0, 0, 0), Weapons.bobber)
 

@@ -6,7 +6,7 @@ const Vec3Dimension = require('./vec3-dimension')
  * @param {string} key
  * @param {any} value
  * @returns {any}
- */ //@ts-ignore
+ */
 function reviver(key, value) {
     if (value &&
         (typeof value === 'object') &&
@@ -40,7 +40,7 @@ function reviver(key, value) {
  * @param {string} key
  * @param {any} value
  * @returns {any}
- */ //@ts-ignore
+ */
 function replacer(key, value) {
     if (value && value instanceof Vec3) {
         return {

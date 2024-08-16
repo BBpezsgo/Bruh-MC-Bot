@@ -2,7 +2,7 @@ const { Vec3 } = require('vec3')
 const { sleepG, wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const { Block } = require('prismarine-block')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
@@ -24,19 +24,19 @@ module.exports = {
         }
 
         const hoes = [
-            bot.mc.data.itemsByName['wooden_hoe'].id,
-            bot.mc.data.itemsByName['stone_hoe'].id,
-            bot.mc.data.itemsByName['iron_hoe'].id,
-            bot.mc.data.itemsByName['golden_hoe'].id,
-            bot.mc.data.itemsByName['diamond_hoe'].id,
-            bot.mc.data.itemsByName['netherite_hoe'].id,
+            bot.mc.registry.itemsByName['wooden_hoe'].id,
+            bot.mc.registry.itemsByName['stone_hoe'].id,
+            bot.mc.registry.itemsByName['iron_hoe'].id,
+            bot.mc.registry.itemsByName['golden_hoe'].id,
+            bot.mc.registry.itemsByName['diamond_hoe'].id,
+            bot.mc.registry.itemsByName['netherite_hoe'].id,
         ]
         let n = 0
 
         {
             let hasHoe = false
             for (const hoe of hoes) {
-                const hoeItem = bot.searchItem(bot.mc.data.items[hoe].name)
+                const hoeItem = bot.searchItem(bot.mc.registry.items[hoe].name)
                 if (hoeItem) {
                     hasHoe = true
                     break
@@ -52,7 +52,7 @@ module.exports = {
 
         const equipHoe = function*() {
             for (const hoe of hoes) {
-                const hoeItem = bot.searchItem(bot.mc.data.items[hoe].name)
+                const hoeItem = bot.searchItem(bot.mc.registry.items[hoe].name)
                 if (hoeItem) {
                     if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoe) {
                         yield* wrap(bot.bot.equip(hoe, 'hand'))
@@ -67,12 +67,12 @@ module.exports = {
                 throw `I don't have a hoe`
             }
 
-            // const gatherResult = await (new GatherItemGoal(this, context.mc.data.itemsByName['wooden_hoe'].id, 1, false, false, false, true)).wait()
+            // const gatherResult = await (new GatherItemGoal(this, context.mc.registry.itemsByName['wooden_hoe'].id, 1, false, false, false, true)).wait()
             // if ('error' in gatherResult) {
             //     return gatherResult
             // }
             // 
-            // await context.bot.equip(context.mc.data.itemsByName['wooden_hoe'].id, 'hand')
+            // await context.bot.equip(context.mc.registry.itemsByName['wooden_hoe'].id, 'hand')
             // return { result: true }
         }
 
@@ -89,7 +89,7 @@ module.exports = {
             }
         
             water = bot.bot.findBlock({
-                matching: [ bot.mc.data.blocksByName['water'].id ],
+                matching: [ bot.mc.registry.blocksByName['water'].id ],
                 point: target.xyz(bot.dimension),
                 maxDistance: 4,
             })?.position.clone()
@@ -103,7 +103,7 @@ module.exports = {
 
             let above = bot.bot.blockAt(args.block.offset(0, 1, 0).xyz(bot.dimension))
 
-            while (above && MC.replaceableBlocks[above.name] === 'break') {
+            while (above && Minecraft.replaceableBlocks[above.name] === 'break') {
                 if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
                     console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
                     yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
@@ -112,7 +112,7 @@ module.exports = {
                 }
             }
 
-            if (above && !MC.replaceableBlocks[above.name]) {
+            if (above && !Minecraft.replaceableBlocks[above.name]) {
                 throw `Can't break ${above.name ?? 'null'}`
             }
 
@@ -120,7 +120,7 @@ module.exports = {
                 block: args.block,
             })
 
-            if (above && MC.replaceableBlocks[above.name] === 'break') {
+            if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
                 yield* wrap(bot.bot.dig(above, true))
             }
 
@@ -137,7 +137,7 @@ module.exports = {
 
             const filterBlock = (/** @type {Block} */ block) => {
                 const above = bot.bot.blockAt(block.position.offset(0, 1, 0))
-                if (above && !MC.replaceableBlocks[above.name]) { return false }
+                if (above && !Minecraft.replaceableBlocks[above.name]) { return false }
                 // if (block.skyLight < 7) { return false }
                 return true
             }
@@ -170,7 +170,7 @@ module.exports = {
             let shouldContinue = false
             for (const dirt of dirts) {
                 const above = bot.bot.blockAt(dirt.xyz(bot.dimension).offset(0, 1, 0))
-                if (!MC.replaceableBlocks[above?.name ?? '']) {
+                if (!Minecraft.replaceableBlocks[above?.name ?? '']) {
                     continue
                 }
 
@@ -178,7 +178,7 @@ module.exports = {
                     block: dirt.clone(),
                 })
 
-                if (MC.replaceableBlocks[above.name] === 'break') {
+                if (Minecraft.replaceableBlocks[above.name] === 'break') {
                     yield* wrap(bot.bot.dig(above, true))
                 }
 

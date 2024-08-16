@@ -25,7 +25,7 @@ module.exports = {
                     let notFirst = false
                     while (junkBlock = bot.bot.findBlock({
                         matching: [
-                            bot.mc.data.blocksByName['water'].id
+                            bot.mc.registry.blocksByName['water'].id
                         ],
                         maxDistance: 2,
                         point: junk.position.xyz(bot.dimension),
@@ -67,7 +67,7 @@ module.exports = {
 
                     const junkBlock = bot.bot.findBlock({
                         matching: [
-                            bot.mc.data.blocksByName[junk.blockName].id
+                            bot.mc.registry.blocksByName[junk.blockName].id
                         ],
                         maxDistance: 2,
                         point: junk.position.xyz(bot.dimension),

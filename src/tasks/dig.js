@@ -4,9 +4,16 @@ const { wrap, sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
+const { toArray } = require('../utils/other')
 
 /**
- * @type {import('../task').TaskDef<number, { block: Block; alsoTheNeighbors: boolean; }>}
+ * @type {import('../task').TaskDef<{
+ *   digged: Array<Vec3>;
+ *   itemsDelta: Record<string, number>;
+ * }, {
+ *   block: Block;
+ *   alsoTheNeighbors: boolean;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -15,7 +22,7 @@ module.exports = {
         }
 
         /**
-         * @type {Array<Vec3>}
+         * @type {Array<{ position: Vec3; loot: getMcData.BlockItemDrop[] }>}
          */
         const digged = [ ]
         /**
@@ -23,18 +30,24 @@ module.exports = {
          */
         let current = args.block
 
+        const itemsBefore = toArray(bot.items()).reduce((map, item) => {
+            if (!map[item.name]) { map[item.name] = 0 }
+            map[item.name] -= item.count
+            return map
+        }, /** @type {Record<string, number>} */ ({}))
+
         while (current) {
             yield
 
             try {
                 if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
-                    console.log(`[Bot "${bot.username}"] Digging ${current.displayName} ${current.position} ...`)
+                    // console.log(`[Bot "${bot.username}"] Digging ${current.displayName} ${current.position} ...`)
                 
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
                     let tool = null
                 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                        console.log(`[Bot "${bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
+                        console.warn(`[Bot "${bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
                 
                         tool = bot.mc.getCorrectTool(current, bot.bot)
                 
@@ -66,16 +79,16 @@ module.exports = {
                         }
                     }
                 
-                    console.log(`[Bot "${bot.username}"] Tool:`, tool)
+                    // console.log(`[Bot "${bot.username}"] Tool:`, tool)
         
-                    console.log(`[Bot "${bot.username}"] Goto block ...`)
+                    // console.log(`[Bot "${bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
                         block: current.position,
                         movements: bot.cutTreeMovements,
                     })
                 
                     if (tool?.has) {
-                        console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
+                        // console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
                         yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
                     }
                 
@@ -83,9 +96,14 @@ module.exports = {
                         throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
                     }
         
-                    console.log(`[Bot "${bot.username}"] Digging ...`)
+                    const loot = bot.mc.registry.blockLoot[current.name].drops
+
+                    // console.log(`[Bot "${bot.username}"] Digging ...`)
                     yield* wrap(bot.bot.dig(current))
-                    digged.push(current.position.clone())
+                    digged.push({
+                        position: current.position.clone(),
+                        loot: loot,
+                    })
                 } else {
                     console.log(`[Bot "${bot.username}"] Block will be digged by someone else, skipping`)
                 }
@@ -109,20 +127,24 @@ module.exports = {
             }
         }
 
-        console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
+        // console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
         yield* sleepG(500)
 
         for (let i = digged.length - 1; i >= 0; i--) {
             const position = digged[i]
             while (true) {
                 yield
-                const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
-                    entity.displayName === 'Item'
-                ))
+                const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
+                    if (entity.name !== 'item') { return false }
+                    const item = entity.getDroppedItem()
+                    if (!item) { return false }
+                    if (!position.loot.find(v => v.item === item.name)) { return false }
+                    return true
+                })
                 if (!nearestEntity) { break }
-                const distance = position.distanceTo(nearestEntity.position)
+                const distance = position.position.distanceTo(nearestEntity.position)
                 if (distance < 1.5) {
-                    console.log(`[Bot "${bot.username}"] Picking up item ...`)
+                    // console.log(`[Bot "${bot.username}"] Picking up item ...`)
                     yield* goto.task(bot, {
                         point: nearestEntity.position,
                         distance: 0,
@@ -133,7 +155,7 @@ module.exports = {
                         throw `Inventory is full`
                     }
 
-                    console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
+                    // console.log(`[Bot "${bot.username}"] Waiting 500 ms ...`)
                     yield* sleepG(500)
                 } else {
                     break
@@ -141,7 +163,16 @@ module.exports = {
             }
         }
     
-        return digged.length
+        const itemsDelta = toArray(bot.items()).reduce((map, item) => {
+            if (!map[item.name]) { map[item.name] = 0 }
+            map[item.name] += item.count
+            return map
+        }, itemsBefore)
+
+        return {
+            digged: digged.map(v => v.position),
+            itemsDelta: itemsDelta,
+        }
     },
     id: function(args) {
         return `dig-${args.block.position.x}-${args.block.position.y}-${args.block.position.z}`

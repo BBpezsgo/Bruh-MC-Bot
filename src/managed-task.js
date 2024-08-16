@@ -217,7 +217,11 @@ class ManagedTask {
             const v = this._task.next()
             if (v.done) {
                 this._status = 'done'
-                console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                if (v.value === undefined) {
+                    console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
+                } else {
+                    console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                }
                 if (this._resolve) { this._resolve(v.value) }
                 return true
             } else {

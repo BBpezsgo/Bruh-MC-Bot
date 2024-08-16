@@ -1,6 +1,7 @@
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
+const Minecraft = require('../minecraft')
 
 /**
  * @typedef {{
@@ -26,7 +27,7 @@ module.exports = {
     
         const neighbor = bot.bot.nearestEntity()
         if (neighbor &&
-            bot.mc.data2.mlg.vehicles.includes(neighbor.name) &&
+            Minecraft.mlg.vehicles.includes(neighbor.name) &&
             bot.bot.entity.position.distanceTo(neighbor.position) < 6) {
             console.log(`[Bot "${bot.username}"] [MLG] Mounting "${neighbor.name}" ...`)
             bot.bot.mount(neighbor)
@@ -42,14 +43,14 @@ module.exports = {
                 for (const item of bot.bot.inventory.slots) {
                     if (!item) { continue }
     
-                    if (bot.mc.data2.mlg.boats.includes(item.name) &&
+                    if (Minecraft.mlg.boats.includes(item.name) &&
                         haveMlgItem < 1) {
                         yield* wrap(bot.bot.equip(item.type, 'hand'))
                         haveMlgItem = 1
                         continue
                     }
     
-                    if (bot.mc.data2.mlg.mlgBlocks.includes(item.name) &&
+                    if (Minecraft.mlg.mlgBlocks.includes(item.name) &&
                         haveMlgItem < 2) {
                         yield* wrap(bot.bot.equip(item.type, 'hand'))
                         haveMlgItem = 2
@@ -111,7 +112,7 @@ module.exports = {
                             position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
                         })
                     }
-                } else if (bot.mc.data2.mlg.boats.includes(bot.bot.heldItem.name)) {
+                } else if (Minecraft.mlg.boats.includes(bot.bot.heldItem.name)) {
                     console.log(`[Bot "${bot.username}"] [MLG] Activating item ...`)
                     bot.bot.activateItem()
     
@@ -151,7 +152,7 @@ module.exports = {
             yield
         }
 
-        while (bot.bot.entity.velocity.y < bot.mc.data2.general.fallDamageVelocity) {
+        while (bot.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
             console.log(`[Bot "${bot.username}"] Already did MLG, just falling ...`)
             yield
         }

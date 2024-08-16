@@ -5,7 +5,7 @@ const { Item } = require('prismarine-item')
 const { goals } = require('mineflayer-pathfinder')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
 
@@ -286,7 +286,7 @@ function getChargeTime(item) {
 /**
  * @param {Item} item
  * @returns {boolean}
- */ // @ts-ignore
+ */
 function isCrossbowCharged(item) {
     return (
         item.nbt &&
@@ -309,7 +309,7 @@ function searchRangeWeapon(bot) {
     const keys = Object.values(Weapons)
 
     for (const weapon of keys) {
-        const searchFor = bot.mc.data.itemsByName[weapon]?.id
+        const searchFor = bot.mc.registry.itemsByName[weapon]?.id
 
         if (!searchFor) { continue }
 
@@ -321,7 +321,7 @@ function searchRangeWeapon(bot) {
         switch (weapon) {
             case Weapons.bow:
             case Weapons.crossbow:
-                ammo = bot.bot.inventory.count(bot.mc.data.itemsByName['arrow'].id, null)
+                ammo = bot.bot.inventory.count(bot.mc.registry.itemsByName['arrow'].id, null)
                 break
 
             // case hawkeye.Weapons.egg:
@@ -364,11 +364,23 @@ function bestMeleeWeapon(bot) {
 }
 
 /**
+ * @param {Entity} entity
+ */
+function isAlive(entity) {
+    if (!entity) { return false }
+    if (!entity.isValid) { return false }
+    if (entity.metadata[6] === EntityPose.DYING) { return false }
+    return true
+}
+
+/**
  * @type {import('../task').TaskDef<boolean, ({
  *   target: Entity;
  * } | {
  *   targets: Record<number, Entity>;
- * }) & PermissionArgs>}
+ * }) & PermissionArgs> & {
+ *   can: (bot: import('../bruh-bot'), entity: Entity, permissions: PermissionArgs) => boolean;
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -377,7 +389,7 @@ module.exports = {
         }
 
         let lastPunch = 0
-        const hurtTime = bot.mc.data2.general.hurtTime
+        const hurtTime = Minecraft.general.hurtTime
         let cooldown = hurtTime
 
         /** @type {(MeleeWeapon & { item: Item }) | null}*/
@@ -466,16 +478,6 @@ module.exports = {
             }
         }
 
-        /**
-         * @param {Entity} entity
-         */
-        const isAlive = function(entity) {
-            if (!entity) { return false }
-            if (!entity.isValid) { return false }
-            if (entity.metadata[6] === EntityPose.DYING) { return false }
-            return true
-        }
-
         let reequipMeleeWeapon = false
 
         /**
@@ -496,7 +498,7 @@ module.exports = {
         const calculateScore = function(entity) {
             const distance = bot.bot.entity.position.distanceTo(entity.position)
 
-            const hostile = MC.hostiles[entity.name]
+            const hostile = Minecraft.hostiles[entity.name]
 
             let activeMeleeDamage = (distance < 2) ? 1 : 0
             let activeRangeDamage = 0
@@ -561,8 +563,8 @@ module.exports = {
                 healthScore +
                 dangerScore
             ) *
-            damageScore +
-            activeDamageScore
+                damageScore +
+                activeDamageScore
         }
 
         try {
@@ -732,12 +734,7 @@ module.exports = {
                         yield* wrap(bot.bot.equip(weapon.item, 'hand'))
 
                         if (weapon.weapon === Weapons.crossbow) {
-                            const isCharged =
-                                weapon.item.nbt &&
-                                weapon.item.nbt.type === 'compound' &&
-                                weapon.item.nbt.value['ChargedProjectiles'] &&
-                                weapon.item.nbt.value['ChargedProjectiles'].type === 'list' &&
-                                weapon.item.nbt.value['ChargedProjectiles'].value.value.length > 0
+                            const isCharged = isCrossbowCharged(weapon.item)
 
                             if (!isCharged) {
                                 console.log(`[Bot "${bot.username}"] Charging crossbow`)
@@ -846,5 +843,31 @@ module.exports = {
         } else {
             return `Attack multiple targets`
         }
+    },
+    can: function(bot, entity, permissions) {
+        if (!permissions.useBow && !permissions.useMelee) { return false }
+
+        if (!isAlive(entity)) { return false }
+
+        const distance = bot.bot.entity.position.distanceTo(entity.position)
+
+        if (permissions.useMelee && (distance <= distanceToUseRangeWeapons || !permissions.useBow)) {
+            return distance <= 6
+        }
+
+        if (permissions.useBow && (distance > distanceToUseRangeWeapons || !permissions.useMelee) && entity.name !== 'enderman') {
+            const weapon = searchRangeWeapon(bot)
+
+            if (!weapon || weapon.ammo <= 0) { return false }
+
+            const grade = bot.bot.hawkEye.getMasterGrade({
+                isValid: false,
+                position: entity.position.offset(0, entity.height / 2, 0),
+            }, new Vec3(0, 0, 0), weapon.weapon)
+
+            return grade && !grade.blockInTrayect
+        }
+
+        return true
     }
 }

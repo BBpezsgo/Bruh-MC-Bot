@@ -6,6 +6,10 @@
         "checkJs": true,
         "skipDefaultLibCheck": true,
         "skipLibCheck": true,
+        "extendedDiagnostics": false,
+        "suppressExcessPropertyErrors": false,
+        "disableReferencedProjectLoad": true,
+        "disableSolutionSearching": true,
 
         "noFallthroughCasesInSwitch": true,
         "noImplicitAny": true,
@@ -17,12 +21,15 @@
         "noUncheckedIndexedAccess": true,
         "noUnusedLocals": true,
         "noUnusedParameters": false,
+        "noStrictGenericChecks": false,
+        
+        "strictBindCallApply": true,
+        "strictFunctionTypes": true,
 
         "allowUnreachableCode": false,
-        "allowUnusedLabels": false
+        "allowUnusedLabels": false,
     },
-    "exclude": [
-        "node_modules",
-        "**/node_modules/*"
+    "include": [
+        "src"
     ]
 }

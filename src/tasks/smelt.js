@@ -4,16 +4,17 @@ const { Timeout } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const { Block } = require('prismarine-block')
+const Minecraft = require('../minecraft')
 
 /**
  * @param {import('../bruh-bot')} bot
- * @param {ReadonlyArray<(import('../mc-data').SmeltingRecipe | import('../mc-data').SmokingRecipe | import('../mc-data').BlastingRecipe | import('../mc-data').CampfireRecipe)> | null} recipes
+ * @param {ReadonlyArray<(import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe)> | null} recipes
  * @param {boolean} noFuel
  */
 function findBestFurnace(bot, recipes, noFuel) {
     let bestFurnaceId = -1
     /**
-     * @type {Array<(import('../mc-data').SmeltingRecipe | import('../mc-data').SmokingRecipe | import('../mc-data').BlastingRecipe | import('../mc-data').CampfireRecipe)>}
+     * @type {Array<(import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe)>}
      */
     let _recipes = []
     let bestFurnace = null
@@ -51,7 +52,7 @@ function findBestFurnace(bot, recipes, noFuel) {
             continue
         }
 
-        const furnaceId = bot.mc.data.blocksByName[goodFurnace]?.id
+        const furnaceId = bot.mc.registry.blocksByName[goodFurnace]?.id
 
         if (furnaceId === bestFurnaceId) {
             _recipes.push(recipe)
@@ -86,12 +87,12 @@ function findBestFurnace(bot, recipes, noFuel) {
 /**
  * @param {import('../bruh-bot')} bot
  * @param {Block} campfire
- * @param {import('../mc-data').CampfireRecipe} recipe
+ * @param {import('../local-minecraft-data').CampfireRecipe} recipe
  * @param {number} count
  * @returns {import('../task').Task<Item>}
  */
 function* doCampfire(bot, campfire, recipe, count) {
-    const result = bot.mc.data.itemsByName[recipe.result]
+    const result = bot.mc.registry.itemsByName[recipe.result]
     if (!result) { throw `What?` }
 
     if (!campfire.getProperties()['lit']) {
@@ -104,7 +105,7 @@ function* doCampfire(bot, campfire, recipe, count) {
 
     let item
     for (const ingredient of recipe.ingredient) {
-        const _i = bot.mc.data.itemsByName[ingredient]
+        const _i = bot.mc.registry.itemsByName[ingredient]
         if (!_i) {
             console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
             continue
@@ -195,7 +196,7 @@ function* doCampfire(bot, campfire, recipe, count) {
 
 /**
  * @type {import('../task').TaskDef<Item, {
- *   recipes: ReadonlyArray<import('../mc-data').CookingRecipe>;
+ *   recipes: ReadonlyArray<import('../local-minecraft-data').CookingRecipe>;
  *   noFuel: boolean;
  *   count: number;
  *   onNeedYesNo?: (question: string, timeout: number) => import('../task').Task<boolean | null>;
@@ -205,20 +206,16 @@ function* doCampfire(bot, campfire, recipe, count) {
  */
 module.exports = {
     task: function*(bot, args) {
-        const fuels = bot.mc.data2.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
+        const fuels = Minecraft.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
 
         const best = findBestFurnace(bot, args.recipes, args.noFuel)
 
-        if (!best) {
-            throw `No furnaces found`
-        }
+        if (!best) { throw `No furnaces found` }
 
         const furnaceBlock = best.furnaceBlock
         const bestRecipes = best.recipes
 
-        if (!furnaceBlock) {
-            throw `No furnaces found`
-        }
+        if (!furnaceBlock) { throw `No furnaces found` }
 
         yield* goto.task(bot, {
             block: furnaceBlock.position,
@@ -233,7 +230,7 @@ module.exports = {
                 return yield* doCampfire(bot, furnaceBlock, recipe, args.count)
             }
 
-            let furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
+            const furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
 
             while (furnace.inputItem() && furnace.fuel > 0) {
                 yield* sleepG(1000)
@@ -273,17 +270,7 @@ module.exports = {
                 }
             }
 
-            if (!furnace.fuelItem()) {
-                furnace.close()
-
-                throw `I have no fuel`
-
-                if (!furnaceBlock) {
-                    throw `Furnace disappeared`
-                }
-
-                furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
-
+            if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                 for (const fuel of fuels) {
                     const have = bot.searchItem(fuel.item)
                     if (have) {
@@ -294,12 +281,12 @@ module.exports = {
 
                 if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                     furnace.close()
-                    throw `Failed to gather fuel`
+                    throw `I have no fuel`
                 }
             }
 
             for (const ingredient of recipe.ingredient) {
-                const _i = bot.mc.data.itemsByName[ingredient]
+                const _i = bot.mc.registry.itemsByName[ingredient]
                 if (!_i) {
                     console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
                     continue
@@ -320,16 +307,6 @@ module.exports = {
                 yield
 
                 if (furnace.fuel <= 0 && !furnace.fuelItem()) {
-                    furnace.close()
-
-                    throw `I have no fuel`
-
-                    if (!furnaceBlock) {
-                        throw `Furnace disappeared`
-                    }
-
-                    furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
-
                     for (const fuel of fuels) {
                         const have = bot.searchItem(fuel.item)
                         if (have) {
@@ -340,7 +317,7 @@ module.exports = {
 
                     if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                         furnace.close()
-                        throw `Failed to gather fuel`
+                        throw `I have no fuel`
                     }
                 }
 

@@ -1,6 +1,6 @@
 const { Vec3 } = require('vec3')
 const { wrap } = require('../utils/tasks')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
@@ -294,7 +294,7 @@ module.exports = {
 
             for (const faceVector of validFaceVectors) {
                 const referenceBlock = bot.bot.blockAt(target.offset(-faceVector.x, -faceVector.y, -faceVector.z))
-                if (!referenceBlock || MC.replaceableBlocks[referenceBlock.name]) { continue }
+                if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) { continue }
                 if (interactableBlocks.includes(referenceBlock.name)) { continue }
                 return { referenceBlock, faceVector }
             }
@@ -369,7 +369,7 @@ module.exports = {
                         const _placeInfo = findBestReferenceBlock(position)
                         if (!_placeInfo) { continue }
 
-                        if (MC.replaceableBlocks[above.name]) {
+                        if (Minecraft.replaceableBlocks[above.name]) {
                             if (!position) {
                                 position = current
                                 placeInfo = _placeInfo
@@ -398,7 +398,7 @@ module.exports = {
         const referencePosition = position.offset(-placeInfo.faceVector.x, -placeInfo.faceVector.y, -placeInfo.faceVector.z)
 
         let blockHere = bot.bot.blockAt(position)
-        while (blockHere && MC.replaceableBlocks[blockHere.name] === 'break') {
+        while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
             if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(position, bot.dimension), 'dig')) {
                 console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
                 yield* bot.env.waitUntilBlockIs(new Vec3Dimension(position, bot.dimension), 'dig')
@@ -439,19 +439,19 @@ module.exports = {
                 })
             }
 
-            if (blockHere && MC.replaceableBlocks[blockHere.name] !== 'yes') {
+            if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
                 throw `There is already a block here: ${blockHere.name}`
             }
 
             const referenceBlock = bot.bot.blockAt(referencePosition)
-            if (!referenceBlock || MC.replaceableBlocks[referenceBlock.name]) {
+            if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
                 throw `Invalid reference block ${referenceBlock.name}`
             }
 
             if (!bot.searchItem(item)) { throw `I don't have ${item}` }
 
             try {
-                yield* wrap(bot.bot.equip(bot.mc.data.itemsByName[item].id, 'hand'))
+                yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'))
                 if (botFacing) {
                     const yaw = Math.atan2(-botFacing.x, -botFacing.z)
                     const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)

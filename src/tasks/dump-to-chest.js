@@ -12,12 +12,12 @@ function getChest(bot, fullChests) {
     for (const myChest of bot.memory.myChests) {
         if (myChest.dimension !== bot.dimension) { continue }
         const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.dimension), true)
-        if (myChestBlock && myChestBlock.type === bot.mc.data.blocksByName['chest'].id) {
+        if (myChestBlock && myChestBlock.type === bot.mc.registry.blocksByName['chest'].id) {
             return myChestBlock
         }
     }
     return bot.bot.findBlock({
-        matching: bot.mc.data.blocksByName['chest'].id,
+        matching: bot.mc.registry.blocksByName['chest'].id,
         useExtraInfo: (block) => {
             for (const fullChest of fullChests) {
                 if (fullChest.equals(block.position)) {
@@ -102,7 +102,7 @@ module.exports = {
                     if (have === 0) {
                         return true
                     }
-                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.data.itemsByName[itemToDeposit.item].stackSize, have)
+                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.registry.itemsByName[itemToDeposit.item].stackSize, have)
                     if (count === 0) {
                         return true
                     }

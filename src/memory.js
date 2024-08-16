@@ -4,12 +4,11 @@ const { replacer, reviver } = require('./serializing')
 const Vec3Dimension = require('./vec3-dimension')
 const { goals } = require('mineflayer-pathfinder')
 
-// @ts-ignore
 module.exports = class Memory {
     /**
      * @private @readonly
      * @type {import('./bruh-bot')}
-     */ // @ts-ignore
+     */
     bot
 
     /**

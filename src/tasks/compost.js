@@ -4,7 +4,7 @@ const { Timeout } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -35,13 +35,13 @@ const waitCompost = function*(bot, composter) {
 const getItem = function(bot, includeNono) {
     const trashItems = bot.getTrashItems()
     for (const trashItem of trashItems) {
-        const compostable = bot.mc.data2.compost[trashItem.name]
+        const compostable = Minecraft.compost[trashItem.name]
         if (!compostable) { continue }
         if (compostable.no && !includeNono) { continue }
         let isSeed = false
-        for (const cropBlockName in MC.cropsByBlockName) {
+        for (const cropBlockName in Minecraft.cropsByBlockName) {
             if (isSeed) { break }
-            const crop = MC.cropsByBlockName[cropBlockName]
+            const crop = Minecraft.cropsByBlockName[cropBlockName]
             switch (crop.type) {
                 case 'seeded':
                 case 'simple':
@@ -78,7 +78,7 @@ module.exports = {
         let composted = 0
 
         let composter = bot.bot.findBlock({
-            matching: bot.mc.data.blocksByName['composter'].id,
+            matching: bot.mc.registry.blocksByName['composter'].id,
             maxDistance: 32,
         })
 
@@ -98,7 +98,7 @@ module.exports = {
             })
 
             composter = bot.bot.blockAt(composter.position)
-            if (composter.type !== bot.mc.data.blocksByName['composter'].id) {
+            if (composter.type !== bot.mc.registry.blocksByName['composter'].id) {
                 throw `Composter destroyed while I was trying to get there`
             }
 

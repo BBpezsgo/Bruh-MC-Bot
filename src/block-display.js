@@ -1,4 +1,3 @@
-
 const { Vec3 } = require('vec3')
 const { nonce } = require('./utils/math')
 const Commands = require('./commands')

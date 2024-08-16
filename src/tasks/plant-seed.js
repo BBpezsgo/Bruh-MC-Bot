@@ -3,7 +3,7 @@ const { wrap } = require('../utils/tasks')
 const { Block } = require('prismarine-block')
 const goto = require('./goto')
 const hoeing = require('./hoeing')
-const MC = require('../mc')
+const Minecraft = require('../minecraft')
 const { basicRouteSearch } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
 
@@ -46,7 +46,6 @@ function* plant(bot, placeOn, placeVector, seedItem) {
         // console.log(`[Bot "${bot.username}"] Planting seed ...`)
         // @ts-ignore
         yield* wrap(bot.bot._placeBlockWithOptions(placeOn, placeVector, { forceLook: 'ignore' }))
-        // bot.bot._placeBlockWithOptions(placeOn, placeVector, { forceLook: 'ignore' })
         // yield
     }
 }
@@ -71,12 +70,12 @@ module.exports = {
             const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))
             for (const savedCrop of sortedCropPositions) {
                 // yield
-                const crop = MC.cropsByBlockName[savedCrop.block]
+                const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
                 
                 const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
-                const seed = bot.bot.inventory.findInventoryItem(bot.mc.data.itemsByName[seedName].id, null, false)
+                const seed = bot.bot.inventory.findInventoryItem(bot.mc.registry.itemsByName[seedName].id, null, false)
                 if (!seed) {
                     console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${seedName}"`)
                     continue
@@ -84,7 +83,7 @@ module.exports = {
 
                 const at = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
 
-                if (at && MC.replaceableBlocks[at.name] !== 'yes') {
+                if (at && Minecraft.replaceableBlocks[at.name] !== 'yes') {
                     console.warn(`[Bot "${bot.username}"] There is something else there`)
                     continue
                 }
@@ -136,10 +135,10 @@ module.exports = {
             while (true) {
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)
 
-                const seed = bot.searchItem(...args.seedItems.map(v => bot.mc.data.items[v].name))
+                const seed = bot.searchItem(...args.seedItems.map(v => bot.mc.registry.items[v].name))
                 if (!seed) { break }
 
-                const cropInfo = Object.values(MC.cropsByBlockName).find(v => {
+                const cropInfo = Object.values(Minecraft.cropsByBlockName).find(v => {
                     if (v.type === 'tree') {
                         return v.sapling === seed.name
                     } else {

@@ -2,7 +2,7 @@ const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')
 const getMcData = require('minecraft-data')
-const MinecraftData = require('./mc-data')
+const LocalMinecraftData = require('./local-minecraft-data')
 
 /**
  * @typedef { 'sword' | 'shovel' | 'pickaxe' | 'axe' | 'hoe' } Tool
@@ -78,22 +78,464 @@ const MinecraftData = require('./mc-data')
  * @typedef { 'wooden' | 'stone' | 'iron' | 'golden' | 'diamond' | 'netherite' } ToolLevel
  */
 
-module.exports = class MC {
+module.exports = class Minecraft {
     /**
      * @readonly
      * @type {getMcData.IndexedData}
      */
-    data
+    registry
 
     /**
      * @readonly
-     * @type {MinecraftData}
+     * @type {LocalMinecraftData}
      */
-    data2
+    local
 
     /**
      * @readonly
-     * @type {{ [block: string]: undefined | 'yes' | 'break' }}
+     */
+    static general = Object.freeze({
+        /** @type {number} */
+        hurtTime: 500,
+        /** @type {number} */
+        fallDamageVelocity: -1
+    })
+
+    /**
+     * @readonly
+     */
+    static mlg = Object.freeze({
+        /**
+         * @type {ReadonlyArray<string>}
+         */
+        boats: [
+            "oak_boat",
+            "spruce_boat",
+            "birch_boat",
+            "jungle_boat",
+            "acacia_boat",
+            "dark_oak_boat"
+        ],
+        /**
+         * @type {ReadonlyArray<string>}
+         */
+        mlgBlocks: [
+            "water_bucket",
+            "slime_block",
+            "sweet_berries",
+            "cobweb",
+            "hay_block"
+        ],
+        /**
+         * @type {ReadonlyArray<string>}
+         */
+        vehicles: [
+            "boat",
+            "donkey",
+            "horse",
+            "minecart"
+        ]
+    })
+
+    /**
+     * @readonly
+     * @type {Readonly<Record<string, Readonly<{ time: number; no: boolean; }>>>}
+     */
+    static fuels = Object.freeze({
+        "lava_bucket":              { "time": 1000, "no": true },
+        "coal_block":               { "time": 800, "no": false },
+        "dried_kelp_block":         { "time": 200, "no": false },
+        
+        "blaze_rod":                { "time": 120, "no": true },
+        "coal":                     { "time": 80, "no": true },
+        "charcoal":                 { "time": 80, "no": false },
+        
+        "oak_boat":                 { "time": 60, "no": true },
+        "spruce_boat":              { "time": 60, "no": true },
+        "birch_boat":               { "time": 60, "no": true },
+        "jungle_boat":              { "time": 60, "no": true },
+        "acacia_boat":              { "time": 60, "no": true },
+        "dark_oak_boat":            { "time": 60, "no": true },
+        "mangrove_boat":            { "time": 60, "no": true },
+        "cherry_boat":              { "time": 60, "no": true },
+        "bamboo_raft":              { "time": 60, "no": true },
+    
+        "oak_chest_boat":           { "time": 60, "no": true },
+        "spruce_chest_boat":        { "time": 60, "no": true },
+        "birch_chest_boat":         { "time": 60, "no": true },
+        "jungle_chest_boat":        { "time": 60, "no": true },
+        "acacia_chest_boat":        { "time": 60, "no": true },
+        "dark_oak_chest_boat":      { "time": 60, "no": true },
+        "mangrove_chest_boat":      { "time": 60, "no": true },
+        "cherry_chest_boat":        { "time": 60, "no": true },
+        "bamboo_chest_raft":        { "time": 60, "no": true },
+    
+        "oak_log":                  { "time": 15, "no": false },
+        "spruce_log":               { "time": 15, "no": false },
+        "birch_log":                { "time": 15, "no": false },
+        "jungle_log":               { "time": 15, "no": false },
+        "acacia_log":               { "time": 15, "no": false },
+        "dark_oak_log":             { "time": 15, "no": false },
+        "mangrove_log":             { "time": 15, "no": false },
+        "cherry_log":               { "time": 15, "no": false },
+        "bamboo_block":             { "time": 15, "no": false },
+    
+        "stripped_oak_log":         { "time": 15, "no": false },
+        "stripped_spruce_log":      { "time": 15, "no": false },
+        "stripped_birch_log":       { "time": 15, "no": false },
+        "stripped_jungle_log":      { "time": 15, "no": false },
+        "stripped_acacia_log":      { "time": 15, "no": false },
+        "stripped_dark_oak_log":    { "time": 15, "no": false },
+        "stripped_mangrove_log":    { "time": 15, "no": false },
+        "stripped_cherry_log":      { "time": 15, "no": false },
+        "stripped_bamboo_block":    { "time": 15, "no": false },
+    
+        "oak_planks":               { "time": 15, "no": false },
+        "spruce_planks":            { "time": 15, "no": false },
+        "birch_planks":             { "time": 15, "no": false },
+        "jungle_planks":            { "time": 15, "no": false },
+        "acacia_planks":            { "time": 15, "no": false },
+        "dark_oak_planks":          { "time": 15, "no": false },
+        "mangrove_planks":          { "time": 15, "no": false },
+        "cherry_planks":            { "time": 15, "no": false },
+        "bamboo_planks":            { "time": 15, "no": false },
+        "bamboo_mosaic":            { "time": 15, "no": false },
+        "bamboo_mosaic_slab":       { "time": 7.5, "no": false },
+        "bamboo_mosaic_stairs":     { "time": 15, "no": false },
+    
+        "chiseled_bookshelf":       { "time": 15, "no": false },
+    
+        "oak_slab":                 { "time": 7.5, "no": false },
+        "spruce_slab":              { "time": 7.5, "no": false },
+        "birch_slab":               { "time": 7.5, "no": false },
+        "jungle_slab":              { "time": 7.5, "no": false },
+        "acacia_slab":              { "time": 7.5, "no": false },
+        "dark_oak_slab":            { "time": 7.5, "no": false },
+        "mangrove_slab":            { "time": 7.5, "no": false },
+        "cherry_slab":              { "time": 7.5, "no": false },
+        "bamboo_slab":              { "time": 7.5, "no": false },
+    
+        "oak_stairs":               { "time": 15, "no": false },
+        "spruce_stairs":            { "time": 15, "no": false },
+        "birch_stairs":             { "time": 15, "no": false },
+        "jungle_stairs":            { "time": 15, "no": false },
+        "acacia_stairs":            { "time": 15, "no": false },
+        "dark_oak_stairs":          { "time": 15, "no": false },
+        "mangrove_stairs":          { "time": 15, "no": false },
+        "cherry_stairs":            { "time": 15, "no": false },
+        "bamboo_stairs":            { "time": 15, "no": false },
+    
+        "oak_pressure_plate":       { "time": 15, "no": false },
+        "spruce_pressure_plate":    { "time": 15, "no": false },
+        "birch_pressure_plate":     { "time": 15, "no": false },
+        "jungle_pressure_plate":    { "time": 15, "no": false },
+        "acacia_pressure_plate":    { "time": 15, "no": false },
+        "dark_oak_pressure_plate":  { "time": 15, "no": false },
+        "mangrove_pressure_plate":  { "time": 15, "no": false },
+        "cherry_pressure_plate":    { "time": 15, "no": false },
+        "bamboo_pressure_plate":    { "time": 15, "no": false },
+    
+        "oak_button":               { "time": 5, "no": false },
+        "spruce_button":            { "time": 5, "no": false },
+        "birch_button":             { "time": 5, "no": false },
+        "jungle_button":            { "time": 5, "no": false },
+        "acacia_button":            { "time": 5, "no": false },
+        "dark_oak_button":          { "time": 5, "no": false },
+        "mangrove_button":          { "time": 5, "no": false },
+        "cherry_button":            { "time": 5, "no": false },
+        "bamboo_button":            { "time": 5, "no": false },
+    
+        "oak_trapdoor":             { "time": 15, "no": false },
+        "spruce_trapdoor":          { "time": 15, "no": false },
+        "birch_trapdoor":           { "time": 15, "no": false },
+        "jungle_trapdoor":          { "time": 15, "no": false },
+        "acacia_trapdoor":          { "time": 15, "no": false },
+        "dark_oak_trapdoor":        { "time": 15, "no": false },
+        "mangrove_trapdoor":        { "time": 15, "no": false },
+        "cherry_trapdoor":          { "time": 15, "no": false },
+        "bamboo_trapdoor":          { "time": 15, "no": false },
+    
+        "oak_fence":                { "time": 15, "no": false },
+        "spruce_fence":             { "time": 15, "no": false },
+        "birch_fence":              { "time": 15, "no": false },
+        "jungle_fence":             { "time": 15, "no": false },
+        "acacia_fence":             { "time": 15, "no": false },
+        "dark_oak_fence":           { "time": 15, "no": false },
+        "mangrove_fence":           { "time": 15, "no": false },
+        "cherry_fence":             { "time": 15, "no": false },
+        "bamboo_fence":             { "time": 15, "no": false },
+    
+        "oak_fence_gate":           { "time": 15, "no": false },
+        "spruce_fence_gate":        { "time": 15, "no": false },
+        "birch_fence_gate":         { "time": 15, "no": false },
+        "jungle_fence_gate":        { "time": 15, "no": false },
+        "acacia_fence_gate":        { "time": 15, "no": false },
+        "dark_oak_fence_gate":      { "time": 15, "no": false },
+        "mangrove_fence_gate":      { "time": 15, "no": false },
+        "cherry_fence_gate":        { "time": 15, "no": false },
+        "bamboo_fence_gate":        { "time": 15, "no": false },
+    
+        "oak_door":                 { "time": 10, "no": false },
+        "spruce_door":              { "time": 10, "no": false },
+        "birch_door":               { "time": 10, "no": false },
+        "jungle_door":              { "time": 10, "no": false },
+        "acacia_door":              { "time": 10, "no": false },
+        "dark_oak_door":            { "time": 10, "no": false },
+        "mangrove_door":            { "time": 10, "no": false },
+        "cherry_door":              { "time": 10, "no": false },
+        "bamboo_door":              { "time": 10, "no": false },
+    
+        "oak_sign":                 { "time": 10, "no": false },
+        "spruce_sign":              { "time": 10, "no": false },
+        "birch_sign":               { "time": 10, "no": false },
+        "jungle_sign":              { "time": 10, "no": false },
+        "acacia_sign":              { "time": 10, "no": false },
+        "dark_oak_sign":            { "time": 10, "no": false },
+        "mangrove_sign":            { "time": 10, "no": false },
+        "cherry_sign":              { "time": 10, "no": false },
+        "bamboo_sign":              { "time": 10, "no": false },
+    
+        "oak_hanging_sign":         { "time": 10, "no": true },
+        "spruce_hanging_sign":      { "time": 10, "no": true },
+        "birch_hanging_sign":       { "time": 10, "no": true },
+        "jungle_hanging_sign":      { "time": 10, "no": true },
+        "acacia_hanging_sign":      { "time": 10, "no": true },
+        "dark_oak_hanging_sign":    { "time": 10, "no": true },
+        "mangrove_hanging_sign":    { "time": 10, "no": true },
+        "cherry_hanging_sign":      { "time": 10, "no": true },
+        "bamboo_hanging_sign":      { "time": 10, "no": true },
+    
+        "oak_sapling":              { "time": 5, "no": true },
+        "spruce_sapling":           { "time": 5, "no": true },
+        "birch_sapling":            { "time": 5, "no": true },
+        "jungle_sapling":           { "time": 5, "no": true },
+        "acacia_sapling":           { "time": 5, "no": true },
+        "dark_oak_sapling":         { "time": 5, "no": true },
+        "mangrove_propagule":       { "time": 5, "no": true },
+        "cherry_sapling":           { "time": 5, "no": true },
+        "azalea":                   { "time": 5, "no": true },
+        "flowering_azalea":         { "time": 5, "no": true },
+    
+        "wooden_sword":             { "time": 10, "no": false },
+        "wooden_axe":               { "time": 10, "no": false },
+        "wooden_hoe":               { "time": 10, "no": true },
+        "wooden_shovel":            { "time": 10, "no": false },
+        "wooden_pickaxe":           { "time": 10, "no": false },
+        "fishing_rod":              { "time": 15, "no": true },
+        "crossbow":                 { "time": 15, "no": true },
+        "bow":                      { "time": 15, "no": true },
+    
+        "bowl":                     { "time": 5, "no": false },
+        "stick":                    { "time": 5, "no": false },
+        "ladder":                   { "time": 15, "no": false },
+    
+        "mangrove_roots":           { "time": 15, "no": false },
+        "dead_bush":                { "time": 5, "no": false },
+    
+        "crafting_table":           { "time": 15, "no": false },
+        "cartography_table":        { "time": 15, "no": true },
+        "fletching_table":          { "time": 15, "no": true },
+        "smithing_table":           { "time": 15, "no": true },
+        "loom":                     { "time": 15, "no": true },
+        "bookshelf":                { "time": 15, "no": true },
+        "lectern":                  { "time": 15, "no": true },
+        "composter":                { "time": 15, "no": true },
+        "chest":                    { "time": 15, "no": true },
+        "trapped_chest":            { "time": 15, "no": true },
+        "barrel":                   { "time": 15, "no": true },
+        "daylight_detector":        { "time": 15, "no": true },
+        "jukebox":                  { "time": 15, "no": true },
+        "note_block":               { "time": 15, "no": true },
+        
+        "white_wool":               { "time": 5, "no": false },
+        "light_gray_wool":          { "time": 5, "no": false },
+        "gray_wool":                { "time": 5, "no": false },
+        "black_wool":               { "time": 5, "no": false },
+        "brown_wool":               { "time": 5, "no": false },
+        "red_wool":                 { "time": 5, "no": false },
+        "orange_wool":              { "time": 5, "no": false },
+        "yellow_wool":              { "time": 5, "no": false },
+        "lime_wool":                { "time": 5, "no": false },
+        "green_wool":               { "time": 5, "no": false },
+        "cyan_wool":                { "time": 5, "no": false },
+        "light_blue_wool":          { "time": 5, "no": false },
+        "blue_wool":                { "time": 5, "no": false },
+        "purple_wool":              { "time": 5, "no": false },
+        "magenta_wool":             { "time": 5, "no": false },
+        "pink_wool":                { "time": 5, "no": false },
+        
+        "white_banner":             { "time": 5, "no": false },
+        "light_gray_banner":        { "time": 5, "no": false },
+        "gray_banner":              { "time": 5, "no": false },
+        "black_banner":             { "time": 5, "no": false },
+        "brown_banner":             { "time": 5, "no": false },
+        "red_banner":               { "time": 5, "no": false },
+        "orange_banner":            { "time": 5, "no": false },
+        "yellow_banner":            { "time": 5, "no": false },
+        "lime_banner":              { "time": 5, "no": false },
+        "green_banner":             { "time": 5, "no": false },
+        "cyan_banner":              { "time": 5, "no": false },
+        "light_blue_banner":        { "time": 5, "no": false },
+        "blue_banner":              { "time": 5, "no": false },
+        "purple_banner":            { "time": 5, "no": false },
+        "magenta_banner":           { "time": 5, "no": false },
+        "pink_banner":              { "time": 5, "no": false },
+        
+        "white_carpet":             { "time": 3.35, "no": false },
+        "light_gray_carpet":        { "time": 3.35, "no": false },
+        "gray_carpet":              { "time": 3.35, "no": false },
+        "black_carpet":             { "time": 3.35, "no": false },
+        "brown_carpet":             { "time": 3.35, "no": false },
+        "red_carpet":               { "time": 3.35, "no": false },
+        "orange_carpet":            { "time": 3.35, "no": false },
+        "yellow_carpet":            { "time": 3.35, "no": false },
+        "lime_carpet":              { "time": 3.35, "no": false },
+        "green_carpet":             { "time": 3.35, "no": false },
+        "cyan_carpet":              { "time": 3.35, "no": false },
+        "light_blue_carpet":        { "time": 3.35, "no": false },
+        "blue_carpet":              { "time": 3.35, "no": false },
+        "purple_carpet":            { "time": 3.35, "no": false },
+        "magenta_carpet":           { "time": 3.35, "no": false },
+        "pink_carpet":              { "time": 3.35, "no": false },
+        
+        "bamboo":                   { "time": 2.5, "no": true },
+        "scaffolding":              { "time": 2.5, "no": true }
+    })
+
+    /**
+     * @readonly
+     * @type {ReadonlyArray<Readonly<{ item: string; time: number; no: boolean; }>>}
+     */
+    static sortedFuels
+
+    static {
+        const _sortedFuels = []
+        for (const item in this.fuels) {
+            _sortedFuels.push({
+                item: item,
+                time: this.fuels[item].time,
+                no: this.fuels[item].no,
+            })
+        }
+        _sortedFuels.sort((a, b) => b.time - a.time)
+        // @ts-ignore
+        this.sortedFuels = _sortedFuels
+    }
+
+    /**
+     * @readonly
+     * @type {Readonly<Record<string, Readonly<{ chance: number; no: boolean; }>>>}
+     */
+    static compost = Object.freeze({
+        "beetroot_seeds": { "chance": 0.30, "no": false },
+        "dried_kelp": { "chance": 0.30, "no": true },
+        "glow_berries": { "chance": 0.30, "no": true },
+        "short_grass": { "chance": 0.30, "no": false },
+        "hanging_roots": { "chance": 0.30, "no": false },
+        "mangrove_roots": { "chance": 0.30, "no": false },
+        "kelp": { "chance": 0.30, "no": true },
+        "oak_leaves": { "chance": 0.30, "no": false },
+        "spruce_leaves": { "chance": 0.30, "no": false },
+        "birch_leaves": { "chance": 0.30, "no": false },
+        "jungle_leaves": { "chance": 0.30, "no": false },
+        "acacia_leaves": { "chance": 0.30, "no": false },
+        "dark_oak_leaves": { "chance": 0.30, "no": true },
+        "mangrove_leaves": { "chance": 0.30, "no": false },
+        "cherry_leaves": { "chance": 0.30, "no": false },
+        "melon_seeds": { "chance": 0.30, "no": false },
+        "moss_carpet": { "chance": 0.30, "no": true },
+        "pink_petals": { "chance": 0.30, "no": true },
+        "pitcher_pod": { "chance": 0.30, "no": true },
+        "pumpkin_seeds": { "chance": 0.30, "no": false },
+        "oak_sapling": { "chance": 0.30, "no": false },
+        "spruce_sapling": { "chance": 0.30, "no": false },
+        "birch_sapling": { "chance": 0.30, "no": false },
+        "jungle_sapling": { "chance": 0.30, "no": false },
+        "acacia_sapling": { "chance": 0.30, "no": false },
+        "dark_oak_sapling": { "chance": 0.30, "no": true },
+        "mangrove_propagule": { "chance": 0.30, "no": false },
+        "cherry_sapling": { "chance": 0.30, "no": false },
+        "seagrass": { "chance": 0.30, "no": true },
+        "small_dripleaf": { "chance": 0.30, "no": true },
+        "sweet_berries": { "chance": 0.30, "no": true },
+        "torchflower_seeds": { "chance": 0.30, "no": true },
+        "wheat_seeds": { "chance": 0.30, "no": false },
+    
+        "cactus": { "chance": 0.50, "no": false },
+        "dried_kelp_block": { "chance": 0.50, "no": true },
+        "flowering_azalea_leaves": { "chance": 0.50, "no": true },
+        "glow_lichen": { "chance": 0.50, "no": true },
+        "melon_slice": { "chance": 0.50, "no": true },
+        "nether_sprouts": { "chance": 0.50, "no": true },
+        "sugar_cane": { "chance": 0.50, "no": true },
+        "tall_grass": { "chance": 0.50, "no": false },
+        "vine": { "chance": 0.50, "no": true },
+        "twisting_vines": { "chance": 0.50, "no": true },
+        "weeping_vines": { "chance": 0.50, "no": true },
+    
+        "apple": { "chance": 0.65, "no": true },
+        "azalea": { "chance": 0.65, "no": true },
+        "beetroot": { "chance": 0.65, "no": true },
+        "big_dripleaf": { "chance": 0.65, "no": true },
+        "carrot": { "chance": 0.65, "no": true },
+        "cocoa_beans": { "chance": 0.65, "no": false },
+        "fern": { "chance": 0.65, "no": true },
+        "large_fern": { "chance": 0.65, "no": true },
+        "dandelion": { "chance": 0.65, "no": true },
+        "poppy": { "chance": 0.65, "no": true },
+        "blue_orchid": { "chance": 0.65, "no": true },
+        "allium": { "chance": 0.65, "no": true },
+        "azure_bluet": { "chance": 0.65, "no": true },
+        "red_tulip": { "chance": 0.65, "no": true },
+        "orange_tulip": { "chance": 0.65, "no": true },
+        "white_tulip": { "chance": 0.65, "no": true },
+        "pink_tulip": { "chance": 0.65, "no": true },
+        "oxeye_daisy": { "chance": 0.65, "no": true },
+        "cornflower": { "chance": 0.65, "no": true },
+        "lily_of_the_valley": { "chance": 0.65, "no": true },
+        "wither_rose": { "chance": 0.65, "no": true },
+        "sunflower": { "chance": 0.65, "no": true },
+        "lilac": { "chance": 0.65, "no": true },
+        "rose_bush": { "chance": 0.65, "no": true },
+        "peony": { "chance": 0.65, "no": true },
+        "crimson_fungus": { "chance": 0.65, "no": true },
+        "warped_fungus": { "chance": 0.65, "no": true },
+        "lily_pad": { "chance": 0.65, "no": true },
+        "melon": { "chance": 0.65, "no": true },
+        "moss_block": { "chance": 0.65, "no": true },
+        "brown_mushroom": { "chance": 0.65, "no": true },
+        "red_mushroom": { "chance": 0.65, "no": true },
+        "mushroom_stem": { "chance": 0.65, "no": true },
+        "nether_wart": { "chance": 0.65, "no": true },
+        "potato": { "chance": 0.65, "no": true },
+        "pumpkin": { "chance": 0.65, "no": true },
+        "carved_pumpkin": { "chance": 0.65, "no": true },
+        "crimson_roots": { "chance": 0.65, "no": true },
+        "warped_roots": { "chance": 0.65, "no": true },
+        "sea_pickle": { "chance": 0.65, "no": true },
+        "shroomlight": { "chance": 0.65, "no": true },
+        "spore_blossom": { "chance": 0.65, "no": true },
+        "wheat": { "chance": 0.65, "no": true },
+    
+        "baked_potato": { "chance": 0.85, "no": true },
+        "bread": { "chance": 0.85, "no": true },
+        "cookie": { "chance": 0.85, "no": true },
+        "flowering_azalea": { "chance": 0.85, "no": true },
+        "hay_block": { "chance": 0.85, "no": true },
+        "brown_mushroom_block": { "chance": 0.85, "no": true },
+        "red_mushroom_block": { "chance": 0.85, "no": true },
+        "nether_wart_block": { "chance": 0.85, "no": true },
+        "pitcher_plant": { "chance": 0.85, "no": true },
+        "torchflower": { "chance": 0.85, "no": true },
+        "warped_wart_block": { "chance": 0.85, "no": true },
+    
+        "cake": { "chance": 1.00, "no": true },
+        "pumpkin_pie": { "chance": 1.00, "no": true }
+    })
+
+    /**
+     * @readonly
+     * @type {Readonly<Record<string, undefined | 'yes' | 'break'>>}
      */
     static replaceableBlocks = Object.freeze({
         'air': 'yes',
@@ -163,6 +605,7 @@ module.exports = class MC {
 
     /**
      * @readonly
+     * @type {ReadonlyArray<string>}
      */
     static soilBlocks = Object.freeze([
         'grass_block',
@@ -303,7 +746,7 @@ module.exports = class MC {
             size: 'small',
             branches: 'sometimes',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -314,7 +757,7 @@ module.exports = class MC {
             size: 'can-be-large',
             branches: 'never',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -325,7 +768,7 @@ module.exports = class MC {
             size: 'small',
             branches: 'never',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -336,7 +779,7 @@ module.exports = class MC {
             size: 'can-be-large',
             branches: 'never',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -347,7 +790,7 @@ module.exports = class MC {
             size: 'small',
             branches: 'always',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -358,7 +801,7 @@ module.exports = class MC {
             size: 'always-large',
             branches: 'never',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -370,7 +813,7 @@ module.exports = class MC {
             branches: 'always',
             canUseBonemeal: true,
             growsOnBlock: [
-                ...MC.soilBlocks,
+                ...Minecraft.soilBlocks,
                 'clay',
             ],
             growsOnSide: 'top',
@@ -383,7 +826,7 @@ module.exports = class MC {
             size: 'small',
             branches: 'always',
             canUseBonemeal: true,
-            growsOnBlock: MC.soilBlocks,
+            growsOnBlock: Minecraft.soilBlocks,
             growsOnSide: 'top',
             lightLevel: { min: 9 },
         },
@@ -395,7 +838,7 @@ module.exports = class MC {
             branches: 'always',
             canUseBonemeal: true,
             growsOnBlock: [
-                ...MC.soilBlocks,
+                ...Minecraft.soilBlocks,
                 'clay',
             ],
             growsOnSide: 'top',
@@ -409,7 +852,7 @@ module.exports = class MC {
             branches: 'always',
             canUseBonemeal: true,
             growsOnBlock: [
-                ...MC.soilBlocks,
+                ...Minecraft.soilBlocks,
                 'clay',
             ],
             growsOnSide: 'top',
@@ -420,7 +863,7 @@ module.exports = class MC {
             seed: 'brown_mushroom',
             canUseBonemeal: false,
             growsOnBlock: [
-                ...MC.soilBlocks,
+                ...Minecraft.soilBlocks,
             ],
             growsOnSide: 'top',
             lightLevel: { max: 12 },
@@ -430,7 +873,7 @@ module.exports = class MC {
             seed: 'red_mushroom',
             canUseBonemeal: false,
             growsOnBlock: [
-                ...MC.soilBlocks,
+                ...Minecraft.soilBlocks,
             ],
             growsOnSide: 'top',
             lightLevel: { max: 12 },
@@ -786,8 +1229,8 @@ module.exports = class MC {
      * @returns {(AnyCrop & { cropName: string }) | null}
      */
     static resolveCrop(blockName) {
-        for (const cropBlockName in MC.cropsByBlockName) {
-            const crop = MC.cropsByBlockName[cropBlockName]
+        for (const cropBlockName in Minecraft.cropsByBlockName) {
+            const crop = Minecraft.cropsByBlockName[cropBlockName]
             if (cropBlockName === blockName) {
                 return {
                     ...crop,
@@ -821,33 +1264,33 @@ module.exports = class MC {
      * @param {string} jarPath
      */
     constructor(version, jarPath) {
-        this.data = getMcData(version)
-        this.data2 = new MinecraftData(jarPath)
+        this.registry = getMcData(version)
+        this.local = new LocalMinecraftData(jarPath)
 
         /** @type {Array<number>} */
         const cropBlockIds = []
-        for (const cropName in MC.cropsByBlockName) {
-            const crop = MC.cropsByBlockName[cropName]
+        for (const cropName in Minecraft.cropsByBlockName) {
+            const crop = Minecraft.cropsByBlockName[cropName]
             switch (crop.type) {
                 case 'tree':
-                    cropBlockIds.push(this.data.blocksByName[crop.log].id)
-                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    cropBlockIds.push(this.registry.blocksByName[crop.log].id)
+                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
                     break
                 case 'grows_block':
-                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
                     if (crop.attachedCropName) {
-                        cropBlockIds.push(this.data.blocksByName[crop.attachedCropName].id)
+                        cropBlockIds.push(this.registry.blocksByName[crop.attachedCropName].id)
                     }
                     break
                 default:
-                    cropBlockIds.push(this.data.blocksByName[cropName].id)
+                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
                     break
             }
         }
         this.cropBlockIds = cropBlockIds
 
-        for (const key in this.data2.compost) {
-            if (!this.data.itemsByName[key]) {
+        for (const key in Minecraft.compost) {
+            if (!this.registry.itemsByName[key]) {
                 console.warn(`Unknown item "${key}"`)
             }
         }
@@ -860,41 +1303,41 @@ module.exports = class MC {
     getCorrectBlocks(name) {
         if (name === 'dirt') {
             return [
-                this.data.blocksByName['grass_block'],
-                this.data.blocksByName['dirt'],
+                this.registry.blocksByName['grass_block'],
+                this.registry.blocksByName['dirt'],
             ]
         }
 
         if (name === 'wood') {
             return [
-                this.data.blocksByName['oak_log'],
-                this.data.blocksByName['spruce_log'],
-                this.data.blocksByName['birch_log'],
-                this.data.blocksByName['jungle_log'],
-                this.data.blocksByName['acacia_log'],
-                this.data.blocksByName['dark_oak_log'],
-                this.data.blocksByName['mangrove_log'],
-                this.data.blocksByName['cherry_log'],
-                this.data.blocksByName['crimson_stem'],
-                this.data.blocksByName['warped_stem'],
+                this.registry.blocksByName['oak_log'],
+                this.registry.blocksByName['spruce_log'],
+                this.registry.blocksByName['birch_log'],
+                this.registry.blocksByName['jungle_log'],
+                this.registry.blocksByName['acacia_log'],
+                this.registry.blocksByName['dark_oak_log'],
+                this.registry.blocksByName['mangrove_log'],
+                this.registry.blocksByName['cherry_log'],
+                this.registry.blocksByName['crimson_stem'],
+                this.registry.blocksByName['warped_stem'],
             ]
         }
 
         if (name === 'stone') {
             return [
-                this.data.blocksByName['stone'],
-                this.data.blocksByName['cobblestone'],
-                this.data.blocksByName['deepslate'],
-                this.data.blocksByName['cobbled_deepslate'],
+                this.registry.blocksByName['stone'],
+                this.registry.blocksByName['cobblestone'],
+                this.registry.blocksByName['deepslate'],
+                this.registry.blocksByName['cobbled_deepslate'],
             ]
         }
 
-        if (this.data.blocksByName[name]) {
-            return [this.data.blocksByName[name]]
+        if (this.registry.blocksByName[name]) {
+            return [this.registry.blocksByName[name]]
         }
 
-        if (this.data.blocksByName[name.replace(/ /g, '_')]) {
-            return [this.data.blocksByName[name.replace(/ /g, '_')]]
+        if (this.registry.blocksByName[name.replace(/ /g, '_')]) {
+            return [this.registry.blocksByName[name.replace(/ /g, '_')]]
         }
 
         return []
@@ -905,12 +1348,12 @@ module.exports = class MC {
      * @returns {getMcData.Item | null}
      */
     getCorrectItems(name) {
-        if (this.data.itemsByName[name]) {
-            return this.data.itemsByName[name]
+        if (this.registry.itemsByName[name]) {
+            return this.registry.itemsByName[name]
         }
 
-        if (this.data.itemsByName[name.replace(/ /g, '_')]) {
-            return this.data.itemsByName[name.replace(/ /g, '_')]
+        if (this.registry.itemsByName[name.replace(/ /g, '_')]) {
+            return this.registry.itemsByName[name.replace(/ /g, '_')]
         }
 
         return null
@@ -922,17 +1365,17 @@ module.exports = class MC {
      * @returns {{ has: boolean, item: getMcData.Item | null } | null}
      */
     getCorrectTool(blockToBreak, bot) {
-        /** @ts-ignore @type {[ keyof MC.tools ]} */
-        const toolNames = Object.keys(MC.tools)
+        /** @ts-ignore @type {[ keyof Minecraft.tools ]} */
+        const toolNames = Object.keys(Minecraft.tools)
 
         /** @type {Array<{ time: number, item: getMcData.Item }>} */
         let bestTools = []
 
         for (const category_ of toolNames) {
-            const subTools = MC.tools[category_]
-            for (const level of MC.toolLevels) {
+            const subTools = Minecraft.tools[category_]
+            for (const level of Minecraft.toolLevels) {
                 const subTool = subTools[level]
-                const item = this.data.itemsByName[subTool]
+                const item = this.registry.itemsByName[subTool]
 
                 if (blockToBreak.canHarvest(item.id)) {
                     const time = blockToBreak.digTime(item.id, false, false, false, [], [])
@@ -945,7 +1388,7 @@ module.exports = class MC {
 
         bestTools.sort((a, b) => a.time - b.time)
 
-        /** @ts-ignore @type {keyof MC.tools} */
+        /** @ts-ignore @type {keyof Minecraft.tools} */
         let bestToolCategory = bestTools[0].item.name.split('_')[1]
         if (!toolNames.includes(bestToolCategory)) {
             console.warn(`Invalid tool "${bestTools[0].item.name}" ("${bestToolCategory}")`)
@@ -953,22 +1396,22 @@ module.exports = class MC {
         }
 
         bestTools.sort((a, b) => {
-            /** @ts-ignore @type {MC.toolLevels[0 | 1 | 2 | 3 | 4 | 5]} */
+            /** @ts-ignore @type {Minecraft.toolLevels[number]} */
             const levelA = a.item.name.split('_')[0]
-            if (!MC.toolLevels.includes(levelA)) {
+            if (!Minecraft.toolLevels.includes(levelA)) {
                 console.warn(`Invalid tool level ${levelA}`)
                 return 0
             }
 
-            /** @ts-ignore @type {MC.toolLevels[0 | 1 | 2 | 3 | 4 | 5]} */
+            /** @ts-ignore @type {Minecraft.toolLevels[number]} */
             const levelB = b.item.name.split('_')[0]
-            if (!MC.toolLevels.includes(levelB)) {
+            if (!Minecraft.toolLevels.includes(levelB)) {
                 console.warn(`Invalid tool level ${levelB}`)
                 return 0
             }
 
-            const indexofA = MC.toolLevels.indexOf(levelA)
-            const indexofB = MC.toolLevels.indexOf(levelB)
+            const indexofA = Minecraft.toolLevels.indexOf(levelA)
+            const indexofB = Minecraft.toolLevels.indexOf(levelB)
 
             return indexofB - indexofA
         })
@@ -1090,8 +1533,8 @@ module.exports = class MC {
      * @returns {Array<Item>}
      */
     filterFoods(foods, sort) {
-        const bad = MC.badFoods
-        const allFoods = this.data.foodsByName
+        const bad = Minecraft.badFoods
+        const allFoods = this.registry.foodsByName
 
         const _foods = foods
             .filter((item) => item.name in allFoods)
@@ -1108,9 +1551,9 @@ module.exports = class MC {
      * @param {boolean} includeRaws
      */
     getGoodFoods(includeRaws) {
-        return this.data.foodsArray.filter((item) => {
-            if (MC.badFoods.includes(item.name)) { return false }
-            if (MC.rawFoods.includes(item.name) && !includeRaws) { return false }
+        return this.registry.foodsArray.filter((item) => {
+            if (Minecraft.badFoods.includes(item.name)) { return false }
+            if (Minecraft.rawFoods.includes(item.name) && !includeRaws) { return false }
             return true
         })
     }
@@ -1133,7 +1576,7 @@ module.exports = class MC {
         //     return 0
         // })
 
-        Object.values(this.data.entities)
+        Object.values(this.registry.entities)
             .filter(v => v.type === 'hostile')
             .map(v => v.name)
             .forEach(v => movements.entitiesToAvoid.add(v));
@@ -1167,7 +1610,7 @@ module.exports = class MC {
             'spawner',
             'composter',
         ]
-            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .map(v => this.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
             .forEach(v => movements.blocksCantBreak.add(v)));
 
         ([
@@ -1178,7 +1621,7 @@ module.exports = class MC {
             'end_portal',
             'nether_portal',
         ]
-            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .map(v => this.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
             .forEach(v => movements.blocksToAvoid.add(v)));
 
         ([
@@ -1190,14 +1633,14 @@ module.exports = class MC {
             'weeping_vines',
             'weeping_vines_plant',
         ]
-            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .map(v => this.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
             .forEach(v => movements.climbables.add(v)));
 
         ([
             'short_grass',
             'tall_grass',
         ]
-            .map(v => this.data.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+            .map(v => this.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
             .forEach(v => movements.replaceables.add(v)));
     }
 

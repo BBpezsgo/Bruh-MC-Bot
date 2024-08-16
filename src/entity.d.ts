@@ -19,5 +19,6 @@ declare module 'prismarine-entity' {
 
     interface Entity {
         readonly metadata: EntityMetadata
+        time?: number
     }
 }

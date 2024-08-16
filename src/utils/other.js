@@ -1,5 +1,3 @@
-/** <include="entity-metadata2.js"> */
-
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
@@ -414,6 +412,7 @@ function NBT2JSON(nbt) {
             return nbt.value.value.map(v => ({
                 type: nbt.value.type,
                 value: v,
+            // @ts-ignore
             })).map(NBT2JSON)
         }
         case NBT.TagType.Long:

@@ -6,7 +6,7 @@ const { wrap, sleepG } = require('./utils/tasks')
 const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require('./utils/other')
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
-const MC = require('./mc')
+const Minecraft = require('./minecraft')
 const Tasks = require('./tasks')
 const { Chest } = require('mineflayer')
 const { goals } = require('mineflayer-pathfinder')
@@ -116,7 +116,7 @@ class ItemRequest {
 
 module.exports = class Environment {
     /**
-     * @private @readonly
+     * @readonly
      * @type {Array<import('./bruh-bot')>}
      */
     bots
@@ -246,7 +246,7 @@ module.exports = class Environment {
         delete this.allocatedBlocks[hash]
 
         if (isPlace && newBlock) {
-            if (newBlock.name in MC.cropsByBlockName) {
+            if (newBlock.name in Minecraft.cropsByBlockName) {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(newBlock.position)) {
@@ -265,7 +265,7 @@ module.exports = class Environment {
         }
 
         if (isBreak) {
-            if (oldBlock && oldBlock.name in MC.cropsByBlockName) {
+            if (oldBlock && oldBlock.name in Minecraft.cropsByBlockName) {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(oldBlock.position)) {
@@ -462,7 +462,7 @@ module.exports = class Environment {
             point: bot.bot.entity.position.clone(),
             maxDistance: 30,
             matching: (block) => {
-                if (bot.mc.data.blocksByName['chest'].id === block.type) {
+                if (bot.mc.registry.blocksByName['chest'].id === block.type) {
                     return true
                 }
                 return false
@@ -602,10 +602,10 @@ module.exports = class Environment {
 
         if (count > 0) {
             actualCount = Math.min(count, bot.itemCount(item))
-            yield* wrap(chest.deposit(bot.mc.data.itemsByName[item].id, null, actualCount))
+            yield* wrap(chest.deposit(bot.mc.registry.itemsByName[item].id, null, actualCount))
         } else {
-            actualCount = Math.min(-count, chest.containerCount(bot.mc.data.itemsByName[item].id, null))
-            yield* wrap(chest.withdraw(bot.mc.data.itemsByName[item].id, null, actualCount))
+            actualCount = Math.min(-count, chest.containerCount(bot.mc.registry.itemsByName[item].id, null))
+            yield* wrap(chest.withdraw(bot.mc.registry.itemsByName[item].id, null, actualCount))
         }
 
         saved.content = {}
@@ -632,7 +632,7 @@ module.exports = class Environment {
      */
     searchForItem(bot, item) {
         if (typeof item === 'number') {
-            item = bot.mc.data.items[item].name
+            item = bot.mc.registry.items[item].name
         } else if (typeof item === 'string') { } else {
             item = item.name
         }
@@ -703,7 +703,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} plantPosition
-     * @param {import("./mc").AnyCrop} plant
+     * @param {import("./minecraft").AnyCrop} plant
      * @param {boolean} exactPosition
      * @param {boolean} exactBlock
      * @returns {{ block: Block; faceVector: Vec3; isExactPosition: boolean; isExactBlock: boolean; } | null}
@@ -713,12 +713,12 @@ module.exports = class Environment {
             // TODO: this
             return null
         }
-        const growsOnBlock = plant.growsOnBlock.map(v => bot.mc.data.blocksByName[v].id)
+        const growsOnBlock = plant.growsOnBlock.map(v => bot.mc.registry.blocksByName[v].id)
         if (!exactBlock && plant.growsOnBlock.includes('farmland')) {
             const hoeableBlocks = [
-                bot.mc.data.blocksByName['dirt'].id,
-                bot.mc.data.blocksByName['grass_block'].id,
-                bot.mc.data.blocksByName['dirt_path'].id,
+                bot.mc.registry.blocksByName['dirt'].id,
+                bot.mc.registry.blocksByName['grass_block'].id,
+                bot.mc.registry.blocksByName['dirt_path'].id,
             ]
             for (const hoeableBlock of hoeableBlocks) {
                 if (!growsOnBlock.includes(hoeableBlock)) {
@@ -751,7 +751,7 @@ module.exports = class Environment {
                 const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
                 for (const neighbor of neighbors) {
                     const neighborBlock = bot.bot.blockAt(neighbor)
-                    if (MC.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
+                    if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
                     return true
                 }
                 return false
@@ -766,7 +766,7 @@ module.exports = class Environment {
         const neighbors = directBlockNeighbors(bestBlock.position, plant.growsOnSide)
         for (const neighbor of neighbors) {
             const neighborBlock = bot.bot.blockAt(neighbor)
-            if (MC.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
+            if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
             return {
                 block: bestBlock,
                 faceVector: neighbor.offset(-bestBlock.position.x, -bestBlock.position.y, -bestBlock.position.z),
@@ -787,7 +787,7 @@ module.exports = class Environment {
     cropFilter(bot, grown, block, mushrooms) {
         /** @type {boolean} */
         let isGrown = false
-        const cropInfo = MC.resolveCrop(block.name)
+        const cropInfo = Minecraft.resolveCrop(block.name)
         if (!cropInfo) {
             console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
             return false

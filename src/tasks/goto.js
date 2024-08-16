@@ -302,7 +302,6 @@ function* getGoal(bot, args) {
             LOS: args.LOS ?? false,
             facing: args.facing,
             faces: args.faces,
-            // @ts-ignore
             half: args.half,
         })
     } else if ('flee' in args) {
@@ -350,41 +349,41 @@ function setOptions(bot, args) {
     newMovements.interactableBlocks = originalMovements.interactableBlocks
     newMovements.liquids = originalMovements.liquids
     newMovements.openable = new Set([
-        bot.mc.data.blocksByName['oak_door'].id,
-        bot.mc.data.blocksByName['spruce_door'].id,
-        bot.mc.data.blocksByName['birch_door'].id,
-        bot.mc.data.blocksByName['jungle_door'].id,
-        bot.mc.data.blocksByName['acacia_door'].id,
-        bot.mc.data.blocksByName['dark_oak_door'].id,
-        bot.mc.data.blocksByName['mangrove_door'].id,
-        bot.mc.data.blocksByName['cherry_door'].id,
-        bot.mc.data.blocksByName['bamboo_door'].id,
-        bot.mc.data.blocksByName['crimson_door'].id,
-        bot.mc.data.blocksByName['warped_door'].id,
+        bot.mc.registry.blocksByName['oak_door'].id,
+        bot.mc.registry.blocksByName['spruce_door'].id,
+        bot.mc.registry.blocksByName['birch_door'].id,
+        bot.mc.registry.blocksByName['jungle_door'].id,
+        bot.mc.registry.blocksByName['acacia_door'].id,
+        bot.mc.registry.blocksByName['dark_oak_door'].id,
+        bot.mc.registry.blocksByName['mangrove_door'].id,
+        bot.mc.registry.blocksByName['cherry_door'].id,
+        bot.mc.registry.blocksByName['bamboo_door'].id,
+        bot.mc.registry.blocksByName['crimson_door'].id,
+        bot.mc.registry.blocksByName['warped_door'].id,
 
-        bot.mc.data.blocksByName['oak_fence_gate'].id,
-        bot.mc.data.blocksByName['spruce_fence_gate'].id,
-        bot.mc.data.blocksByName['birch_fence_gate'].id,
-        bot.mc.data.blocksByName['jungle_fence_gate'].id,
-        bot.mc.data.blocksByName['acacia_fence_gate'].id,
-        bot.mc.data.blocksByName['dark_oak_fence_gate'].id,
-        bot.mc.data.blocksByName['mangrove_fence_gate'].id,
-        bot.mc.data.blocksByName['cherry_fence_gate'].id,
-        bot.mc.data.blocksByName['bamboo_fence_gate'].id,
-        bot.mc.data.blocksByName['crimson_fence_gate'].id,
-        bot.mc.data.blocksByName['warped_fence_gate'].id,
+        bot.mc.registry.blocksByName['oak_fence_gate'].id,
+        bot.mc.registry.blocksByName['spruce_fence_gate'].id,
+        bot.mc.registry.blocksByName['birch_fence_gate'].id,
+        bot.mc.registry.blocksByName['jungle_fence_gate'].id,
+        bot.mc.registry.blocksByName['acacia_fence_gate'].id,
+        bot.mc.registry.blocksByName['dark_oak_fence_gate'].id,
+        bot.mc.registry.blocksByName['mangrove_fence_gate'].id,
+        bot.mc.registry.blocksByName['cherry_fence_gate'].id,
+        bot.mc.registry.blocksByName['bamboo_fence_gate'].id,
+        bot.mc.registry.blocksByName['crimson_fence_gate'].id,
+        bot.mc.registry.blocksByName['warped_fence_gate'].id,
 
-        // bot.mc.data.blocksByName['oak_trapdoor'].id,
-        // bot.mc.data.blocksByName['spruce_trapdoor'].id,
-        // bot.mc.data.blocksByName['birch_trapdoor'].id,
-        // bot.mc.data.blocksByName['jungle_trapdoor'].id,
-        // bot.mc.data.blocksByName['acacia_trapdoor'].id,
-        // bot.mc.data.blocksByName['dark_oak_trapdoor'].id,
-        // bot.mc.data.blocksByName['mangrove_trapdoor'].id,
-        // bot.mc.data.blocksByName['cherry_trapdoor'].id,
-        // bot.mc.data.blocksByName['bamboo_trapdoor'].id,
-        // bot.mc.data.blocksByName['crimson_trapdoor'].id,
-        // bot.mc.data.blocksByName['warped_trapdoor'].id,
+        // bot.mc.registry.blocksByName['oak_trapdoor'].id,
+        // bot.mc.registry.blocksByName['spruce_trapdoor'].id,
+        // bot.mc.registry.blocksByName['birch_trapdoor'].id,
+        // bot.mc.registry.blocksByName['jungle_trapdoor'].id,
+        // bot.mc.registry.blocksByName['acacia_trapdoor'].id,
+        // bot.mc.registry.blocksByName['dark_oak_trapdoor'].id,
+        // bot.mc.registry.blocksByName['mangrove_trapdoor'].id,
+        // bot.mc.registry.blocksByName['cherry_trapdoor'].id,
+        // bot.mc.registry.blocksByName['bamboo_trapdoor'].id,
+        // bot.mc.registry.blocksByName['crimson_trapdoor'].id,
+        // bot.mc.registry.blocksByName['warped_trapdoor'].id,
     ])
     newMovements.passableEntities = originalMovements.passableEntities
     newMovements.replaceables = originalMovements.replaceables
@@ -487,14 +486,14 @@ module.exports = {
                                 switch (bot.dimension) {
                                     case 'the_nether': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
@@ -507,14 +506,14 @@ module.exports = {
                                     }
                                     case 'overworld': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
@@ -537,14 +536,14 @@ module.exports = {
                                     }
                                     case 'overworld': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
@@ -557,14 +556,14 @@ module.exports = {
                                     }
                                     case 'the_end': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
@@ -581,14 +580,14 @@ module.exports = {
                                 switch (bot.dimension) {
                                     case 'the_nether': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['nether_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['nether_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
@@ -604,14 +603,14 @@ module.exports = {
                                     }
                                     case 'the_end': {
                                         const portal = bot.bot.findBlock({
-                                            matching: bot.mc.data.blocksByName['end_portal'].id,
+                                            matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
                                             maxDistance: 128,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)
                                         bot.mc.setRestrictedMovements(movements)
-                                        movements.blocksToAvoid.delete(bot.mc.data.blocksByName['end_portal'].id)
+                                        movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
