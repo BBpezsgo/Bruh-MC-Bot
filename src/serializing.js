@@ -42,7 +42,9 @@ function reviver(key, value) {
  * @returns {any}
  */
 function replacer(key, value) {
-    if (value && value instanceof Vec3) {
+    if (!value) { return value }
+
+    if (value instanceof Vec3) {
         return {
             x: value.x,
             y: value.y,
@@ -50,7 +52,7 @@ function replacer(key, value) {
         }
     }
 
-    if (value && value instanceof Vec3Dimension) {
+    if (value instanceof Vec3Dimension) {
         return {
             x: value.x,
             y: value.y,

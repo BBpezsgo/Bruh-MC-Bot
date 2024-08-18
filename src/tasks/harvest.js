@@ -231,7 +231,7 @@ module.exports = {
             const item = Object.values(bot.bot.entities).find(e => {
                 if (e.name !== 'item') { return false }
                 const d = e.position.distanceTo(point)
-                if (d > 3) { return false }
+                if (d > 5) { return false }
                 if (items.find(other => other.id === e.id)) { return false }
                 return true
             })
@@ -268,4 +268,5 @@ module.exports = {
             return `Harvesting crops`
         }
     },
+    definition: 'harvest',
 }

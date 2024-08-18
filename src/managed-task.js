@@ -1,4 +1,12 @@
 /**
+ * @typedef {{
+ *   args: NonNullable<object>;
+ *   priority?: number | undefined;
+ *   definition: import('./tasks').TaskId;
+ * }} SavedManagedTask
+ */
+
+/**
  * @template [TResult = any]
  * @template {{}} [TArgs = {}]
  * @template {any} [TError = any]
@@ -50,6 +58,12 @@ class ManagedTask {
      * @type {import('./task').CommonArgs<TArgs>}
      */
     args
+
+    /**
+     * @readonly
+     * @type {boolean}
+     */
+    save
 
     /**
      * @readonly
@@ -124,7 +138,8 @@ class ManagedTask {
         priority,
         args,
         bot,
-        def
+        def,
+        save = false
     ) {
         this._priority = priority
         this._status = 'queued'
@@ -136,6 +151,7 @@ class ManagedTask {
         this._promise = null
         this._resolve = null
         this._reject = null
+        this.save = save
     }
 
     /**
@@ -243,6 +259,30 @@ class ManagedTask {
             if (this._reject) { this._reject(error) }
             return true
         }
+    }
+
+    /**
+     * @returns {SavedManagedTask | undefined}
+     */
+    toJSON() {
+        if (!this._def.definition) { return undefined }
+
+        /**
+         * @type {any}
+         */
+        const _args = { ...this.args }
+
+        for (const key in _args) {
+            const arg = _args[key]
+            if (typeof arg === 'function') { delete _args[key] }
+            if (typeof arg === 'symbol') { delete _args[key] }
+        }
+
+        return this._def.definition ? {
+            args: _args,
+            priority: (typeof this._priority === 'number') ? this._priority : undefined,
+            definition: this._def.definition,
+        } : undefined
     }
 }
 

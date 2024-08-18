@@ -65,4 +65,5 @@ module.exports = {
     humanReadableId: function() {
         return `Teleporting`
     },
+    definition: 'enderpearlTo',
 }

@@ -131,5 +131,6 @@ module.exports = {
     humanReadableId: function() {
         return 'Trading'
     },
+    definition: 'trade',
     tradeEquality: tradeEquality,
 }

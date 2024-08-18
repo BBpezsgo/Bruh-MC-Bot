@@ -9,7 +9,7 @@ module.exports = {
             throw `Can't eat in quiet mode`
         }
     
-        if (bot.bot.food > 19) {
+        if (bot.bot.food >= 20) {
             return 'full'
         }
     
@@ -43,4 +43,5 @@ module.exports = {
     humanReadableId: function() {
         return `Eating`
     },
+    definition: 'eat',
 }

@@ -180,4 +180,5 @@ module.exports = {
     humanReadableId: function() {
         return `Digging`
     },
+    definition: 'dig',
 }

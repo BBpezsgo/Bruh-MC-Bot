@@ -351,5 +351,6 @@ module.exports = {
     humanReadableId: function() {
         return `Cooking`
     },
+    definition: 'smelt',
     findBestFurnace: findBestFurnace,
 }

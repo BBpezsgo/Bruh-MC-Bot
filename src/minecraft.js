@@ -1569,7 +1569,7 @@ module.exports = class Minecraft {
         movements.allowParkour = true
         movements.allowSprinting = true
         movements.allowEntityDetection = true
-        movements.canOpenDoors = false
+        movements.canOpenDoors = true
 
         // movements.exclusionAreasStep.push((block) => {
         //     if (block.name === 'composter') return 50
@@ -1653,5 +1653,6 @@ module.exports = class Minecraft {
         movements.allow1by1towers = false
         movements.scafoldingBlocks.splice(0, movements.scafoldingBlocks.length)
         movements.placeCost = 500
+        movements.canOpenDoors = false
     }
 }

@@ -8,16 +8,16 @@ const goto = require('./goto')
 module.exports = {
     task: function*(bot, args) {
         const nearest = bot.env.getClosestXp(bot, args)
-        if ('error' in nearest) {
-            throw nearest.error
+        if (!nearest) {
+            throw `No xps nearby`
         }
 
         yield* goto.task(bot, {
-            point: nearest.result.position,
+            point: nearest.position,
             distance: .5,
         })
 
-        while (nearest.result && nearest.result.isValid) {
+        while (nearest && nearest.isValid) {
             yield* sleepG(100)
         }
     },
@@ -27,4 +27,5 @@ module.exports = {
     humanReadableId: function() {
         return `Picking up XP orbs`
     },
+    definition: 'pickupXp',
 }

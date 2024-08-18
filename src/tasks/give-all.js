@@ -69,4 +69,5 @@ module.exports = {
     humanReadableId: function(args) {
         return `Giving everything to ${args.player}`
     },
+    definition: 'giveAll',
 }

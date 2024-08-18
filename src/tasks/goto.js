@@ -17,6 +17,7 @@ class GoalBlockSimple extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     heuristic(node) {
@@ -28,6 +29,7 @@ class GoalBlockSimple extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     isEnd(node) {
@@ -50,6 +52,7 @@ class GoalHawkeye extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     heuristic(node) {
@@ -64,6 +67,7 @@ class GoalHawkeye extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     isEnd(node) {
@@ -126,6 +130,7 @@ class GoalEntity extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     heuristic(node) {
@@ -136,6 +141,7 @@ class GoalEntity extends goals.Goal {
     }
 
     /**
+     * @override
      * @param {Vec3} node
      */
     isEnd(node) {
@@ -162,7 +168,7 @@ class GoalEntity extends goals.Goal {
 
 /**
  * @exports @typedef {{
- *   goal: goals.Goal;
+ *   goal: import('mineflayer-pathfinder/lib/goals').GoalBase;
  *   options: GeneralArgs;
  * }} GoalArgs
  */
@@ -171,10 +177,11 @@ class GoalEntity extends goals.Goal {
  * @exports @typedef {{
  *   timeout?: number;
  *   searchRadius?: number;
- *   movements?: Readonly<Movements>;
+ *   movements?: Readonly<import('mineflayer-pathfinder').Movements>;
  *   savePathError?: boolean;
  *   sprint?: boolean;
  *   excludeStep?: ReadonlyArray<Vec3>;
+ *   lookAtTarget?: boolean;
  * }} GeneralArgs
  */
 
@@ -233,7 +240,7 @@ class GoalEntity extends goals.Goal {
 /**
  * @param {import('../bruh-bot')} bot
  * @param {(GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs) & GeneralArgs} args
- * @returns {Generator<goals.Goal | GotoDimensionArgs, void, void>}
+ * @returns {Generator<import('mineflayer-pathfinder/lib/goals').GoalBase | GotoDimensionArgs, void, void>}
  */
 function* getGoal(bot, args) {
     if ('hawkeye' in args) {
@@ -333,6 +340,8 @@ function setOptions(bot, args) {
         bot.bot.pathfinder.searchRadius = -1
     }
 
+    bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
+
     const originalMovements = args.movements ?? bot.restrictedMovements
     const newMovements = new Movements(bot.bot)
 
@@ -429,7 +438,7 @@ function setOptions(bot, args) {
 }
 
 /**
- * @param {Movements} movements
+ * @param {import('mineflayer-pathfinder').Movements} movements
  * @param {import('mineflayer-pathfinder').PartiallyComputedPath} path
  */
 function getTime(movements, path) {
@@ -643,6 +652,7 @@ module.exports = {
                 setOptions(bot, args.options)
 
                 if (args.options.savePathError) {
+                    args.cancel = function*() { bot.bot.pathfinder.stop() }
                     try {
                         yield* wrap(bot.bot.pathfinder.goto(args.goal))
                     } catch (error) {
@@ -650,9 +660,16 @@ module.exports = {
                             bot.memory.theGoalIsUnreachable(args.goal)
                         }
                         throw error
+                    } finally {
+                        args.cancel = undefined
                     }
                 } else {
-                    yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                    args.cancel = function*() { bot.bot.pathfinder.stop() }
+                    try {
+                        yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                    } finally {
+                        args.cancel = undefined
+                    }
                 }
 
                 return 'ok'
@@ -693,6 +710,12 @@ module.exports = {
             }
         } else if ('dimension' in args) {
             return `dimension-${args.dimension}`
+        } else if ('entity' in args) {
+            return `goto-entity-${args.entity.id}`
+        } else if ('hawkeye' in args) {
+            return `goto-hawkeye-${args.hawkeye}-${args.weapon}`
+        } else if ('goal' in args) {
+            return `goto-goal`
         } else {
             throw `What?`
         }
@@ -712,10 +735,17 @@ module.exports = {
             }
         } else if ('dimension' in args) {
             return `Goto ${args.dimension}`
+        } else if ('entity' in args) {
+            return `Goto ${args.entity.name}`
+        } else if ('hawkeye' in args) {
+            return `Goto shoot`
+        } else if ('goal' in args) {
+            return `Goto somewhere`
         } else {
             return `Goto somewhere`
         }
     },
+    definition: 'goto',
     getGoal: getGoal,
     getTime: getTime,
     GoalBlockSimple: GoalBlockSimple,

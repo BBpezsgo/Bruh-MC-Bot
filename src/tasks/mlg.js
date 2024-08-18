@@ -167,4 +167,5 @@ module.exports = {
     humanReadableId: function() {
         return `MLG`
     },
+    definition: 'mlg',
 }

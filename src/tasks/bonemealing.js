@@ -61,5 +61,6 @@ module.exports = {
     },
     humanReadableId: function() {
         return `Bonemealing`
-    }
+    },
+    definition: 'bonemealing',
 }

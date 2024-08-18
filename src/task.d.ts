@@ -6,9 +6,10 @@ export type Task<TResult> = Generator<string | void, TResult, void>
 export type SimpleTaskDef<TResult, TArgs, TError = any> = (bot: BruhBot, args: TArgs) => Task<TResult>
 
 export type TaskDef<TResult = void, TArgs extends {} = {}, TError = any> = {
-    task: (bot: BruhBot, args: CommonArgs<TArgs>) => Task<TResult>;
-    id: (args: TArgs) => string;
-    humanReadableId: (args: TArgs) => string;
+    readonly task: (bot: BruhBot, args: CommonArgs<TArgs>) => Task<TResult>;
+    readonly id: (args: TArgs) => string;
+    readonly humanReadableId: (args: TArgs) => string;
+    readonly definition?: import('./tasks').TaskId;
 }
 
 export type CommonArgs<TArgs extends {}> = TArgs & {

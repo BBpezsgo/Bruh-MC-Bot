@@ -7,7 +7,7 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
-const { parseYesNoH, parseLocationH, toArray, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
+const { parseLocationH, toArray, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
 const giveTo = require('./give-to')
 const { Vec3 } = require('vec3')
 const dig = require('./dig')
@@ -1072,14 +1072,14 @@ function* evaluatePlan(bot, plan) {
                     let requestPlayer
                     let response
                     try {
-                        const _response = yield* bot.ask(
+                        const _response = yield* bot.askYesNo(
                             (step.count === 1) ?
                                 `Can someone give me a ${step.item}?` :
                                 `Can someone give me ${step.count} ${step.item}?`,
                             bot.bot.chat,
                             null,
                             30000)
-                        response = parseYesNoH(_response.message)
+                        response = _response.message
                         requestPlayer = _response.sender
                     } catch (error) {
                         throw `:(`
@@ -1376,7 +1376,7 @@ function organizePlan(plan) {
 }
 
 /**
- * @type {import('../task').TaskDef<void, Args> & {
+ * @type {import('../task').TaskDef<{ item: string; count: number; }, Args> & {
  *   planCost: planCost;
  *   planResult: planResult;
  *   plan: plan;
@@ -1491,7 +1491,16 @@ const def = {
 
             console.log(builder)
         }
+
+        const itemsBefore = bot.itemCount(bestPlan.item)
         yield* evaluatePlan(bot, _organizedPlan)
+        const itemsAfter = bot.itemCount(bestPlan.item)
+        const itemsGathered = itemsAfter - itemsBefore
+
+        return {
+            item: bestPlan.item,
+            count: itemsGathered,
+        }
     },
     id: function(args) {
         return `gather-${args.count}-${args.item}`
@@ -1499,6 +1508,7 @@ const def = {
     humanReadableId: function(args) {
         return `Gathering ${args.count} ${args.item}`
     },
+    definition: 'gatherItem',
     planCost: planCost,
     planResult: planResult,
     plan: plan,

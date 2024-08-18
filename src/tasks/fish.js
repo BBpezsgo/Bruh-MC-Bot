@@ -3,7 +3,44 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const { Weapons } = require('minecrafthawkeye')
-const { Interval } = require('../utils/other')
+const { Interval, directBlockNeighbors } = require('../utils/other')
+
+/**
+ * @param {import("../bruh-bot")} bot
+ */
+function findWater(bot) {
+    const waters = bot.bot.findBlocks({
+        matching: bot.mc.registry.blocksByName['water'].id,
+        maxDistance: 32,
+        count: 8,
+        useExtraInfo: (/** @type {Block} */ water) => {
+            if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
+                return false
+            }
+            if (water.getProperties()['level'] !== 0) {
+                return false
+            }
+            return true
+        }
+    })
+    let bestWater = null
+    let bestWaterScore = 0
+    for (const water of waters) {
+        let waterScore = 0
+        for (const neighborPosition of directBlockNeighbors(water, 'side')) {
+            const neighbor = bot.bot.blockAt(neighborPosition)
+            if (!neighbor) { continue }
+            if (neighbor.name !== 'water') { continue }
+            if (neighbor.getProperties()['level'] !== 0) { continue }
+            waterScore++
+        }
+        if (waterScore > bestWaterScore || !bestWater) {
+            bestWater = water
+            bestWaterScore = waterScore
+        }
+    }
+    return bestWater
+}
 
 /**
  * @type {import('../task').TaskDef<number>}
@@ -33,16 +70,7 @@ module.exports = {
                 throw `I have no fishing rod`
             }
 
-            let water = bot.bot.findBlock({
-                matching: bot.mc.registry.blocksByName['water'].id,
-                maxDistance: 32,
-                useExtraInfo: (/** @type {Block} */ water) => {
-                    if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
-                        return false
-                    }
-                    return true
-                }
-            })
+            const water = findWater(bot)
 
             if (!water) {
                 if (n) { return n }
@@ -51,15 +79,15 @@ module.exports = {
 
             if (true) {
                 yield* goto.task(bot, {
-                    point: water.position.offset(0, 0, 0),
+                    point: water.offset(0, 0, 0),
                     distance: 4,
                 })
                 yield* goto.task(bot, {
-                    hawkeye: water.position.offset(0.5, 0.5, 0.5),
+                    hawkeye: water.offset(0.5, 0.5, 0.5),
                     weapon: Weapons.bobber,
                 })
                 const grade = bot.bot.hawkEye.getMasterGrade({
-                    position: water.position.offset(0.5, 0.5, 0.5),
+                    position: water.offset(0.5, 0.5, 0.5),
                     isValid: false,
                 }, new Vec3(0, 0, 0), Weapons.bobber)
 
@@ -145,4 +173,5 @@ module.exports = {
     humanReadableId: function() {
         return `Fishing`
     },
+    definition: 'fish',
 }

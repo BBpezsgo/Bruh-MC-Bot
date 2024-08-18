@@ -1,3 +1,7 @@
+/**
+ * @typedef {Exclude<keyof typeof this, 'prototype' | 'preloadAll'>} TaskId
+ */
+
 module.exports = class {
     /** @readonly */ static get attack() { return require('./tasks/attack') }
     /** @readonly */ static get blockExplosion() { return require('./tasks/block-explosion') }
@@ -16,6 +20,7 @@ module.exports = class {
     /** @readonly */ static get giveTo() { return require('./tasks/give-to') }
     /** @readonly */ static get goto() { return require('./tasks/goto') }
     /** @readonly */ static get harvest() { return require('./tasks/harvest') }
+    /** @readonly */ static get kill() { return require('./tasks/kill') }
     /** @readonly */ static get mlg() { return require('./tasks/mlg') }
     /** @readonly */ static get pickupItem() { return require('./tasks/pickup-item') }
     /** @readonly */ static get pickupXp() { return require('./tasks/pickup-xp') }

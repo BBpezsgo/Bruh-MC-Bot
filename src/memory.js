@@ -2,7 +2,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const Vec3Dimension = require('./vec3-dimension')
-const { goals } = require('mineflayer-pathfinder')
+const { Vec3 } = require('vec3')
 
 module.exports = class Memory {
     /**
@@ -48,7 +48,7 @@ module.exports = class Memory {
     /**
      * @private @readonly
      * @type {Array<{
-     *   goal: goals.Goal;
+     *   goal: import('mineflayer-pathfinder/lib/goals').GoalBase;
      *   time: number;
      * }>}
      */
@@ -59,6 +59,11 @@ module.exports = class Memory {
      * @type {Record<string, { lastTime: number; successCount: number; }>}
      */
     successfulGatherings
+
+    /**
+     * @type {Vec3Dimension | null}
+     */
+    idlePosition
 
     /**
      * @param {import('./bruh-bot')} bot
@@ -75,6 +80,7 @@ module.exports = class Memory {
         this.hurtBy = {}
         this.successfulGatherings = {}
         this._unreachableGoals = []
+        this.idlePosition = null
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Memory] File not found at "${this.filePath}"`)
@@ -87,6 +93,7 @@ module.exports = class Memory {
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
         this.successfulGatherings = data.successfulGatherings ?? this.successfulGatherings
+        this.idlePosition = data.idlePosition ?? this.idlePosition
 
         console.log(`[Memory] Loaded`)
     }
@@ -101,11 +108,12 @@ module.exports = class Memory {
             mlgJunkBlocks: this.mlgJunkBlocks,
             myArrows: this.myArrows,
             successfulGatherings: this.successfulGatherings,
+            idlePosition: this.idlePosition,
         }, replacer, ' '))
     }
 
     /**
-     * @param {goals.Goal} goal
+     * @param {import('mineflayer-pathfinder/lib/goals').GoalBase} goal
      */
     theGoalIsUnreachable(goal) {
         this._unreachableGoals.push({
@@ -115,7 +123,7 @@ module.exports = class Memory {
     }
 
     /**
-     * @param {goals.Goal} goal
+     * @param {import('mineflayer-pathfinder/lib/goals').GoalBase} goal
      */
     isGoalUnreachable(goal) {
         for (let i = this._unreachableGoals.length - 1; i > 0; i--) {

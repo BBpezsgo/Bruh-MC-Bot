@@ -48,5 +48,6 @@ module.exports = {
     },
     humanReadableId: function() {
         return `Blocking some explosion`
-    }
+    },
+    definition: 'blockExplosion',
 }

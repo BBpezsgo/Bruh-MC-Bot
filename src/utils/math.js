@@ -58,8 +58,8 @@ function rotationToVector(pitch, yaw) {
     if (yaw < -180) { yaw += 360 }
     if (yaw > 180) { yaw -= 360 }
 
-    let f = Math.cos(-yaw - Math.PI)
-    let f1 = Math.sin(-yaw - Math.PI)
+    let f = Math.cos(-(yaw * (Math.PI / 180)) - Math.PI)
+    let f1 = Math.sin(-(yaw * (Math.PI / 180)) - Math.PI)
     let f2 = -Math.cos(-pitch)
     let f3 = Math.sin(pitch)
     return new Vec3((f1 * f2), f3, -(f * f2))

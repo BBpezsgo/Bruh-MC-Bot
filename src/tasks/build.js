@@ -4,7 +4,7 @@ const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
 
 /**
- * @type {import('../task').TaskDef<'ok', {
+ * @type {import('../task').TaskDef<void, {
  *   blocks: ReadonlyArray<{
  *     position: Vec3;
  *     name: string;
@@ -139,8 +139,6 @@ module.exports = {
             debugger
             throw `Failed`
         }
-
-        return 'ok'
     },
     id: function(args) {
         return `build`
@@ -148,4 +146,5 @@ module.exports = {
     humanReadableId: function(args) {
         return 'Build something'
     },
+    definition: 'build',
 }

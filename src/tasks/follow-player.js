@@ -57,10 +57,17 @@ module.exports = {
             }
 
             try {
-                yield* goto.task(bot, {
-                    point: target,
-                    distance: args.range,
-                })
+                if (bot.bot.players[args.player]?.entity) {
+                    yield* goto.task(bot, {
+                        entity: bot.bot.players[args.player].entity,
+                        distance: args.range,
+                    })
+                } else {
+                    yield* goto.task(bot, {
+                        point: target,
+                        distance: args.range,
+                    })
+                }
                 failStreak = 0
             } catch (error) {
                 if (failStreak > 5) {
@@ -84,4 +91,5 @@ module.exports = {
     humanReadableId: function(args) {
         return `Follow ${args.player}`
     },
+    definition: 'followPlayer',
 }

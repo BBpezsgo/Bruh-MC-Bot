@@ -97,5 +97,6 @@ module.exports = {
     humanReadableId: function() {
         return `Sleeping`
     },
+    definition: 'sleep',
     can: can,
 }

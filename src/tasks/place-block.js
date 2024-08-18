@@ -481,6 +481,7 @@ module.exports = {
             return `Placing ${args.block}`
         }
     },
+    definition: 'placeBlock',
     getCorrectItem: getCorrectItem,
     getCorrectBlock: getCorrectBlock,
 }

@@ -127,4 +127,5 @@ module.exports = {
     humanReadableId: function() {
         return `Dump items`
     },
+    definition: 'dumpToChest',
 }

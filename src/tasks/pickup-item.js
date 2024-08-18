@@ -48,6 +48,7 @@ module.exports = {
             return `Picking up items`
         }
     },
+    definition: 'pickupItem',
     can: function(bot, args) {
         const nearest = (() => {
             if ('item' in args) { return args.item }
@@ -72,5 +73,5 @@ module.exports = {
         }
 
         return true
-    }
+    },
 }

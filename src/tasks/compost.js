@@ -125,4 +125,5 @@ module.exports = {
     humanReadableId: function() {
         return `Compost`
     },
+    definition: 'compost',
 }

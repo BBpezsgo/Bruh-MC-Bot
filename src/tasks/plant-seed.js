@@ -167,5 +167,6 @@ module.exports = {
     humanReadableId: function() {
         return `Planting seeds`
     },
+    definition: 'plantSeed',
     plant: plant,
 }

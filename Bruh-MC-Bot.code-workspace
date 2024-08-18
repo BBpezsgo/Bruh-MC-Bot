@@ -12,6 +12,8 @@
 	],
 	"settings": {
 		"typescript.tsserver.experimental.enableProjectDiagnostics": true,
+		"typescript.tsserver.web.projectWideIntellisense.enabled": false,
+		"typescript.tsserver.web.projectWideIntellisense.suppressSemanticErrors": false,
 		"javascript.referencesCodeLens.enabled": true,
 		"javascript.referencesCodeLens.showOnAllFunctions": true,
 		"files.watcherExclude": {
@@ -26,7 +28,6 @@
 		},
 		"material-icon-theme.files.associations": {
 			"template.js": "template",
-			"config.js": "settings"
 		},
 		"material-icon-theme.folders.associations": {
 			"worlds": "environment"
@@ -102,7 +103,12 @@
 			"zombified"
 		],
 		"javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
-		"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false
+		"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
+		"javascript.preferences.quoteStyle": "single",
+		"javascript.preferGoToSourceDefinition": true,
+		"javascript.suggest.jsdoc.generateReturns": false,
+		"javascript.suggest.names": false,
+		// "javascript.validate.enable": true.
 	},
 	"launch": {
 		"version": "0.2.0",

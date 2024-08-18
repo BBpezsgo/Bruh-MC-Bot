@@ -1,4 +1,5 @@
 const ManagedTask = require('./managed-task')
+const { replacer, reviver } = require('./serializing')
 
 /**
  * @exports
@@ -43,10 +44,11 @@ module.exports = class TaskManager {
      * @param {import('./bruh-bot')} bot
      * @param {import('./task').TaskDef<TResult, TArgs, TError>} task
      * @param {import('./task').CommonArgs<TArgs>} args
-     * @param {Priority<TArgs>} priority
+     * @param {Priority<TArgs>} [priority]
+     * @param {boolean} [save]
      * @returns {ManagedTask<TResult, TArgs, TError> | null}
      */
-    push(bot, task, args, priority = 0) {
+    push(bot, task, args, priority = 0, save = false) {
         if (this._isStopping) {
             return null
         }
@@ -65,7 +67,8 @@ module.exports = class TaskManager {
             priority,
             args,
             bot,
-            task
+            task,
+            save
         )
 
         this._tasks.push(newTask)
@@ -152,6 +155,31 @@ module.exports = class TaskManager {
     abort() {
         for (const task of this._tasks) {
             task.abort()
+        }
+    }
+
+    toJSON() {
+        const _tasks = this._tasks
+            .filter(v => !v.isDone && v.save)
+            .map(v => v.toJSON())
+            .filter(v => v)
+        return JSON.stringify(_tasks, replacer)
+    }
+
+    /**
+     * @param {import("./bruh-bot")} bot
+     * @param {string} json
+     */
+    fromJSON(bot, json) {
+        const tasks = require('./tasks')
+        /** @type {ReadonlyArray<import('./managed-task').SavedManagedTask>} */
+        const rawTasks = JSON.parse(json, reviver)
+        for (const rawTask of rawTasks) {
+            /**
+             * @type {import('./task').TaskDef<any, any, any>}
+             */
+            const definition = tasks[rawTask.definition]
+            this.push(bot, definition, rawTask.args, rawTask.priority, true)
         }
     }
 }

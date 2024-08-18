@@ -105,8 +105,6 @@ module.exports = {
                     break
             }
         }
-
-        return 'ok'
     },
     id: function() {
         return `clear-mlg-junk`
@@ -114,4 +112,5 @@ module.exports = {
     humanReadableId: function() {
         return `Clearing MLG junk`
     },
+    definition: 'clearMlgJunk',
 }

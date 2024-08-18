@@ -430,11 +430,11 @@ module.exports = {
                 }
             }
 
-            if (meleeWeapon) {
-                console.log(`[Bot "${bot.username}"] Melee weapon "${meleeWeapon.name}" equipped`)
-            } else {
-                console.log(`[Bot "${bot.username}"] No melee weapon found`)
-            }
+            // if (meleeWeapon) {
+            //     console.log(`[Bot "${bot.username}"] Melee weapon "${meleeWeapon.name}" equipped`)
+            // } else {
+            //     console.log(`[Bot "${bot.username}"] No melee weapon found`)
+            // }
 
             cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : hurtTime
         }
@@ -465,13 +465,13 @@ module.exports = {
             }
         }
 
-        console.log(`[Bot "${bot.username}"] Attack ...`)
+        // console.log(`[Bot "${bot.username}"] Attack ...`)
 
         if (args.useMelee) {
             if (args.useMeleeWeapon) {
                 yield* equipMeleeWeapon()
             } else {
-                console.log(`[Bot "${bot.username}"] Attacking with bare hands`)
+                // console.log(`[Bot "${bot.username}"] Attacking with bare hands`)
                 if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
                     yield* wrap(bot.bot.unequip('hand'))
                 }
@@ -628,10 +628,12 @@ module.exports = {
                     options: {
                         timeout: 100,
                         searchRadius: 5,
+                        sprint: true,
+                        movements: bot.restrictedMovements,
                     },
                 })
 
-                console.log(`[Bot "${bot.username}"] Attack ${target.name}`)
+                // console.log(`[Bot "${bot.username}"] Attack ${target.name}`)
 
                 if (target.name === 'boat') {
                     cooldown = 80
@@ -645,7 +647,7 @@ module.exports = {
 
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 6) {
-                        console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                        // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
                             entity: target,
                             distance: 5,
@@ -658,10 +660,10 @@ module.exports = {
                     stopMoving(target)
 
                     if (reequipMeleeWeapon) {
-                        console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
+                        // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
                         shield = bot.searchItem('shield')
                         yield* equipMeleeWeapon()
-                        console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
+                        // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                         reequipMeleeWeapon = false
                     }
 
@@ -700,7 +702,7 @@ module.exports = {
                         return true
                     })
                     if (arrow) {
-                        console.log(`[Bot "${bot.username}"] Arrow saved`)
+                        // console.log(`[Bot "${bot.username}"] Arrow saved`)
                         bot.memory.myArrows.push(arrow.id)
                     }
                 }
@@ -721,7 +723,7 @@ module.exports = {
                     if (weapon && weapon.ammo > 0) {
                         let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
-                            console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                            //  console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                             yield* goto.task(bot, {
                                 entity: target,
                                 distance: distance - 2,
@@ -737,17 +739,17 @@ module.exports = {
                             const isCharged = isCrossbowCharged(weapon.item)
 
                             if (!isCharged) {
-                                console.log(`[Bot "${bot.username}"] Charging crossbow`)
+                                // (`[Bot "${bot.username}"] Charging crossbow`)
                                 bot.activateHand('right')
                                 const chargeTime = getChargeTime(weapon.weapon)
                                 yield* sleepG(Math.max(100, chargeTime))
                                 bot.deactivateHand()
-                                console.log(`[Bot "${bot.username}"] Crossbow charged`)
+                                // console.log(`[Bot "${bot.username}"] Crossbow charged`)
                             }
 
                             grade = getGrade()
                             if (!grade || grade.blockInTrayect) {
-                                console.log(`[Bot "${bot.username}"] Trajectory changed while charging crossbow`)
+                                // console.log(`[Bot "${bot.username}"] Trajectory changed while charging crossbow`)
                                 reequipMeleeWeapon = true
                                 continue
                             }
@@ -770,7 +772,7 @@ module.exports = {
                             }
                             bot.env.entityHurtTimes[target.id] = performance.now() - 50 - 50
                         } else if (weapon.weapon === Weapons.bow) {
-                            console.log(`[Bot "${bot.username}"] Pulling bow`)
+                            // console.log(`[Bot "${bot.username}"] Pulling bow`)
                             bot.activateHand('right')
                             const chargeTime = getChargeTime(weapon.weapon)
                             yield* sleepG(Math.max(hurtTime, chargeTime))
@@ -783,7 +785,7 @@ module.exports = {
 
                             grade = getGrade()
                             if (!grade || grade.blockInTrayect) {
-                                console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
+                                // console.log(`[Bot "${bot.username}"] Trajectory changed while charging bow`)
                                 if (!(yield* bot.clearMainHand())) {
                                     console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
                                 }
@@ -844,6 +846,7 @@ module.exports = {
             return `Attack multiple targets`
         }
     },
+    definition: 'attack',
     can: function(bot, entity, permissions) {
         if (!permissions.useBow && !permissions.useMelee) { return false }
 
@@ -869,5 +872,5 @@ module.exports = {
         }
 
         return true
-    }
+    },
 }

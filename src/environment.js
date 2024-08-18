@@ -454,9 +454,10 @@ module.exports = class Environment {
 
     /**
      * @param {import('./bruh-bot')} bot
-     * @returns {import('./task').Task<void>}
+     * @returns {import('./task').Task<number>}
      */
     *scanChests(bot) {
+        let scannedChests = 0
         console.log(`[Bot "${bot.username}"] Scanning chests ...`)
         const chestPositions = bot.bot.findBlocks({
             point: bot.bot.entity.position.clone(),
@@ -528,6 +529,8 @@ module.exports = class Environment {
                     found.content[item.name] += item.count
                 }
 
+                scannedChests++
+
                 yield* sleepG(100)
                 chest.close()
             } catch (error) {
@@ -535,13 +538,16 @@ module.exports = class Environment {
             }
         }
         console.log(`[Bot "${bot.username}"] Chests scanned`)
+
+        return scannedChests
     }
 
     /**
      * @param {import('./bruh-bot')} bot
-     * @returns {import('./task').Task<void>}
+     * @returns {import('./task').Task<number>}
      */
     *scanVillagers(bot) {
+        let scannedVillagers = 0
         console.log(`[Bot "${bot.username}"] Scanning villagers ...`)
         const villagers = Object.values(bot.bot.entities).filter(v => v.name === 'villager')
         console.log(`[Bot "${bot.username}"] Found ${villagers.length} villagers`)
@@ -558,6 +564,7 @@ module.exports = class Environment {
                 while (!_villager.trades) { yield }
                 yield
                 this.addVillager(villager, _villager, bot.dimension)
+                scannedVillagers++
                 _villager.close()
 
                 yield* sleepG(100)
@@ -566,6 +573,7 @@ module.exports = class Environment {
             }
         }
         console.log(`[Bot "${bot.username}"] Villagers scanned`)
+        return scannedVillagers
     }
 
     /**
@@ -993,39 +1001,18 @@ module.exports = class Environment {
      *   maxDistance?: number;
      *   point?: Vec3;
      * }} args
-     * @returns {import('./result').Result<import('prismarine-entity').Entity>}
-     */
-    getClosestArrow(bot, args = {}) {
-        const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
-            entity.displayName === 'Arrow' &&
-            (entity.velocity.distanceTo(new Vec3(0, 0, 0)) < 1)
-        ))
-        if (!nearestEntity) { return { error: `No arrows found` } }
-
-        const distance = nearestEntity.position.distanceTo(args.point ?? bot.bot.entity.position)
-        if (distance > (args.maxDistance || 10)) { return { error: `No arrows nearby` } }
-
-        return { result: nearestEntity }
-    }
-
-    /**
-     * @param {import('./bruh-bot')} bot
-     * @param {{
-     *   maxDistance?: number;
-     *   point?: Vec3;
-     * }} args
-     * @returns {import('./result').Result<import('prismarine-entity').Entity>}
+     * @returns {import('prismarine-entity').Entity | null}
      */
     getClosestXp(bot, args = {}) {
         const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
             entity.name === 'experience_orb')
         )
-        if (!nearestEntity) { return { error: `No xps found` } }
+        if (!nearestEntity) { return null }
 
         const distance = nearestEntity.position.distanceTo(args.point ?? bot.bot.entity.position)
-        if (distance > (args.maxDistance || 10)) { return { error: `No xps nearby` } }
+        if (distance > (args.maxDistance || 10)) { return null }
 
-        return { result: nearestEntity }
+        return nearestEntity
     }
 
     /**
@@ -1299,8 +1286,51 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {import('prismarine-entity').Entity} entity
+     */
+    static isGoodFarmAnimal(entity) {
+        if (!entity || !entity.isValid) { return false }
+        if ((
+            entity.name !== 'chicken' &&
+            entity.name !== 'cow' &&
+            entity.name !== 'pig' &&
+            entity.name !== 'sheep'
+        )) { return false }
+        if (entity.metadata[16]) { return false }
+        return true
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot 
+     */
+    *scanFencings(bot) {
+        /**
+         * @type {Array<import('./environment').Fencing>}
+         */
+        const fencings = []
+        const farmAnimals = Object.values(bot.bot.entities)
+            .filter(Environment.isGoodFarmAnimal)
+        for (const farmAnimal of farmAnimals) {
+            yield
+            if (!farmAnimal.isValid) { continue }
+            let isAdded = false
+            for (const fencing of fencings) {
+                if (fencing.mobs[farmAnimal.id]) {
+                    isAdded = true
+                    break
+                }
+            }
+            if (isAdded) { continue }
+            const fencing = yield* bot.env.scanFencing(farmAnimal.position)
+            if (!fencing) { continue }
+            fencings.push(fencing)
+        }
+        return fencings
+    }
+
+    /**
      * @param {{ x: number; y: number; z: number; }} origin
-     * @returns {import("./task").Task<Fencing>}
+     * @returns {import("./task").Task<Fencing | null>}
      */
     *scanFencing(origin) {
         if (!origin) { return { positions: [], mobs: {} } }
@@ -1308,7 +1338,8 @@ module.exports = class Environment {
         /** @type {Array<{ p: Vec3; v: boolean; }>} */
         const visited = []
         /** @type {Array<Vec3>} */
-        const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).rounded()]
+        const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).floored()]
+        const maxSize = 128
 
         const isEmpty = (/** @type {import("prismarine-block").Block} */ block) => {
             return (
@@ -1318,6 +1349,18 @@ module.exports = class Environment {
             )
         }
 
+        const fences = [
+            'oak_fence',
+            'spruce_fence',
+            'birch_fence',
+            'jungle_fence',
+            'acacia_fence',
+            'dark_oak_fence',
+            'mangrove_fence',
+            'cherry_fence',
+            'bamboo_fence',
+        ]
+
         const visit = (/** @type {Vec3} */ p) => {
             if (!p) { return }
             const block = this.blockAt(p)
@@ -1325,22 +1368,36 @@ module.exports = class Environment {
             if (visited.find(other => other.p.equals(p))) { return }
             const node = { p: p, v: false }
             visited.push(node)
-            // this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 0, 1])
             if (isEmpty(block)) { return }
             const above = this.blockAt(p.offset(0, 1, 0))
-            if (!isEmpty(above)) { return }
+            if (!isEmpty(above)) {
+                if (fences.includes(above.name)) {
+                    this.bots[0].debug.drawPoint(p.offset(0, 2, 0), [0, 0, 1])
+                    node.v = true
+                }
+                return
+            }
             mustVisit.push(p.offset(-1, 0, 0))
             mustVisit.push(p.offset(1, 0, 0))
             mustVisit.push(p.offset(0, 0, -1))
             mustVisit.push(p.offset(0, 0, 1))
-            // this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 1, 0])
+            this.bots[0].debug.drawPoint(p.offset(0, 1, 0), [0, 1, 0])
             node.v = true
         }
 
+        let j = 0
+
         while (mustVisit.length > 0) {
+            if (visited.length >= maxSize) {
+                console.warn(`[Bot] Fencing is too big: ${visited.length} >= ${maxSize}`)
+                return null
+            }
             const n = mustVisit.length
             for (let i = 0; i < n; i++) {
-                yield
+                if (j++ > 5) {
+                    yield
+                    j = 0
+                }
                 visit(mustVisit[i])
             }
             mustVisit.splice(0, n)
@@ -1355,7 +1412,7 @@ module.exports = class Environment {
         for (const bot of this.bots) {
             for (const entity of Object.values(bot.bot.entities)) {
                 yield
-                if (!entity.isValid) { continue }
+                if (!Environment.isGoodFarmAnimal(entity)) { continue }
                 let isIncluded = false
                 const entityPosition = entity.position.rounded()
                 for (const fencingPosition of fencing) {
@@ -1365,6 +1422,7 @@ module.exports = class Environment {
                     }
                 }
                 if (!isIncluded) { continue }
+                this.bots[0].debug.drawPoint(entity.position.offset(0, entity.height + 0.3, 0), [1, 1, 1])
                 mobs[entity.id] = entity
             }
         }
