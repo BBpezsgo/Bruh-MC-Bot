@@ -204,6 +204,7 @@ function getCorrectBlock(itemName) {
  *   block: string;
  * }) & {
  *   clearGrass?: boolean;
+ *   cheat?: boolean;
  * } & ({} | {
  *   position: Vec3;
  *   properties?: object;
@@ -221,7 +222,7 @@ module.exports = {
         const item = ('item' in args) ? args.item : getCorrectItem(args.block)
         const block = ('block' in args) ? args.block : getCorrectBlock(args.item)[0]
 
-        if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+        if (!args.cheat && !bot.searchItem(item)) { throw `I don't have ${item}` }
 
         /**
          * @param {Vec3} target
@@ -448,7 +449,11 @@ module.exports = {
                 throw `Invalid reference block ${referenceBlock.name}`
             }
 
-            if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+            if (args.cheat) {
+                yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
+            } else {
+                if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+            }
 
             try {
                 yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'))

@@ -558,6 +558,11 @@ module.exports = {
                 dangerScore += hurtScore
             }
 
+            if (entity.name === 'shulker' &&
+                !entity.metadata[17]) {
+                return 0.01
+            }
+
             return (
                 attackRangeScore +
                 healthScore +

@@ -282,6 +282,31 @@ function parseLocationH(text) {
 
 /**
  * @param {string} text
+ * @param {import('../bruh-bot')} [bot=null]
+ * @returns {null | string | Vec3Dimension | Entity}
+ */
+function parseAnyLocationH(text, bot = null) {
+    text = text.trim().toLowerCase()
+
+    if (bot) {
+        if (text === 'home') {
+            if (!bot.memory.idlePosition) { return `I don't have a home` }
+
+            return bot.memory.idlePosition.clone()
+        }
+
+        if (bot.bot.players[text]?.entity) {
+            if (text === bot.username) { return `That's me!` }
+
+            return bot.bot.players[text].entity
+        }
+    }
+
+    return parseLocationH(text)
+}
+
+/**
+ * @param {string} text
  * @returns {null | boolean}
  */
 function parseYesNoH(text) {
@@ -564,6 +589,7 @@ module.exports = {
     Timeout,
     Interval,
     parseLocationH,
+    parseAnyLocationH,
     parseYesNoH,
     directBlockNeighbors,
     isDirectNeighbor,

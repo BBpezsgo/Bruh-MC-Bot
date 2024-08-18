@@ -16,7 +16,7 @@ const levenshtein = require('damerau-levenshtein')
 
 const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
-const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout, directBlockNeighbors } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout, parseAnyLocationH } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const Environment = require('./environment')
@@ -26,7 +26,6 @@ const TextDisplay = require('./text-display')
 const Commands = require('./commands')
 const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
-const { Vec3 } = require('vec3')
 const BlockDisplay = require('./block-display')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
 
@@ -521,20 +520,9 @@ module.exports = class BruhBot {
 
         this.bot.once('spawn', () => {
             console.log(`[Bot "${this.username}"] Spawned`)
+            this.bot.clearControlStates()
 
             console.log(`[Bot "${this.username}"] Loading ...`)
-
-            // for (const entity of this.mc.registry.entitiesArray) {
-            //     if (!Minecraft.hostiles[entity.name]) {
-            //         console.warn(entity.name)
-            //     }
-            //     if (entityRangeOfSight(entity.name) === undefined) {
-            //         console.warn(entity.name, 'range of sight')
-            //     }
-            //     if (entityAttackDamage(entity.name) === undefined) {
-            //         console.warn(entity.name, 'attack damage')
-            //     }
-            // }
 
             // @ts-ignore
             this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
@@ -638,7 +626,7 @@ module.exports = class BruhBot {
 
             TextDisplay.tick(this)
             BlockDisplay.tick(this)
-            
+
             if (this.saveTasksInterval?.is()) {
                 const json = this.tasks.toJSON()
                 fs.writeFileSync(path.join(config.worldPath, 'tasks-' + this.username + '.json'), json, 'utf8')
@@ -1231,6 +1219,7 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('death', () => {
+            this.bot.clearControlStates()
             console.log(`[Bot "${this.username}"] Died`)
         })
 
@@ -1474,6 +1463,14 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
+            match: ['clear debug', 'cdebug', 'dispose debug', 'ddebug', 'ndebug'],
+            command: (sender, message, respond) => {
+                TextDisplay.disposeAll(this.commands)
+                BlockDisplay.disposeAll(this.commands)
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
             match: 'fly',
             command: (sender, message, respond) => {
                 this.tasks.push(this, {
@@ -1518,7 +1515,7 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
-            match: /get\W+([0-9]*)\W*([a-zA-Z_ ]+)/,
+            match: /get\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
                 const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
                 const itemName = message[2].toLowerCase().trim()
@@ -1555,7 +1552,7 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
-            match: /plan\W+([0-9]*)\W*([a-zA-Z_ ]+)/,
+            match: /plan\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
                 const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
                 const itemName = message[2].toLowerCase().trim()
@@ -1631,7 +1628,7 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
-            match: /kill\W+([a-zA-Z0-9_]+)/,
+            match: /kill\s+([a-zA-Z0-9_]+)/,
             command: (sender, message, respond) => {
                 const target = this.bot.players[message[1]]
                 if (!target) {
@@ -2062,7 +2059,7 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
-            match: /give\W+([0-9]*)\W*([a-zA-Z_ ]+)/,
+            match: /give\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
                 const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
                 const itemName = message[2].toLowerCase().trim()
@@ -2109,49 +2106,35 @@ module.exports = class BruhBot {
             }
         }))
 
-        handlers.push(/** @type {StringChatHandler} */({
-            match: 'goto',
+        handlers.push(/** @type {RegexpChatHandler} */({
+            match: /goto(\s*$|\s+[\sa-zA-Z0-9_\-]+)/,
             command: (sender, message, respond) => {
-                this.askAsync(`Where?`, respond, null, 15000)
-                    .then(response => {
-                        if (response === 'home') {
-                            if (!this.memory.idlePosition) {
-                                respond(`I doesn't have a home`)
-                            } else {
-                                respond(`Okay`)
-                                this.tasks.push(this, tasks.goto, {
-                                    point: this.memory.idlePosition,
-                                    distance: 5,
-                                }, priorities.user)
-                                    ?.wait()
-                                    .then(result => result === 'here' ? respond(`I'm already at home`) : respond(`I got to home`))
-                                    .catch(reason => reason === 'cancelled' || respond(reason))
-                            }
-                            return
-                        }
+                /**
+                 * @param {string} rawLocation
+                 */
+                const confirm = (rawLocation) => {
+                    const location = parseAnyLocationH(rawLocation, this)
 
-                        if (this.bot.players[response]?.entity) {
-                            if (response === this.username) {
-                                respond(`That's me!`)
-                                return
-                            }
-                            respond(`Okay`)
-                            this.tasks.push(this, tasks.goto, {
-                                entity: this.bot.players[response].entity,
-                                distance: 3,
-                            }, priorities.user)
-                                ?.wait()
-                                .then(result => result === 'here' ? respond(`I'm already at ${response}`) : respond(`I'm here`))
-                                .catch(reason => reason === 'cancelled' || respond(reason))
-                            return
-                        }
+                    if (!location) {
+                        respond(`Bruh`)
+                        return
+                    }
 
-                        const location = parseLocationH(response)
-                        if (!location) {
-                            respond(`Bruh`)
-                            return
-                        }
+                    if (typeof location === 'string') {
+                        respond(location)
+                        return
+                    }
 
+                    if ('id' in location) {
+                        respond(`Okay`)
+                        this.tasks.push(this, tasks.goto, {
+                            entity: location,
+                            distance: 3,
+                        }, priorities.user)
+                            ?.wait()
+                            .then(result => result === 'here' ? respond(`I'm already at ${rawLocation}`) : respond(`I'm here`))
+                            .catch(reason => reason === 'cancelled' || respond(reason))
+                    } else {
                         respond(`Okay`)
                         this.tasks.push(this, tasks.goto, {
                             point: location,
@@ -2160,8 +2143,16 @@ module.exports = class BruhBot {
                             ?.wait()
                             .then(result => result === 'here' ? respond(`I'm already here`) : respond(`I'm here`))
                             .catch(reason => reason === 'cancelled' || respond(reason))
-                    })
-                    .catch(console.error)
+                    }
+                }
+
+                if (!message[1]) {
+                    this.askAsync(`Where?`, respond, null, 15000)
+                        .then(response => confirm(response))
+                        .catch(reason => respond(reason))
+                } else {
+                    confirm(message[1])
+                }
             }
         }))
 

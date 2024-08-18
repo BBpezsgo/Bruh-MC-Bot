@@ -887,8 +887,6 @@ module.exports = class Minecraft {
     cropBlockIds
 
 
-    // iron_golem, llama, polar_bear, trader_llama, vex, wither
-
     /**
      * @typedef {number | { easy: number; normal: number; hard: number; }} DamageAmount
      */
@@ -912,6 +910,142 @@ module.exports = class Minecraft {
      */
     static get hostiles() {
         return ({
+            'snow_golem': {
+                rangeAttack: {
+                    damage: 0,
+                    cooldown: 1,
+                    range: 16, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 16,
+            },
+            'shulker_bullet': {
+                meleeAttack: {
+                    damage: 4,
+                    range: 2,
+                    cooldown: 1, // ?
+                },
+                rangeOfSight: 16,
+                alwaysAngry: true,
+            },
+            'ender_dragon': {
+                meleeAttack: {
+                    damage: { easy: 6, normal: 10, hard: 15 },
+                    range: 8, // ?
+                    cooldown: 1, // ?
+                },
+                rangeAttack: {
+                    damage: 6,
+                    cooldown: 6, // ?
+                    range: 64,
+                },
+                rangeOfSight: 150,
+                alwaysAngry: true,
+            },
+            'breeze': {
+                rangeAttack: {
+                    damage: 6,
+                    cooldown: 3, // ?
+                    range: 16, // ?
+                },
+                alwaysAngry: true,
+                rangeOfSight: 16, // ?
+            },
+            'evoker_fangs': {
+                meleeAttack: {
+                    damage: 6,
+                    cooldown: 1, // ?
+                    range: 1, // ?
+                },
+                alwaysAngry: true,
+                rangeOfSight: 3, // ?
+            },
+            'elder_guardian': {
+                meleeAttack: {
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                    cooldown: 3, // ?
+                    range: 15, // ?
+                },
+                alwaysAngry: true,
+                rangeOfSight: 16, // ?
+            },
+            'guardian': {
+                meleeAttack: {
+                    damage: { easy: 4, normal: 6, hard: 9 },
+                    cooldown: 3, // ?
+                    range: 15, // ?
+                },
+                alwaysAngry: true,
+                rangeOfSight: 16, // ?
+            },
+            'panda': {
+                meleeAttack: {
+                    damage: { easy: 4, normal: 6, hard: 9 },
+                    cooldown: 1, // ?
+                    range: 2, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 16, // ?
+            },
+            'wither': {
+                meleeAttack: {
+                    damage: 15,
+                    cooldown: 1, // ?
+                    range: 2, // ?
+                },
+                rangeAttack: {
+                    damage: { easy: 5, normal: 8, hard: 12 },
+                    range: 24, // ?
+                    cooldown: 1, // ?
+                },
+                alwaysAngry: true,
+                rangeOfSight: 32, // ?
+            },
+            'polar_bear': {
+                meleeAttack: {
+                    damage: { easy: 4, normal: 6, hard: 9 },
+                    cooldown: 1, // ?
+                    range: 2, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 16, // ?
+            },
+            'iron_golem': {
+                meleeAttack: {
+                    damage: { easy: 11.75, normal: 21.5, hard: 32.25 },
+                    cooldown: 1, // ?
+                    range: 3, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 16, // ?
+            },
+            'trader_llama': {
+                rangeAttack: {
+                    damage: 1,
+                    cooldown: 3, // ?
+                    range: 4, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 4, // ?
+            },
+            'llama': {
+                rangeAttack: {
+                    damage: 1,
+                    cooldown: 3, // ?
+                    range: 4, // ?
+                },
+                alwaysAngry: false,
+                rangeOfSight: 4, // ?
+            },
+            'vex': {
+                meleeAttack: {
+                    range: 2,
+                    damage: { easy: 5.5, normal: 9, hard: 13.5 },
+                    cooldown: 1, // ?
+                },
+                rangeOfSight: 16, // ?
+                alwaysAngry: true,
+            },
             'shulker': {
                 rangeAttack: {
                     range: 16,

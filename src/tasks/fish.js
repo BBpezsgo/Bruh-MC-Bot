@@ -159,6 +159,7 @@ module.exports = {
             }
 
             if (isFishing && !bot.holds('fishing_rod')) {
+                if (n) { return n }
                 throw `I have no fishing rod`
             }
 
