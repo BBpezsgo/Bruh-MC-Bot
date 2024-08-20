@@ -51,6 +51,8 @@ const { EntityPose } = require('./entity-metadata')
  *   type: 'place';
  *   item: number;
  * } | {
+ *   type: 'activate';
+ * } | {
  *   type: 'hoe';
  * })} AllocatedBlock
  */
@@ -1124,9 +1126,17 @@ module.exports = class Environment {
      * @returns {boolean}
      */
     /**
+     * @overload
      * @param {string} bot
      * @param {Vec3Dimension} position
-     * @param {'dig' | 'place' | 'hoe'} type
+     * @param {'activate'} type
+     * @param {any} [args]
+     * @returns {boolean}
+     */
+    /**
+     * @param {string} bot
+     * @param {Vec3Dimension} position
+     * @param {AllocatedBlock['type']} type
      * @param {any} [args]
      * @returns {boolean}
      */

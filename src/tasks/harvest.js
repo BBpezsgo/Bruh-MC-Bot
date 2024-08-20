@@ -1,4 +1,3 @@
-const { wrap } = require('../utils/tasks')
 const { basicRouteSearch, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
 const plantSeed = require('./plant-seed')
@@ -78,12 +77,7 @@ module.exports = {
                         break
                     }
                     case 'grows_fruit': {
-                        // if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'activate'))) {
-                        //     console.log(`[Bot "${bot.username}"] Crop will be harvested by someone else, skipping ...`)
-                        //     yield
-                        //     continue
-                        // }
-                        yield* wrap(bot.bot.activateBlock(cropBlock))
+                        yield* bot.activate(cropBlock)
                         break
                     }
                     case 'grows_block': {

@@ -1001,14 +1001,25 @@ module.exports = class BruhBot {
                 if (request.lock.by === this.username) { continue }
                 if (request.getStatus() !== 'none') { continue }
                 if (!this.itemCount(request.lock.item)) { continue }
+                console.log(`[Bot "${this.username}"] Serving ${request.lock.item} to ${request.lock.by}`)
                 request.onTheWay()
                 this.tasks.push(this, tasks.giveTo, {
                     player: request.lock.by,
-                    items: [{ name: request.lock.item, count: request.lock.count }],
+                    items: [{
+                        name: request.lock.item,
+                        count: request.lock.count,
+                    }],
                 }, priorities.otherBots)
                     .wait()
-                    .then(() => request.callback(true))
-                    .catch(() => request.callback(false))
+                    .then(result => {
+                        const givenCount = result[request.lock.item] ?? 0
+                        if (givenCount >= request.lock.count) {
+                            request.callback(true)
+                        } else {
+                            request.callback(false)
+                        }
+                    })
+                    .catch(reason => request.callback(false))
             }
 
             if (this.trySleepInterval?.is() &&
@@ -2861,6 +2872,7 @@ module.exports = class BruhBot {
             this.env.deallocateBlock(this.username, blockLocation)
             return true
         } else {
+            yield* taskUtils.wrap(this.bot.dig(block, forceLook))
             return true
         }
     }
@@ -2914,6 +2926,28 @@ module.exports = class BruhBot {
 
             yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
 
+            return true
+        }
+    }
+
+    /**
+     * @param {import('prismarine-block').Block} block
+     * @param {boolean | 'ignore'} [forceLook]
+     * @param {boolean} [allocate]
+     * @returns {import('./task').Task<boolean>}
+     * @throws {Error}
+     */
+    *activate(block, forceLook = 'ignore', allocate = true) {
+        if (allocate) {
+            const blockLocation = new Vec3Dimension(block.position, this.dimension)
+            if (!this.env.allocateBlock(this.username, blockLocation, 'activate')) {
+                return false
+            }
+            yield* taskUtils.wrap(this.bot.activateBlock(block))
+            this.env.deallocateBlock(this.username, blockLocation)
+            return true
+        } else {
+            yield* taskUtils.wrap(this.bot.activateBlock(block))
             return true
         }
     }

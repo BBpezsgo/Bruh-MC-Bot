@@ -1,8 +1,10 @@
 /node_modules
-/config.js
-/worlds
 /package-lock.json
 /bun.lockb
-/src/index.js
-
 **/*.code-workspace
+
+/src/index.js
+/worlds
+/src/local-mind.js
+/src/collective-mind.js
+/src/utils/ballistics.js
