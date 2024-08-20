@@ -1,3 +1,5 @@
+/// <reference types="./global.d.ts" />
+
 //#region Packages
 
 const fs = require('fs')
@@ -871,6 +873,48 @@ module.exports = class BruhBot {
                 defendAgainst(hostile)
             }
 
+            if (!this.bot.pathfinder.path?.length && this.bot.oxygenLevel < 18) {
+                if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
+                    this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
+                    this.tasks.push(this, {
+                        task: function(bot, args) {
+                            return tasks.goto.task(bot, {
+                                goal: {
+                                    heuristic: (node) => {
+                                        const dx = bot.bot.entity.position.x - node.x
+                                        const dy = bot.bot.entity.position.y - node.y
+                                        const dz = bot.bot.entity.position.z - node.z
+                                        return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+                                    },
+                                    isEnd: (node) => {
+                                        const blockFoot = bot.bot.blockAt(node)
+                                        const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
+                                        if (blockFoot.name !== 'water' && blockHead.name !== 'water') {
+                                            return true
+                                        }
+                                        return false
+                                    },
+                                    hasChanged: () => false,
+                                    isValid: () => true,
+                                },
+                                options: {
+                                    searchRadius: 20,
+                                    timeout: 1000,
+                                },
+                            })
+                        },
+                        id: function(args) { return `get-out-water` },
+                        humanReadableId: function(args) { return `Getting out of water` },
+                    }, {}, priorities.surviving + 1)
+                }
+
+                if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
+                    this.bot.setControlState('jump', true)
+                } else if (this.bot.controlState['jump']) {
+                    this.bot.setControlState('jump', false)
+                }
+            }
+
             if (this.bot.food < 18 &&
                 !this.quietMode &&
                 (this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints').length > 0)) {
@@ -1245,9 +1289,7 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('error', (error) => {
-            // @ts-ignore
             if (error instanceof AggregateError) {
-                // @ts-ignore
                 for (const subError of error.errors) {
                     if ('syscall' in subError && subError.syscall === 'connect') {
                         console.error(`[Bot "${this.username}"] Failed to connect to ${subError.address}: ${(() => {
@@ -2425,7 +2467,7 @@ module.exports = class BruhBot {
                 }
             }
 
-            console.log(`Best match:`, bestMatch, bestMatchSteps)
+            // console.log(`Best match:`, bestMatch, bestMatchSteps)
             if (bestMatchSteps <= 1) {
                 this.askAsync(`Did you mean '${bestMatch}'?`, respond, sender, 10000)
                     .then(res => {
@@ -2719,6 +2761,7 @@ module.exports = class BruhBot {
     /**
      * @param {import("prismarine-block").Block | import("prismarine-entity").Entity} chest
      * @returns {import('./task').Task<MineFlayer.Chest>}
+     * @throws {Error}
      */
     *openChest(chest) {
         let isLocked = false
@@ -2748,6 +2791,7 @@ module.exports = class BruhBot {
     /**
      * @param {import('prismarine-entity').Entity} vehicle
      * @returns {import('./task').Task<void>}
+     * @throws {Error}
      */
     *mount(vehicle) {
         let isMounted = false
@@ -2769,6 +2813,7 @@ module.exports = class BruhBot {
     /**
      * @param {string} item
      * @param {number} [count = 1]
+     * @throws {Error}
      */
     *toss(item, count = 1) {
 
@@ -2796,6 +2841,80 @@ module.exports = class BruhBot {
 
             yield* taskUtils.wrap(this.bot.toss(have.type, null, tossCount))
             tossed += tossCount
+        }
+    }
+
+    /**
+     * @param {import('prismarine-block').Block} block
+     * @param {boolean | 'ignore'} [forceLook]
+     * @param {boolean} [allocate]
+     * @returns {import('./task').Task<boolean>}
+     * @throws {Error}
+     */
+    *dig(block, forceLook = 'ignore', allocate = true) {
+        if (allocate) {
+            const blockLocation = new Vec3Dimension(block.position, this.dimension)
+            if (!this.env.allocateBlock(this.username, blockLocation, 'dig')) {
+                return false
+            }
+            yield* taskUtils.wrap(this.bot.dig(block, forceLook))
+            this.env.deallocateBlock(this.username, blockLocation)
+            return true
+        } else {
+            return true
+        }
+    }
+
+    /**
+     * @param {import('prismarine-block').Block} block
+     * @param {boolean | 'ignore'} forceLook
+     * @returns {import('./task').Task<void>}
+     * @throws {Error}
+     */
+    *forceDig(block, forceLook = 'ignore') {
+        while (true) {
+            const digged = yield* this.dig(block, forceLook, true)
+            if (digged) { break }
+            const success = yield* this.env.waitUntilBlockIs(new Vec3Dimension(block.position, this.dimension), 'dig')
+            if (success) { break }
+        }
+    }
+
+    /**
+     * @param {import('prismarine-block').Block} referenceBlock
+     * @param {Vec3} faceVector
+     * @param {string} item
+     * @param {boolean} [allocate]
+     * @returns {import('./task').Task<boolean>}
+     * @throws {Error}
+     */
+    *place(referenceBlock, faceVector, item, allocate = true) {
+        const itemId = this.mc.registry.itemsByName[item].id
+        const above = referenceBlock.position.offset(faceVector.x, faceVector.y, faceVector.z)
+        const blockLocation = new Vec3Dimension(above, this.dimension)
+        if (allocate) {
+            if (!this.env.allocateBlock(this.username, blockLocation, 'place', { item: itemId })) {
+                return false
+            }
+
+            const holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
+            if (!holds || holds.name !== item) {
+                yield* taskUtils.wrap(this.bot.equip(itemId, 'hand'))
+            }
+
+            yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
+
+            this.env.deallocateBlock(this.username, blockLocation)
+            return true
+        } else {
+            const holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
+            if (!holds || holds.name !== item) {
+                yield* taskUtils.wrap(this.bot.equip(itemId, 'hand'))
+            }
+
+            yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
+
+            return true
         }
     }
 }

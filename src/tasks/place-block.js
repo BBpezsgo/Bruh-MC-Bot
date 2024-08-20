@@ -463,7 +463,6 @@ module.exports = {
                     const pitch = Math.atan2(botFacing.y, groundDistance)
                     yield* wrap(bot.bot.look(yaw, pitch, true))
                 }
-                // @ts-ignore
                 yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
                 break
             } catch (error) {

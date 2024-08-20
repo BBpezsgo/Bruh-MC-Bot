@@ -6,13 +6,42 @@ const { Weapons } = require('minecrafthawkeye')
 const { Interval, directBlockNeighbors } = require('../utils/other')
 
 /**
- * @param {import("../bruh-bot")} bot
+ * @param {import('../bruh-bot')} bot
+ * @param {Vec3} waterPosition
  */
-function findWater(bot) {
+function checkTreasure(bot, waterPosition) {
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -2; z <= 2; z++) {
+            for (let y = -2; y < 1; y++) {
+                const block = bot.bot.blockAt(waterPosition.offset(x, y, z))
+                if (!block || block.name !== 'water') {
+                    // if (block) bot.debug.drawPoint(block.position, [1, 0, 0])
+                    return false
+                }
+                // bot.debug.drawPoint(block.position, [0, 1, 0])
+            }
+            for (let y = 1; y <= 2; y++) {
+                const block = bot.bot.blockAt(waterPosition.offset(x, y, z))
+                if (!block || block.name !== 'air') {
+                    // if (block) bot.debug.drawPoint(block.position, [1, 0, 0])
+                    return false
+                }
+                // bot.debug.drawPoint(block.position, [0, 1, 0])
+            }
+        }
+    }
+    return true
+}
+
+/**
+ * @param {import("../bruh-bot")} bot
+ * @param {boolean} preferTreasure
+ */
+function findWater(bot, preferTreasure) {
     const waters = bot.bot.findBlocks({
         matching: bot.mc.registry.blocksByName['water'].id,
         maxDistance: 32,
-        count: 8,
+        count: 64,
         useExtraInfo: (/** @type {Block} */ water) => {
             if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
                 return false
@@ -33,6 +62,12 @@ function findWater(bot) {
             if (neighbor.name !== 'water') { continue }
             if (neighbor.getProperties()['level'] !== 0) { continue }
             waterScore++
+        }
+        if (preferTreasure) {
+            const isTreasure = checkTreasure(bot, water)
+            if (isTreasure) {
+                waterScore += 100
+            }
         }
         if (waterScore > bestWaterScore || !bestWater) {
             bestWater = water
@@ -70,7 +105,7 @@ module.exports = {
                 throw `I have no fishing rod`
             }
 
-            const water = findWater(bot)
+            const water = findWater(bot, true)
 
             if (!water) {
                 if (n) { return n }

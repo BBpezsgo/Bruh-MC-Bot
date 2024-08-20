@@ -4,7 +4,7 @@
     "express": "^4.19.2",
     "json5": "^2.2.3",
     "minecrafthawkeye": "file:../minecraftHawkEye",
-    "mineflayer": "^4.20.1",
+    "mineflayer": "file:../mineflayer",
     "mineflayer-armor-manager": "^2.0.1",
     "mineflayer-elytrafly": "^1.4.6",
     "mineflayer-pathfinder": "file:../mineflayer-pathfinder",

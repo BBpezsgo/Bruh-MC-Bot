@@ -1,5 +1,4 @@
 const { Vec3 } = require('vec3')
-const { wrap } = require('../utils/tasks')
 const { Block } = require('prismarine-block')
 const goto = require('./goto')
 const hoeing = require('./hoeing')
@@ -24,30 +23,11 @@ function* plant(bot, placeOn, placeVector, seedItem) {
         throw `Can't plant seed: block above is "${above.name}"`
     }
 
-    if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(above.position, bot.dimension), 'place', { item: seedItem.type })) {
-        console.log(`[Bot "${bot.username}"] Seed will be planted by someone else, skipping ...`)
-        return
-    }
-
-    // console.log(`[Bot "${bot.username}"] Planting seed ... Going to ${placeOn.position}`)
     yield* goto.task(bot, {
         block: placeOn.position.clone().offset(0, 0.5, 0),
     })
 
-    const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
-    if (!holds || holds.type !== seedItem.type) {
-        // console.log(`[Bot "${bot.username}"] Planting seed ... Equipping item`)
-        yield* wrap(bot.bot.equip(seedItem, 'hand'))
-    } else {
-        // console.log(`[Bot "${bot.username}"] Planting seed ... Item already equipped`)
-    }
-
-    if (bot.bot.heldItem) {
-        // console.log(`[Bot "${bot.username}"] Planting seed ...`)
-        // @ts-ignore
-        yield* wrap(bot.bot._placeBlockWithOptions(placeOn, placeVector, { forceLook: 'ignore' }))
-        // yield
-    }
+    yield* bot.place(placeOn, placeVector, seedItem.name, true)
 }
 
 /**

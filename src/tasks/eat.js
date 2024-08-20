@@ -1,4 +1,4 @@
-const { sleepG, wrap } = require('../utils/tasks')
+const { wrap, sleepTicks } = require('../utils/tasks')
 
 /**
  * @type {import('../task').TaskDef<'ok' | 'full'>}
@@ -32,7 +32,7 @@ module.exports = {
             performance.now() - eatStarted < eatTime &&
             bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === food.name
         ) {
-            yield* sleepG(100)
+            yield* sleepTicks()
         }
     
         return 'ok'

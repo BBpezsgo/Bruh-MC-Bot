@@ -400,7 +400,7 @@ function setOptions(bot, args) {
 
     newMovements.digCost = originalMovements.digCost
     newMovements.entityCost = originalMovements.entityCost
-    newMovements.liquidCost = originalMovements.liquidCost
+    newMovements.liquidCost = 100
     newMovements.placeCost = originalMovements.placeCost
 
     newMovements.entityIntersections = originalMovements.entityIntersections
@@ -467,7 +467,7 @@ function getTime(movements, path) {
  * ) & {
  *   onPathUpdated?: (path: import('mineflayer-pathfinder').PartiallyComputedPath) => void;
  *   onPathReset?: (reason: 'goal_updated' | 'movements_updated' | 'block_updated' | 'chunk_loaded' | 'goal_moved' | 'dig_error' | 'no_scaffolding_blocks' | 'place_error' | 'stuck') => void;
- * }, Error> & {
+ * }> & {
  *   getGoal: getGoal;
  *   getTime: getTime;
  *   GoalBlockSimple: typeof GoalBlockSimple;

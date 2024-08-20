@@ -45,9 +45,7 @@ module.exports = {
         const time = trajectoryTime(grade.arrowTrajectoryPoints, 20) * 1000
         const predictedImpactAt = performance.now() + time
         while (true) {
-            yield
-
-            yield* sleepG(200)
+            yield* sleepG(100)
 
             if (predictedImpactAt - performance.now() < 0 &&
                 bot.bot.entity.position.distanceTo(thrownFrom) > 2) {

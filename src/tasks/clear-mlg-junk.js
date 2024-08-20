@@ -30,6 +30,8 @@ module.exports = {
                         maxDistance: 2,
                         point: junk.position.xyz(bot.dimension),
                     })) {
+                        yield
+                        
                         notFirst = true
                         if (junkBlock.name !== 'water') {
                             console.warn(`[Bot "${bot.username}"] Unknown MLG junk block: "${junkBlock.name}"`)

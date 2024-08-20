@@ -2,15 +2,8 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const Vec3Dimension = require('./vec3-dimension')
-const { Vec3 } = require('vec3')
 
 module.exports = class Memory {
-    /**
-     * @private @readonly
-     * @type {import('./bruh-bot')}
-     */
-    bot
-
     /**
      * @private @readonly
      * @type {string}
@@ -70,7 +63,6 @@ module.exports = class Memory {
      * @param {string} filePath
      */
     constructor(bot, filePath) {
-        this.bot = bot
         this.filePath = filePath
 
         this.myBed = null

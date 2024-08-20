@@ -33,7 +33,7 @@ module.exports = {
         const replantDuringHarvesting = true
 
         while (true) {
-            // yield
+            yield
             let cropPositions = bot.env.getCrops(bot, farmPosition, true, 80, 20)
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
@@ -59,7 +59,13 @@ module.exports = {
                         block: cropPosition,
                     })
                 } catch (error) {
-                    console.error(error)
+                    if (error instanceof Error && error.name === 'NoPath') {
+                        console.error(`[Bot "${bot.username}"] No path`)
+                    } else if (error instanceof Error && error.name === 'GoalChanged') {
+                        console.error(`[Bot "${bot.username}"] Goal changed`)
+                    } else {
+                        console.error(error)
+                    }
                     continue
                 }
 
@@ -68,16 +74,15 @@ module.exports = {
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
-                        if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'dig'))) {
-                            console.log(`[Bot "${bot.username}"] Crop will be digged by someone else, skipping ...`)
-                            yield
-                            continue
-                        }
-                        yield* wrap(bot.bot.dig(cropBlock, 'ignore'))
-                        // bot.bot.dig(cropBlock, 'ignore')
+                        yield* bot.dig(cropBlock)
                         break
                     }
                     case 'grows_fruit': {
+                        // if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(cropPosition, bot.dimension), 'activate'))) {
+                        //     console.log(`[Bot "${bot.username}"] Crop will be harvested by someone else, skipping ...`)
+                        //     yield
+                        //     continue
+                        // }
                         yield* wrap(bot.bot.activateBlock(cropBlock))
                         break
                     }
@@ -97,12 +102,7 @@ module.exports = {
                         yield* goto.task(bot, {
                             block: fruitBlock.position,
                         })
-                        if (!(bot.env.allocateBlock(bot.username, new Vec3Dimension(fruitBlock.position, bot.dimension), 'dig'))) {
-                            console.log(`[Bot "${bot.username}"] Crop fruit will be digged by someone else, skipping ...`)
-                            yield
-                            continue
-                        }
-                        yield* wrap(bot.bot.dig(fruitBlock))
+                        yield* bot.dig(fruitBlock)
                         break
                     }
                     case 'tree': {

@@ -409,17 +409,14 @@ module.exports = class Minecraft {
     static sortedFuels
 
     static {
-        const _sortedFuels = []
-        for (const item in this.fuels) {
-            _sortedFuels.push({
-                item: item,
-                time: this.fuels[item].time,
-                no: this.fuels[item].no,
-            })
-        }
-        _sortedFuels.sort((a, b) => b.time - a.time)
         // @ts-ignore
-        this.sortedFuels = _sortedFuels
+        this.sortedFuels = Object.entries(this.fuels)
+            .map(([item, value]) => ({
+                item: item,
+                time: value.time,
+                no: value.no,
+            }))
+            .sort((a, b) => a.time - b.time)
     }
 
     /**
@@ -1169,7 +1166,6 @@ module.exports = class Minecraft {
                 meleeAttack: {
                     range: 2,
                     damage: function(entity) {
-                        /** @type {number} */ //@ts-ignore
                         const size = entity.metadata[16]
                         switch (size) {
                             case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
@@ -1186,7 +1182,6 @@ module.exports = class Minecraft {
                 meleeAttack: {
                     range: 2,
                     damage: function(entity) {
-                        /** @type {number} */ //@ts-ignore
                         const size = entity.metadata[16]
                         switch (size) {
                             case 0: return { easy: 0, normal: 0, hard: 0 }
@@ -1499,7 +1494,7 @@ module.exports = class Minecraft {
      * @returns {{ has: boolean, item: getMcData.Item | null } | null}
      */
     getCorrectTool(blockToBreak, bot) {
-        /** @ts-ignore @type {[ keyof Minecraft.tools ]} */
+        /** @ts-ignore @type {UnionToArray<keyof Minecraft.tools>} */
         const toolNames = Object.keys(Minecraft.tools)
 
         /** @type {Array<{ time: number, item: getMcData.Item }>} */

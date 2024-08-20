@@ -7,7 +7,7 @@ const Vec3Dimension = require('../vec3-dimension')
  *   player: string;
  *   range: number;
  *   onNoPlayer?: import('../task').SimpleTaskDef<Vec3Dimension | null, null>;
- * }, Error>}
+ * }>}
  */
 module.exports = {
     task: function* (bot, args) {

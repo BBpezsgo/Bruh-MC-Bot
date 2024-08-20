@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../minecraftHawkEye"
+		},
+		{
+			"path": "../mineflayer"
 		}
 	],
 	"settings": {

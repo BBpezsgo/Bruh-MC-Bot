@@ -2,19 +2,19 @@
 const { sleepG, wrap } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok', {}>}
+ * @type {import('../task').TaskDef}
  */
 module.exports = {
     // @ts-ignore
     task: function*(bot, args) {
-        return 'ok'
+        
     },
     // @ts-ignore
     id: function(args) {
-        return null
+        return `idk`
     },
     // @ts-ignore
     humanReadableId: function(args) {
-        return 'idk'
+        return `idk`
     },
 }

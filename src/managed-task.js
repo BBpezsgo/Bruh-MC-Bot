@@ -92,13 +92,13 @@ class ManagedTask {
     _resolve
 
     /**
-     * @type {((reason: TError | 'cancelled') => any) | null}
+     * @type {((reason: TError | 'cancelled' | 'aborted') => any) | null}
      */
     _reject
 
     /**
      * @private
-     * @type {Promise<TResult> | null}
+     * @type {TypedPromise<TResult, TError | 'cancelled' | 'aborted'> | null}
      */
     _promise
 
@@ -122,7 +122,7 @@ class ManagedTask {
 
     /**
      * @private @readonly
-     * @type {import('./task').TaskDef<TResult, TArgs, TError>}
+     * @type {import('./task').TaskDef<TResult, TArgs>}
      */
     _def
 
@@ -132,7 +132,7 @@ class ManagedTask {
      * @param {import('./task-manager').Priority<TArgs>} priority
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
-     * @param {import('./task').TaskDef<TResult, TArgs, TError>} def
+     * @param {import('./task').TaskDef<TResult, TArgs>} def
      */
     constructor(
         priority,
@@ -155,16 +155,16 @@ class ManagedTask {
     }
 
     /**
-     * @returns {import('./promise').TypedPromise<TResult, TError | 'cancelled'>}
+     * @returns {TypedPromise<TResult, TError | 'cancelled' | 'aborted'>}
      */
     wait() {
         if (!this._promise) {
+            // @ts-ignore
             this._promise = new Promise((resolve, reject) => {
                 this._resolve = resolve
                 this._reject = reject
             })
         }
-        // @ts-ignore
         return this._promise
     }
 
@@ -184,8 +184,7 @@ class ManagedTask {
         this._status = 'aborted'
         if (!this._task) { return }
 
-        // @ts-ignore
-        this._task.return('aborted')
+        this._task.throw('aborted')
         console.log(`[Tasks] Task "${this.id}" aborted`)
     }
 
@@ -288,12 +287,21 @@ class ManagedTask {
 
 /**
  * @exports
+ * @template {import('./task').TaskDef<any, {}, any>} TTask
+ * @typedef {TTask extends import('./task').TaskDef<infer T, any> ? T : never} TaskResult
+ */
+
+/**
+ * @exports
  * @template {import('./task').TaskDef<any, any, any>} TTask
- * @typedef {ManagedTask<
- *   TTask extends import('./task').TaskDef<infer TResult, any> ? TResult : never,
- *   TTask extends import('./task').TaskDef<any, infer TArgs, any> ? TArgs : never,
- *   TTask extends import('./task').TaskDef<any, any, infer TError> ? TError : never
- * >} AsManaged
+ * @typedef {TTask extends import('./task').TaskDef<any, infer T> ? T : never} TaskArgs
+ */
+
+/**
+ * @exports
+ * @template {import('./task').TaskDef<any, any>} TTask
+ * @template {any} [TError = any]
+ * @typedef {ManagedTask<TaskResult<TTask>, TaskArgs<TTask>, TError>} AsManaged
  */
 
 module.exports = ManagedTask

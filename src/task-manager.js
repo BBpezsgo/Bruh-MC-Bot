@@ -42,7 +42,7 @@ module.exports = class TaskManager {
      * @template TResult
      * @template TError
      * @param {import('./bruh-bot')} bot
-     * @param {import('./task').TaskDef<TResult, TArgs, TError>} task
+     * @param {import('./task').TaskDef<TResult, TArgs>} task
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {Priority<TArgs>} [priority]
      * @param {boolean} [save]
@@ -63,6 +63,9 @@ module.exports = class TaskManager {
             console.warn(`Too many tasks in _queue`)
         }
 
+        /**
+         * @type {ManagedTask<TResult, TArgs, TError>}
+         */
         const newTask = new ManagedTask(
             priority,
             args,

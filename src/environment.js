@@ -921,7 +921,6 @@ module.exports = class Environment {
         const mushrooms = []
 
         return bot.bot.findBlocks({
-            // @ts-ignore
             matching: bot.mc.cropBlockIds,
             useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
@@ -944,7 +943,6 @@ module.exports = class Environment {
         const mushrooms = []
 
         return bot.bot.findBlock({
-            // @ts-ignore
             matching: bot.mc.cropBlockIds,
             useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
@@ -1024,7 +1022,6 @@ module.exports = class Environment {
         return bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
             return (
                 entity.name === 'creeper' &&
-                // @ts-ignore
                 entity.metadata[16] === 1
             )
         })
@@ -1148,6 +1145,24 @@ module.exports = class Environment {
             type: type,
             ...args,
         }
+        return true
+    }
+
+    /**
+     * @param {string} bot
+     * @param {Vec3Dimension} position
+     * @returns {boolean}
+     */
+    deallocateBlock(bot, position) {
+        /**
+         * @type {PositionHash}
+         */
+        const hash = `${position.x}-${position.y}-${position.z}-${position.dimension}`
+        if (this.allocatedBlocks[hash] &&
+            this.allocatedBlocks[hash].bot !== bot) {
+            return false
+        }
+        delete this.allocatedBlocks[hash]
         return true
     }
 
