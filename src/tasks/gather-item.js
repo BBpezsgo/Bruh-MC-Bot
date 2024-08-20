@@ -1370,8 +1370,8 @@ function organizePlan(plan) {
     unorderedSteps.sort((a, b) => unorderedStepPriorities[a.type] - unorderedStepPriorities[b.type])
 
     return [
-        ...orderedSteps,
         ...unorderedSteps,
+        ...orderedSteps,
     ]
 }
 
