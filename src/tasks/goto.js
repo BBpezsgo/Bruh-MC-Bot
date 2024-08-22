@@ -3,6 +3,7 @@ const { wrap } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
+const { entityDistanceSquared } = require('../utils/math')
 
 class GoalBlockSimple extends goals.Goal {
     /**
@@ -145,14 +146,11 @@ class GoalEntity extends goals.Goal {
      * @param {Vec3} node
      */
     isEnd(node) {
-        const p = this.entity.position
-        const dx = p.x - node.x
-        const dy = p.y - node.y
-        const dz = p.z - node.z
+        const d = entityDistanceSquared(node, this.entity)
         if (this.isFlee) {
-            return (dx * dx + dy * dy + dz * dz) > this.rangeSq
+            return d > this.rangeSq
         } else {
-            return (dx * dx + dy * dy + dz * dz) <= this.rangeSq
+            return d <= this.rangeSq
         }
     }
 

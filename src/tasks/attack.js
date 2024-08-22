@@ -8,6 +8,7 @@ const { Vec3 } = require('vec3')
 const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
+const { entityDistance } = require('../utils/math')
 
 /**
  * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
@@ -439,32 +440,6 @@ module.exports = {
             cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : hurtTime
         }
 
-        /**
-         * @param {Entity} target 
-         */
-        const startMoving = function*(target) {
-            if (bot.bot.pathfinder.goal &&
-                bot.bot.pathfinder.goal instanceof goals.GoalFollow &&
-                bot.bot.pathfinder.goal.entity?.id == target?.id) {
-                return
-            }
-            if (bot.bot.pathfinder.goal) {
-                bot.bot.pathfinder.stop()
-            }
-            bot.bot.pathfinder.setGoal(new goals.GoalFollow(target, 3))
-        }
-
-        /**
-         * @param {Entity} target 
-         */
-        const stopMoving = (target) => {
-            if (bot.bot.pathfinder.goal &&
-                bot.bot.pathfinder.goal instanceof goals.GoalFollow &&
-                bot.bot.pathfinder.goal.entity?.id == target?.id) {
-                bot.bot.pathfinder.stop()
-            }
-        }
-
         // console.log(`[Bot "${bot.username}"] Attack ...`)
 
         if (args.useMelee) {
@@ -496,7 +471,7 @@ module.exports = {
          * @param {Entity} entity
          */
         const calculateScore = function(entity) {
-            const distance = bot.bot.entity.position.distanceTo(entity.position)
+            const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
             const hostile = Minecraft.hostiles[entity.name]
 
@@ -648,7 +623,7 @@ module.exports = {
 
                 TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
 
-                const distance = bot.bot.entity.position.distanceTo(target.position)
+                const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 6) {
@@ -661,8 +636,6 @@ module.exports = {
                         reequipMeleeWeapon = true
                         continue
                     }
-
-                    stopMoving(target)
 
                     if (reequipMeleeWeapon) {
                         // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
@@ -713,9 +686,6 @@ module.exports = {
                 }
 
                 if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
-                    stopMoving(target)
-                    deactivateShield(shield)
-
                     const weapon = searchRangeWeapon(bot)
 
                     const getGrade = () => {
@@ -726,6 +696,8 @@ module.exports = {
                     }
 
                     if (weapon && weapon.ammo > 0) {
+                        deactivateShield(shield)
+    
                         let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
                             //  console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
@@ -809,21 +781,28 @@ module.exports = {
                     }
                 }
 
-                if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
-                    console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
-                    if ('target' in args) {
-                        return false
-                    } else {
-                        delete args.targets[target.id]
-                        if (Object.keys(args.targets).length === 0) {
-                            return false
-                        }
-                    }
-                    continue
-                }
+                // if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
+                //     console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
+                //     if ('target' in args) {
+                //         return false
+                //     } else {
+                //         delete args.targets[target.id]
+                //         if (Object.keys(args.targets).length === 0) {
+                //             return false
+                //         }
+                //     }
+                //     continue
+                // }
 
                 if (target && target.isValid) {
-                    startMoving(target)
+                    // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                    yield* goto.task(bot, {
+                        entity: target,
+                        distance: 5,
+                        timeout: 500,
+                    })
+                    reequipMeleeWeapon = true
+                    continue
                 }
             }
             return true
@@ -857,7 +836,7 @@ module.exports = {
 
         if (!isAlive(entity)) { return false }
 
-        const distance = bot.bot.entity.position.distanceTo(entity.position)
+        const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
         if (permissions.useMelee && (distance <= distanceToUseRangeWeapons || !permissions.useBow)) {
             return distance <= 6
