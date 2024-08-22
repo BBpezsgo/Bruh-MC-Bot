@@ -57,7 +57,7 @@ module.exports = class BlockDisplay {
      * @param {Commands} commands
      */
     static disposeAll(commands) {
-        commands.sendAsync(`/kill @e[type=block_display,limit=1,nbt={Tags:["debug"]}]`).catch(() => { })
+        commands.sendAsync(`/kill @e[type=block_display,nbt={Tags:["debug"]}]`).catch(() => { })
         for (const uuid in this._registry) {
             const element = this._registry[uuid]
             element._disposed = true
@@ -115,9 +115,9 @@ module.exports = class BlockDisplay {
         if (options.tags) { tags.push(...options.tags) }
         let command
         if (options.block.properties) {
-            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toPrecision(2)} ${(options.position?.y ?? 0).toPrecision(2)} ${(options.position?.z ?? 0).toPrecision(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}",Properties:${JSON.stringify(options.block.properties)}}}`
+            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toFixed(2)} ${(options.position?.y ?? 0).toFixed(2)} ${(options.position?.z ?? 0).toFixed(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}",Properties:${JSON.stringify(options.block.properties)}}}`
         } else {
-            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toPrecision(2)} ${(options.position?.y ?? 0).toPrecision(2)} ${(options.position?.z ?? 0).toPrecision(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}"}}`
+            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toFixed(2)} ${(options.position?.y ?? 0).toFixed(2)} ${(options.position?.z ?? 0).toFixed(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}"}}`
         }
         this._commands.sendAsync(command).catch(() => { })
         this._selector = `@e[type=minecraft:block_display,limit=1,nbt={Tags:${JSON.stringify(tags)}}]`
@@ -151,7 +151,7 @@ module.exports = class BlockDisplay {
         )
         if (this._position && this._position.equals(rounded)) { return this }
         this._position = rounded
-        this._commands.sendAsync(`/tp ${this._selector} ${rounded.x.toPrecision(1)} ${rounded.y.toPrecision(1)} ${rounded.z.toPrecision(1)}`)
+        this._commands.sendAsync(`/tp ${this._selector} ${rounded.x.toFixed(1)} ${rounded.y.toFixed(1)} ${rounded.z.toFixed(1)}`)
         return this
     }
 

@@ -186,7 +186,7 @@ module.exports = {
                 bobber &&
                 bobber.isValid &&
                 isFishing) {
-                if (interval.is()) {
+                if (interval.done()) {
                     console.warn(`[Bot "${bot.username}"] Fishing timed out (${interval.time / 1000} sec)`)
                     break
                 }

@@ -224,7 +224,7 @@ class Interval {
     /**
      * @returns {boolean}
      */
-    is(justRead = false) {
+    done(justRead = false) {
         const now = performance.now()
         if (now - this.startTime >= this.time) {
             if (!justRead) {

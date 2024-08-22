@@ -30,7 +30,7 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @typedef {{ item: string; count: number; }} CountedItem
+ * @typedef {{ name: string; count: number; }} CountedItem
  */
 
 /**
@@ -38,21 +38,17 @@ function getChest(bot, fullChests) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) {
-            throw `Can't open chest in quiet mode`
-        }
+        if (bot.quietMode) { throw `Can't open chest in quiet mode` }
 
-        if (args.items.length === 0) {
-            return false
-        }
+        if (args.items.length === 0) { return false }
 
         /**
          * @type {Record<string, number>}
          */
         const originalCount = {}
         for (const item of args.items) {
-            originalCount[item.item] ??= 0
-            originalCount[item.item] += item.count
+            originalCount[item.name] ??= 0
+            originalCount[item.name] += item.count
         }
         const fullChests = []
 
@@ -61,27 +57,31 @@ module.exports = {
         while (true) {
             yield
 
+            if (!args.items.some(v => bot.itemCount(v.name))) { break }
+
             let chestBlock = null
-            let tryCount = 0
-            while (!chestBlock) {
-                yield
-                tryCount++
 
-                chestBlock = getChest(bot, fullChests)
-                if (!chestBlock && tryCount > 5) {
-                    throw `There is no chest`
-                }
-                const chestPosition = chestBlock.position
+            {
+                let tryCount = 0
+                while (!chestBlock) {
+                    yield
+                    tryCount++
 
-                if (chestBlock) {
-                    yield* goto.task(bot, {
-                        block: chestPosition,
-                    })
-                    chestBlock = bot.bot.blockAt(chestPosition.clone())
+                    chestBlock = getChest(bot, fullChests)
+                    if (!chestBlock && tryCount > 5) { throw `There is no chest` }
+                    const chestPosition = chestBlock.position
+
+                    if (chestBlock) {
+                        yield* goto.task(bot, {
+                            block: chestPosition,
+                        })
+                        chestBlock = bot.bot.blockAt(chestPosition.clone())
+                    }
                 }
             }
 
             const chest = yield* bot.openChest(chestBlock)
+
             try {
                 {
                     let isNewChest = true
@@ -97,22 +97,26 @@ module.exports = {
                     }
                 }
 
-                for (const itemToDeposit of args.items) {
-                    const have = bot.itemCount(itemToDeposit.item)
-                    if (have === 0) {
-                        return true
-                    }
-                    const count = Math.max((itemToDeposit.count === Infinity) ? (bot.itemCount(itemToDeposit.item)) : (itemToDeposit.count - (originalCount[itemToDeposit.item] - bot.itemCount(itemToDeposit.item))), bot.mc.registry.itemsByName[itemToDeposit.item].stackSize, have)
-                    if (count === 0) {
-                        return true
+                while (true) {
+                    yield
+
+                    let shouldBreak = true
+                    for (const itemToDeposit of args.items) {
+                        if (BruhBot.firstFreeSlot(chest, itemToDeposit.name) === null) {
+                            fullChests.push(chestBlock.position.clone())
+                            shouldBreak = true
+                            break
+                        }
+
+                        const deposited = yield* bot.chestTransfer(
+                            chest,
+                            chestBlock.position,
+                            itemToDeposit.name,
+                            itemToDeposit.count)
+                        shouldBreak = !deposited
                     }
 
-                    if (BruhBot.firstFreeSlot(chest, itemToDeposit.item) === null) {
-                        fullChests.push(chestBlock.position.clone())
-                        break
-                    } else {
-                        yield* bot.env.chestDeposit(bot, chest, new Vec3Dimension(chestBlock.position, bot.dimension), itemToDeposit.item, count)
-                    }
+                    if (shouldBreak) { break }
                 }
             } finally {
                 yield* sleepG(100)
@@ -120,6 +124,8 @@ module.exports = {
                 yield* sleepG(100)
             }
         }
+
+        return true
     },
     id: function() {
         return `dump`

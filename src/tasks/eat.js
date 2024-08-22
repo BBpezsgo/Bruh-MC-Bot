@@ -1,10 +1,13 @@
 const { wrap, sleepTicks } = require('../utils/tasks')
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'full'>}
+ * @type {import('../task').TaskDef<'ok' | 'full', {
+ *   sortBy?: 'foodPoints' | 'saturation';
+ *   includeRaw?: boolean;
+ * }>}
  */
 module.exports = {
-    task: function*(bot) {
+    task: function*(bot, args) {
         if (bot.quietMode) {
             throw `Can't eat in quiet mode`
         }
@@ -13,8 +16,8 @@ module.exports = {
             return 'full'
         }
     
-        const foods = bot.mc.filterFoods(bot.bot.inventory.items(), 'foodPoints')
-    
+        const foods = bot.mc.filterFoods(bot.bot.inventory.items(), args.sortBy ?? 'foodPoints', args.includeRaw ?? false)
+
         if (foods.length === 0) {
             throw `I have no food`
         }

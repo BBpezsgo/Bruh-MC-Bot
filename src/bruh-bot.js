@@ -10,6 +10,7 @@ const MineFlayerHawkEye = require('minecrafthawkeye').default
 const MineFlayerArmorManager = require('mineflayer-armor-manager')
 const { Item } = require('prismarine-item')
 const hawkeye = require('minecrafthawkeye')
+const path = require('path')
 const levenshtein = require('damerau-levenshtein')
 
 //#endregion
@@ -30,6 +31,8 @@ const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
 const BlockDisplay = require('./block-display')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
+const Vec3Dimension = require('./vec3-dimension')
+const { Vec3 } = require('vec3')
 
 //#endregion
 
@@ -183,11 +186,6 @@ module.exports = class BruhBot {
      * @private @readonly
      * @type {Interval}
      */
-    tryAutoCookInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
     dumpTrashInterval
     /**
      * @private @readonly
@@ -288,16 +286,10 @@ module.exports = class BruhBot {
     get dimension() { return this.bot.game.dimension }
 
     /**
-     * @private @readonly
-     * @type {string}
-     */
-    _username
-
-    /**
      * @readonly
      * @type {string}
      */
-    get username() { return this.bot.username ?? this._username }
+    get username() { return this.bot.username ?? this._config.bot.username }
 
     /**
      * @type {((soundName: string | number) => void) | null}
@@ -356,15 +348,25 @@ module.exports = class BruhBot {
     commands
 
     /**
+     * @private
+     * @type {MineFlayerPathfinder.PartiallyComputedPath | null}
+     */
+    _currentPath
+
+    /**
+     * @private @readonly
+     * @type {Readonly<BotConfig>}
+     */
+    _config
+
+    /**
      * @param {Readonly<BotConfig>} config
      */
     constructor(config) {
-        this._username = config.bot.username
         this.mc = config.minecraft
+        this._config = config
 
-        // @ts-ignore
         global.bots ??= {}
-        // @ts-ignore
         global.bots[config.bot.username] = this
 
         console.log(`[Bot "${config.bot.username}"] Connecting ...`)
@@ -375,7 +377,10 @@ module.exports = class BruhBot {
             logErrors: false,
         })
 
-        const path = require('path')
+        this.bot.on('injected', (plugin) => {
+            console.log(`[Bot "${this.username}"] Plugin loaded: ${plugin.pluginName}`)
+        })
+
         this.env = config.environment ?? new Environment(path.join(config.worldPath, 'environment.json'))
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
         this.tasks = new TaskManager()
@@ -406,19 +411,21 @@ module.exports = class BruhBot {
         this.lockedItems = []
         this.lookAtPlayers = {}
         this.commands = new Commands(this.bot)
+        this._currentPath = null
 
         this.saveInterval = new Interval(30000)
+
         // this.saveTasksInterval = new Interval(5000)
-        // this.ensureEquipmentInterval = new Interval(60000)
-        // // this.tryAutoCookInterval = new Interval(10000)
-        // // this.dumpTrashInterval = new Interval(30000)
         // this.trySleepInterval = new Interval(5000)
-        // this.goBackInterval = new Interval(20000)
-        // this.tryAutoHarvestInterval = new Interval(5000)
-        // this.tryRestoreCropsInterval = new Interval(15000)
-        // // this.checkQuietInterval = new Interval(500)
+        // this.checkQuietInterval = new Interval(500)
         // this.randomLookInterval = new Interval(10000)
-        // this.moveAwayInterval = new Interval(3000)
+
+        this.ensureEquipmentInterval = new Interval(60000)
+        this.goBackInterval = new Interval(20000)
+        this.tryAutoHarvestInterval = new Interval(5000)
+        this.tryRestoreCropsInterval = new Interval(15000)
+        this.moveAwayInterval = new Interval(3000)
+        this.dumpTrashInterval = new Interval(20000)
 
         this.permissiveMovements = null
         this.restrictedMovements = null
@@ -445,9 +452,12 @@ module.exports = class BruhBot {
             return message + ''
         }
 
-        this.bot.on('chat', (sender, message) => this.handleChat(sender, message, reply => {
-            this.bot.chat(stringifyMessage(reply))
-        }))
+        this.bot.on('chat', (sender, message) => {
+            if (this.env.bots.find(v => v.username === sender)) { return }
+            this.handleChat(sender, message, reply => {
+                this.bot.chat(stringifyMessage(reply))
+            })
+        })
 
         this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => {
             this.bot.whisper(sender, stringifyMessage(reply))
@@ -550,22 +560,9 @@ module.exports = class BruhBot {
             }
         })
 
-        /**
-         * @type {MineFlayerPathfinder.PartiallyComputedPath}
-         */
-        let _path = null
-
-        this.bot.on('path_update', (path) => {
-            _path = path
-        })
-
-        this.bot.on('path_reset', () => {
-            _path = null
-        })
-
-        this.bot.on('path_stop', () => {
-            _path = null
-        })
+        this.bot.on('path_update', path => this._currentPath = path)
+        this.bot.on('path_reset', () => this._currentPath = null)
+        this.bot.on('path_stop', () => this._currentPath = null)
 
         this.bot.on('entityMoved', (entity) => {
             entity.time = performance.now()
@@ -588,680 +585,9 @@ module.exports = class BruhBot {
          */
         let tickInterval = null
 
-        const defendAgainst = (/** @type {import("prismarine-entity").Entity} */ hazard) => {
-            if (!tasks.attack.can(this, hazard, {
-                useBow: true,
-                useMelee: true,
-                useMeleeWeapon: true,
-            })) { return }
-            // console.log(`[Bot "${this.username}"] Defend against ${hazard.name}`)
-            if (!this.defendMyselfGoal || (
-                this.defendMyselfGoal.status !== 'running' &&
-                this.defendMyselfGoal.status !== 'queued') ||
-                !this.tasks.has(this.defendMyselfGoal.id)) {
-                console.log(`[Bot "${this.username}"] New attack task`)
-                this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
-                    targets: { [hazard.id]: hazard },
-                    useBow: true,
-                    useMelee: true,
-                    useMeleeWeapon: true,
-                }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2),)
-            } else {
-                if ('targets' in this.defendMyselfGoal.args) {
-                    // console.log(`[Bot "${this.username}"] Add hazard`)
-                    this.defendMyselfGoal.args.targets[hazard.id] = hazard
-                } else {
-                    throw new Error(`Invalid task for defending myself`)
-                }
-            }
-        }
-
-        const tick = () => {
-            if (Debug.enabled) {
-                if (_path) {
-                    for (let i = 0; i < _path.path.length; i++) {
-                        this.debug.drawLine(_path.path[i - 1] ?? this.bot.entity.position, _path.path[i], [1, 0, 0])
-                    }
-                }
-                this.debug.tick()
-            }
-
-            TextDisplay.tick(this)
-            BlockDisplay.tick(this)
-
-            if (this.saveTasksInterval?.is()) {
-                const json = this.tasks.toJSON()
-                fs.writeFileSync(path.join(config.worldPath, 'tasks-' + this.username + '.json'), json, 'utf8')
-            }
-
-            for (let i = 0; i < 10; i++) {
-                this.commands.tick()
-            }
-
-            // for (const entityId in this.bot.entities) {
-            //     const entity = this.bot.entities[entityId]
-            //     const labelId = `entity-${entityId}`
-            //     if (entity.name === 'text_display') { continue }
-            //     if (!TextDisplay.registry[labelId]) {
-            //         new TextDisplay(this.commands, labelId)
-            //         TextDisplay.registry[labelId].text = { text: entity.username ?? entity.displayName ?? entity.name ?? '?' }
-            //     }
-            //     TextDisplay.registry[labelId].setPosition(entity.position.offset(0, entity.height + .3, 0))
-            // }
-
-            for (let i = this.lockedItems.length - 1; i >= 0; i--) {
-                if (this.lockedItems[i].isUnlocked) {
-                    this.lockedItems.splice(i, 1)
-                }
-            }
-
-            if (this.checkQuietInterval?.is()) {
-                let shouldBeQuiet = false
-
-                if (!shouldBeQuiet && this.bot.findBlock({
-                    matching: this.mc.registry.blocksByName['sculk_sensor'].id,
-                    maxDistance: 8,
-                    count: 1,
-                    point: this.bot.entity.position,
-                    useExtraInfo: false,
-                })) { shouldBeQuiet = true }
-
-                if (!shouldBeQuiet && this.bot.findBlock({
-                    matching: this.mc.registry.blocksByName['calibrated_sculk_sensor'].id,
-                    maxDistance: 16,
-                    count: 1,
-                    point: this.bot.entity.position,
-                    useExtraInfo: false,
-                })) { shouldBeQuiet = true }
-
-                if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
-                    if (entity.name !== 'warden') { return false }
-                    const distance = entity.position.distanceTo(this.bot.entity.position)
-                    if (distance > 16) { return false }
-                    return true
-                })) { shouldBeQuiet = true }
-
-                this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
-
-                if (this.tasks.isIdle) {
-                    if (!shouldBeQuiet && this.bot.controlState.sneak) {
-                        this.bot.setControlState('sneak', false)
-                    } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
-                        this.bot.setControlState('sneak', true)
-                    }
-                }
-
-                this.permissiveMovements.sneak = shouldBeQuiet
-                this.restrictedMovements.sneak = shouldBeQuiet
-                this.cutTreeMovements.sneak = shouldBeQuiet
-                this._quietMode = shouldBeQuiet
-            }
-
-            if (this.saveInterval.is()) {
-                this.memory.save()
-            }
-
-            const runningTask = this.tasks.tick()
-
-            {
-                const explodingCreeper = this.env.getExplodingCreeper(this)
-
-                if (explodingCreeper) {
-                    this.tasks.push(this, tasks.goto, {
-                        flee: explodingCreeper,
-                        distance: 8,
-                        timeout: 300,
-                        sprint: true,
-                    }, priorities.critical)
-                    return
-                }
-
-                const creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
-                if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
-                    this.tasks.push(this, tasks.goto, {
-                        flee: creeper,
-                        distance: 8,
-                        timeout: 300,
-                        sprint: true,
-                    }, priorities.critical - 1)
-                    return
-                }
-
-                const now = performance.now()
-
-                for (const id in this.aimingEntities) {
-                    const hazard = this.aimingEntities[id]
-                    if (now - hazard.time > 100) {
-                        delete this.aimingEntities[id]
-                        continue
-                    }
-                    // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
-                    // this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
-
-                    const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
-
-                    const entityDirection = mathUtils.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
-
-                    const angle = mathUtils.vectorAngle({
-                        x: directionToSelf.x,
-                        y: directionToSelf.z,
-                    }, {
-                        x: entityDirection.x,
-                        y: entityDirection.z,
-                    })
-
-                    if (angle < 0) {
-                        this.tasks.push(this, tasks.goto, {
-                            point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
-                            distance: 0,
-                            searchRadius: 3,
-                            timeout: 500,
-                            sprint: true,
-                        }, priorities.critical - 2)
-                    } else {
-                        this.tasks.push(this, tasks.goto, {
-                            point: this.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
-                            distance: 0,
-                            searchRadius: 3,
-                            timeout: 500,
-                            sprint: true,
-                        }, priorities.critical - 2)
-                    }
-                    break
-                }
-
-                for (const id in this.incomingProjectiles) {
-                    const hazard = this.incomingProjectiles[id]
-                    if (now - hazard.time > 100) {
-                        delete this.incomingProjectiles[id]
-                        continue
-                    }
-
-                    const projectileDirection = hazard.projectile.entity.velocity.clone().normalize()
-                    const directionToSelf = this.bot.entity.position.clone().subtract(hazard.projectile.entity.position).normalize()
-                    const dot = projectileDirection.dot(directionToSelf)
-                    if (dot <= 0) { continue }
-
-                    console.log(`[Bot "${this.username}"] Incoming projectile`)
-                    // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
-
-                    this.tasks.push(this, tasks.goto, {
-                        point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
-                        distance: 0,
-                        searchRadius: 3,
-                        timeout: 500,
-                        sprint: true,
-                    }, priorities.critical - 1)
-                    break
-                }
-            }
-
-            {
-                this.bot.nearestEntity(e => {
-                    if (e.name !== 'fireball') { return false }
-                    if (!e.velocity.x && !e.velocity.y && !e.velocity.z) { return false }
-                    const entityPosition = e.position.clone()
-                    if ('time' in e) {
-                        const deltaTime = (performance.now() - e.time) / 1000
-                        entityPosition.add(e.velocity.scaled(deltaTime))
-                    }
-                    const directionToMe = this.bot.entity.position.clone().subtract(entityPosition).normalize()
-                    const fireballDirection = e.velocity.clone().normalize()
-                    const dot = fireballDirection.dot(directionToMe)
-                    if (dot < 0) { return false }
-                    const distance = this.bot.entity.position.offset(0, 1.6, 0).distanceTo(entityPosition)
-                    if (distance > 5) { return false }
-                    if (distance < 3) { return false }
-                    const ghast = this.bot.nearestEntity(v => v.name === 'ghast')
-                    if (ghast) {
-                        const directionToGhast = ghast.position.clone().subtract(entityPosition)
-                        const yaw = Math.atan2(-directionToGhast.x, -directionToGhast.z)
-                        const groundDistance = Math.sqrt(directionToGhast.x * directionToGhast.x + directionToGhast.z * directionToGhast.z)
-                        const pitch = Math.atan2(directionToGhast.y, groundDistance)
-                        this.bot.look(yaw, pitch, true)
-                    }
-                    this.bot.attack(e)
-                    return true
-                })
-            }
-
-            if (runningTask && runningTask.priority >= priorities.critical) {
-                return
-            }
-
-            const hostile = this.bot.nearestEntity(v => {
-                if (v.metadata[2]) { return false } // Has custom name
-                if (v.metadata[6] === EntityPose.DYING) { return false }
-
-                if (this.defendMyselfGoal &&
-                    !this.defendMyselfGoal.isDone &&
-                    this.tasks.has(this.defendMyselfGoal.id) &&
-                    'targets' in this.defendMyselfGoal.args &&
-                    this.defendMyselfGoal.args.targets[v.id]) {
-                    return false
-                }
-
-                const _hostile = Minecraft.hostiles[v.name]
-                if (!_hostile) { return false }
-
-                if (!_hostile.rangeOfSight) { return false }
-
-                if (!_hostile.alwaysAngry) {
-                    if (v.name === 'enderman') {
-                        // Isn't screaming
-                        if (!v.metadata[17]) { return false }
-                    } else if ((typeof v.metadata[15] === 'number') &&
-                        !(v.metadata[15] & 0x04)) { // Not aggressive
-                        // console.log(v.name)
-                        return false
-                    }
-                }
-
-                if ((typeof v.metadata[15] === 'number') &&
-                    (v.metadata[15] & 0x01)) { // Has no AI
-                    return false
-                }
-
-                const distance = v.position.distanceTo(this.bot.entity.position)
-
-                if (distance > _hostile.rangeOfSight) { return false }
-
-                return true
-            })
-
-            if (hostile) {
-                defendAgainst(hostile)
-            }
-
-            if (!this.bot.pathfinder.path?.length && this.bot.oxygenLevel < 18) {
-                if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
-                    this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
-                    this.tasks.push(this, {
-                        task: function(bot, args) {
-                            return tasks.goto.task(bot, {
-                                goal: {
-                                    heuristic: (node) => {
-                                        const dx = bot.bot.entity.position.x - node.x
-                                        const dy = bot.bot.entity.position.y - node.y
-                                        const dz = bot.bot.entity.position.z - node.z
-                                        return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                                    },
-                                    isEnd: (node) => {
-                                        const blockFoot = bot.bot.blockAt(node)
-                                        const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
-                                        if (blockFoot.name !== 'water' && blockHead.name !== 'water') {
-                                            return true
-                                        }
-                                        return false
-                                    },
-                                    hasChanged: () => false,
-                                    isValid: () => true,
-                                },
-                                options: {
-                                    searchRadius: 20,
-                                    timeout: 1000,
-                                },
-                            })
-                        },
-                        id: function(args) { return `get-out-water` },
-                        humanReadableId: function(args) { return `Getting out of water` },
-                    }, {}, priorities.surviving + 1)
-                }
-
-                if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
-                    this.bot.setControlState('jump', true)
-                } else if (this.bot.controlState['jump']) {
-                    this.bot.setControlState('jump', false)
-                }
-            }
-
-            if (this.bot.food < 18 &&
-                !this.quietMode &&
-                (this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints').length > 0)) {
-                this.tasks.push(this, tasks.eat, {}, priorities.surviving)
-                return
-            }
-
-            {
-                const now = performance.now()
-                for (const by in this.memory.hurtBy) {
-                    for (let i = 0; i < this.memory.hurtBy[by].length; i++) {
-                        const at = this.memory.hurtBy[by][i]
-                        if (now - at > 10000) {
-                            this.memory.hurtBy[by].splice(i, 1)
-                        }
-                    }
-
-                    if (!this.memory.hurtBy[by] ||
-                        this.memory.hurtBy[by].length === 0) { continue }
-
-                    {
-                        const entity = this.bot.entities[by]
-                        if (entity &&
-                            entity.isValid) {
-                            let canAttack = true
-                            // @ts-ignore
-                            const player = Object.values(this.bot.players).find(v => v && v.entity && v.entity.id == by)
-                            if (player && (
-                                player.gamemode === 1 ||
-                                player.gamemode === 3
-                            )) {
-                                canAttack = false
-                            }
-                            if (!canAttack) {
-                                console.warn(`Can't attack ${entity.name}`)
-                                delete this.memory.hurtBy[by]
-                            } else if (entity.position.distanceTo(this.bot.entity.position) < 4) {
-                                this.bot.attack(entity)
-                                delete this.memory.hurtBy[by]
-                            } else if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
-                                defendAgainst(entity)
-                            }
-                        }
-                    }
-
-                    /*
-                    if (!this.memory.hurtBy[by] ||
-                        this.memory.hurtBy[by].length === 0) { continue }
-    
-                    {
-                        this.tasks.push(this, {
-                            task: function*(bot, args) {
-                                if (!args.by || !args.by.isValid) {
-                                    throw `Entity disappeared`
-                                }
-                                yield* goto.task(bot, {
-                                    point: args.by.position,
-                                    distance: 4,
-                                })
-                                if (!args.by || !args.by.isValid) {
-                                    throw `Entity disappeared`
-                                }
-                                bot.bot.attack(args.by)
-                            },
-                            id: function(args) {
-                                return `punch-${args.by?.displayName ?? args.by?.name ?? 'null'}`
-                            },
-                            humanReadableId: function(args) {
-                                return `Punch ${args.by?.displayName ?? args.by?.name ?? 'someone'}`
-                            },
-                        }, { by: this.bot.entities[by] }, 0)
-                        delete this.memory.hurtBy[by]
-                    }
-                    */
-                }
-            }
-
-            if (this.defendMyselfGoal &&
-                !this.defendMyselfGoal.isDone) {
-                return
-            }
-
-            for (const request of this.env.itemRequests) {
-                if (request.lock.by === this.username) { continue }
-                if (request.getStatus() !== 'none') { continue }
-                if (!this.itemCount(request.lock.item)) { continue }
-                console.log(`[Bot "${this.username}"] Serving ${request.lock.item} to ${request.lock.by}`)
-                request.onTheWay()
-                this.tasks.push(this, tasks.giveTo, {
-                    player: request.lock.by,
-                    items: [{
-                        name: request.lock.item,
-                        count: request.lock.count,
-                    }],
-                }, priorities.otherBots)
-                    .wait()
-                    .then(result => {
-                        const givenCount = result[request.lock.item] ?? 0
-                        if (givenCount >= request.lock.count) {
-                            request.callback(true)
-                        } else {
-                            request.callback(false)
-                        }
-                    })
-                    .catch(reason => request.callback(false))
-            }
-
-            if (this.trySleepInterval?.is() &&
-                tasks.sleep.can(this)) {
-                this.tasks.push(this, tasks.sleep, {}, priorities.low)
-            }
-
-            if (this.memory.mlgJunkBlocks.length > 0) {
-                this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
-                return
-            }
-
-            if (this.memory.myArrows.length > 0) {
-                this.tasks.push(this, {
-                    task: function*(bot) {
-                        const myArrow = bot.memory.myArrows.shift()
-                        if (!myArrow) {
-                            return
-                        }
-                        const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
-                        if (!entity) {
-                            console.warn(`[Bot "${bot.username}"] Can't find the arrow`)
-                            return
-                        }
-                        yield* tasks.goto.task(bot, {
-                            point: entity.position,
-                            distance: 1,
-                        })
-                        yield* taskUtils.sleepG(1000)
-                        if (entity.isValid) {
-                            console.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
-                        } else {
-                            console.log(`[Bot "${bot.username}"] Arrow picked up`)
-                        }
-                    },
-                    id: function() {
-                        return `pickup-my-arrows`
-                    },
-                    humanReadableId: function() {
-                        return `Picking up my arrows`
-                    },
-                }, {}, priorities.cleanup)
-            }
-
-            if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
-                this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 20, minLifetime: 5000 }, priorities.unnecessary)
-            }
-
-            if (this.env.getClosestXp(this, { maxDistance: 20 })) {
-                this.tasks.push(this, tasks.pickupXp, { maxDistance: 20 }, priorities.unnecessary)
-            }
-
-            if (this.tryAutoHarvestInterval?.is()) {
-                if (this.env.getCrop(this, this.bot.entity.position.clone(), true)) {
-                    this.tasks.push(this, tasks.harvest, {}, priorities.unnecessary)
-                        ?.wait()
-                        .then(() => {
-                            let canCompost = true
-                            for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-                                const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
-                                if (!blockAt) { continue }
-                                if (blockAt.name !== 'air') { continue }
-                                canCompost = false
-                                break
-                            }
-                            if (canCompost) {
-                                this.tasks.push(this, tasks.compost, {}, priorities.unnecessary)
-                            }
-                        })
-                        .catch(() => { })
-                }
-            }
-
-            if (this.tryRestoreCropsInterval?.is()) {
-                /** @type {Array<import('./environment').SavedCrop>} */
-                const crops = []
-                for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-                    const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
-                    if (!blockAt) { continue }
-                    if (blockAt.name === 'air') { crops.push(crop) }
-                }
-                if (crops.length > 0) {
-                    this.tasks.push(this, tasks.plantSeed, {
-                        harvestedCrops: crops,
-                    }, priorities.unnecessary)
-                }
-            }
-
-            if (this.dumpTrashInterval?.is()) {
-                const trashItems = this.getTrashItems()
-
-                this.tasks.push(this, tasks.dumpToChest, { items: trashItems.map(v => ({ item: v.name, count: v.count })) }, priorities.unnecessary)
-            }
-
-            if (this.tryAutoCookInterval?.is()) {
-                /*
-                const rawFood = this.searchItem(...Minecraft.rawFoods)
-                if (rawFood) {
-                    if (this.mc.simpleSeeds.includes(rawFood.type) &&
-                        this.itemCount(rawFood.type) <= 1) {
-                        // Don't eat plantable foods
-                    } else {
-                        const recipe = this.getCookingRecipesFromRaw(rawFood.name)
-                        if (recipe.length > 0) {
-                            if (smelt.findBestFurnace(this, recipe, true)) {
-                                this.tasks.push(this, smelt, {
-                                    noFuel: true,
-                                    recipes: recipe,
-                                    count: this.itemCount(rawFood.type),
-                                }, priorities.unnecessary)
-                                return
-                            }
-                        }
-                    }
-                }
-                */
-            }
-
-            if (this.ensureEquipmentInterval?.is()) {
-                const equipment = require('./equipment')
-
-                let foodPointsInInventory = 0
-                for (const item of this.bot.inventory.items()) {
-                    if (!Minecraft.badFoods.includes(item.name)) {
-                        const food = this.mc.registry.foods[item.type]
-                        if (food) {
-                            foodPointsInInventory += food.foodPoints * item.count
-                        }
-                    }
-                }
-
-                for (const item of equipment) {
-                    switch (item.type) {
-                        case 'food': {
-                            if (foodPointsInInventory >= item.food) { break }
-                            const foods = this.mc.getGoodFoods(false).map(v => v.name)
-                            console.warn(`[Bot "${this.username}"] Low on food`)
-                            this.tasks.push(this, tasks.gatherItem, {
-                                item: foods,
-                                count: 1,
-                                canCraft: true,
-                                canDig: true,
-                                canKill: false,
-                                canUseChests: true,
-                                canUseInventory: true,
-                                force: true,
-                                canRequestFromPlayers: item.priority === 'must',
-                            }, priorities.low)
-                            break
-                        }
-                        case 'single': {
-                            if (this.itemCount(item.item) > 0) { break }
-                            this.tasks.push(this, tasks.gatherItem, {
-                                item: item.item,
-                                count: 1,
-                                canCraft: true,
-                                canDig: true,
-                                canKill: false,
-                                canUseChests: true,
-                                canUseInventory: true,
-                                canRequestFromPlayers: item.priority === 'must',
-                            }, priorities.unnecessary)
-                            break
-                        }
-                        case 'any': {
-                            if (item.item.find(v => this.itemCount(v) > 0)) { break }
-                            this.tasks.push(this, tasks.gatherItem, {
-                                item: item.prefer,
-                                count: 1,
-                                canCraft: true,
-                                canDig: true,
-                                canKill: false,
-                                canUseChests: true,
-                                canUseInventory: true,
-                                canRequestFromPlayers: item.priority === 'must',
-                            }, priorities.unnecessary)
-                            break
-                        }
-                        default: {
-                            break
-                        }
-                    }
-                }
-            }
-
-            if (this.tasks.isIdle) {
-                if (this.goBackInterval?.is() &&
-                    this.memory.idlePosition &&
-                    this.dimension === this.memory.idlePosition.dimension && (
-                        this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)
-                        )) > 10) {
-                    this.tasks.push(this, {
-                        task: tasks.goto.task,
-                        id: function() { return `goto-idle-position` },
-                        humanReadableId: function() { return `Goto idle position` },
-                    }, {
-                        point: this.memory.idlePosition,
-                        distance: 4,
-                        sprint: false,
-                    }, -999)
-                }
-            } else {
-                this.goBackInterval?.restart()
-            }
-
-            if (this.tasks.isIdle || (
-                runningTask &&
-                runningTask.id.startsWith('follow') &&
-                !this.bot.pathfinder.goal
-            )
-            ) {
-                if (this.moveAwayInterval?.is()) {
-                    const roundedSelfPosition = this.bot.entity.position.rounded()
-                    for (const playerName in this.bot.players) {
-                        if (playerName === this.username) { continue }
-                        const playerEntity = this.bot.players[playerName].entity
-                        if (!playerEntity) { continue }
-                        if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
-                            this.tasks.push(this, tasks.goto, {
-                                flee: playerEntity,
-                                distance: 2,
-                            }, priorities.unnecessary)
-                            return
-                        }
-                    }
-                }
-
-                if (this.lookAtNearestPlayer()) {
-                    this.randomLookInterval?.restart()
-                    return
-                }
-
-                if (this.randomLookInterval?.is()) {
-                    this.lookRandomly()
-                    return
-                }
-            }
-        }
-
         this.bot.on('mount', () => {
             if (!tickInterval) {
-                tickInterval = setInterval(tick, 50)
+                tickInterval = setInterval(this.tick, 50)
             }
         })
 
@@ -1270,7 +596,7 @@ module.exports = class BruhBot {
                 clearInterval(tickInterval)
                 tickInterval = null
             }
-            tick()
+            this.tick()
         })
 
         this.bot.on('death', () => {
@@ -2280,32 +1606,755 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @returns {Array<{ name: string; count: number; }>}
+     * @private
      */
-    getTrashItems() {
-        let result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count }))
-        result = filterOutEquipment(result, this.mc.registry)
-        result = filterOutItems(result, this.lockedItems
-            .filter(v => !v.isUnlocked)
-            .map(v => ({ name: v.item, count: v.count })))
-        return result
+    tick() {
+        if (Debug.enabled) {
+            if (this._currentPath) {
+                const a = [0.26, 0.72, 1]
+                const b = [0.04, 1, 0.51]
+                this.debug.drawLines([
+                    this.bot.entity.position,
+                    ...this._currentPath.path,
+                ], t => [
+                    mathUtils.lerp(a[0], b[0], t),
+                    mathUtils.lerp(a[1], b[1], t),
+                    mathUtils.lerp(a[2], b[2], t),
+                ])
+            }
+            this.debug.tick()
+        }
+
+        TextDisplay.tick(this)
+        BlockDisplay.tick(this)
+
+        if (this.saveTasksInterval?.done()) {
+            const json = this.tasks.toJSON()
+            fs.writeFileSync(path.join(this._config.worldPath, 'tasks-' + this.username + '.json'), json, 'utf8')
+        }
+
+        for (let i = 0; i < 10; i++) {
+            this.commands.tick()
+        }
+
+        // for (const entityId in this.bot.entities) {
+        //     const entity = this.bot.entities[entityId]
+        //     const labelId = `entity-${entityId}`
+        //     if (entity.name === 'text_display') { continue }
+        //     if (!TextDisplay.registry[labelId]) {
+        //         new TextDisplay(this.commands, labelId)
+        //         TextDisplay.registry[labelId].text = { text: entity.username ?? entity.displayName ?? entity.name ?? '?' }
+        //     }
+        //     TextDisplay.registry[labelId].setPosition(entity.position.offset(0, entity.height + .3, 0))
+        // }
+
+        for (let i = this.lockedItems.length - 1; i >= 0; i--) {
+            if (this.lockedItems[i].isUnlocked) {
+                this.lockedItems.splice(i, 1)
+            }
+        }
+
+        if (this.checkQuietInterval?.done()) {
+            let shouldBeQuiet = false
+
+            if (!shouldBeQuiet && this.bot.findBlock({
+                matching: this.mc.registry.blocksByName['sculk_sensor'].id,
+                maxDistance: 8,
+                count: 1,
+                point: this.bot.entity.position,
+                useExtraInfo: false,
+            })) { shouldBeQuiet = true }
+
+            if (!shouldBeQuiet && this.bot.findBlock({
+                matching: this.mc.registry.blocksByName['calibrated_sculk_sensor'].id,
+                maxDistance: 16,
+                count: 1,
+                point: this.bot.entity.position,
+                useExtraInfo: false,
+            })) { shouldBeQuiet = true }
+
+            if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
+                if (entity.name !== 'warden') { return false }
+                const distance = entity.position.distanceTo(this.bot.entity.position)
+                if (distance > 16) { return false }
+                return true
+            })) { shouldBeQuiet = true }
+
+            this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
+
+            if (this.tasks.isIdle) {
+                if (!shouldBeQuiet && this.bot.controlState.sneak) {
+                    this.bot.setControlState('sneak', false)
+                } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
+                    this.bot.setControlState('sneak', true)
+                }
+            }
+
+            this.permissiveMovements.sneak = shouldBeQuiet
+            this.restrictedMovements.sneak = shouldBeQuiet
+            this.cutTreeMovements.sneak = shouldBeQuiet
+            this._quietMode = shouldBeQuiet
+        }
+
+        if (this.saveInterval.done()) {
+            this.memory.save()
+        }
+
+        const runningTask = this.tasks.tick()
+
+        {
+            const explodingCreeper = this.env.getExplodingCreeper(this)
+
+            if (explodingCreeper) {
+                this.tasks.push(this, tasks.goto, {
+                    flee: explodingCreeper,
+                    distance: 8,
+                    timeout: 300,
+                    sprint: true,
+                }, priorities.critical)
+                return
+            }
+
+            const creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
+            if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
+                this.tasks.push(this, tasks.goto, {
+                    flee: creeper,
+                    distance: 8,
+                    timeout: 300,
+                    sprint: true,
+                }, priorities.critical - 1)
+                return
+            }
+
+            const now = performance.now()
+
+            for (const id in this.aimingEntities) {
+                const hazard = this.aimingEntities[id]
+                if (now - hazard.time > 100) {
+                    delete this.aimingEntities[id]
+                    continue
+                }
+                // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
+                // this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
+
+                const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
+
+                const entityDirection = mathUtils.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
+
+                const angle = mathUtils.vectorAngle({
+                    x: directionToSelf.x,
+                    y: directionToSelf.z,
+                }, {
+                    x: entityDirection.x,
+                    y: entityDirection.z,
+                })
+
+                if (angle < 0) {
+                    this.tasks.push(this, tasks.goto, {
+                        point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
+                        distance: 0,
+                        searchRadius: 3,
+                        timeout: 500,
+                        sprint: true,
+                    }, priorities.critical - 2)
+                } else {
+                    this.tasks.push(this, tasks.goto, {
+                        point: this.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
+                        distance: 0,
+                        searchRadius: 3,
+                        timeout: 500,
+                        sprint: true,
+                    }, priorities.critical - 2)
+                }
+                break
+            }
+
+            for (const id in this.incomingProjectiles) {
+                const hazard = this.incomingProjectiles[id]
+                if (now - hazard.time > 100) {
+                    delete this.incomingProjectiles[id]
+                    continue
+                }
+
+                const projectileDirection = hazard.projectile.entity.velocity.clone().normalize()
+                const directionToSelf = this.bot.entity.position.clone().subtract(hazard.projectile.entity.position).normalize()
+                const dot = projectileDirection.dot(directionToSelf)
+                if (dot <= 0) { continue }
+
+                console.log(`[Bot "${this.username}"] Incoming projectile`)
+                // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+
+                this.tasks.push(this, tasks.goto, {
+                    point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
+                    distance: 0,
+                    searchRadius: 3,
+                    timeout: 500,
+                    sprint: true,
+                }, priorities.critical - 1)
+                break
+            }
+        }
+
+        {
+            this.bot.nearestEntity(e => {
+                if (!e.velocity.x && !e.velocity.y && !e.velocity.z) { return false }
+
+                if (e.name === 'fireball') {
+                    const entityPosition = e.position.clone()
+                    if ('time' in e) {
+                        const deltaTime = (performance.now() - e.time) / 1000
+                        entityPosition.add(e.velocity.scaled(deltaTime))
+                    }
+                    const directionToMe = this.bot.entity.position.clone().subtract(entityPosition).normalize()
+                    const fireballDirection = e.velocity.clone().normalize()
+                    const dot = fireballDirection.dot(directionToMe)
+                    if (dot < 0) { return false }
+                    const distance = this.bot.entity.position.offset(0, 1.6, 0).distanceTo(entityPosition)
+                    if (distance > 5) { return false }
+                    if (distance < 3) { return false }
+                    const ghast = this.bot.nearestEntity(v => v.name === 'ghast')
+                    if (ghast) {
+                        const directionToGhast = ghast.position.clone().subtract(entityPosition)
+                        const yaw = Math.atan2(-directionToGhast.x, -directionToGhast.z)
+                        const groundDistance = Math.sqrt(directionToGhast.x * directionToGhast.x + directionToGhast.z * directionToGhast.z)
+                        const pitch = Math.atan2(directionToGhast.y, groundDistance)
+                        this.bot.look(yaw, pitch, true)
+                    }
+                    this.bot.attack(e)
+                    return true
+                }
+
+                if (e.name === 'small_fireball') {
+                    const entityPosition = e.position.clone()
+                    if ('time' in e) {
+                        const deltaTime = (performance.now() - e.time) / 1000
+                        entityPosition.add(e.velocity.scaled(deltaTime))
+                    }
+                    const directionToMe = this.bot.entity.position.clone().subtract(entityPosition).normalize()
+                    const fireballDirection = e.velocity.clone().normalize()
+                    const dot = fireballDirection.dot(directionToMe)
+                    if (dot < 0) { return false }
+                    const a = entityPosition.clone()
+                    const b = this.bot.entity.position.clone().add(
+                        fireballDirection.scaled(10)
+                    )
+                    this.debug.drawLine(a, b, [1, 0, 0], [1, 0.4, 0])
+                    /**
+                     * @param {Vec3} p
+                     */
+                    const d = (p) => {
+                        return mathUtils.lineDistanceSquared(p, a, b)
+                    }
+                    this.tasks.push(this, {
+                        task: tasks.goto.task,
+                        id: () => `flee-from-${e.id}`,
+                        humanReadableId: () => `Flee from small fireball`,
+                    }, {
+                        goal: {
+                            hasChanged: () => false,
+                            isValid: () => true,
+                            heuristic: node => {
+                                return -d(node.offset(0, 1, 0))
+                            },
+                            isEnd: node => {
+                                return d(node.offset(0, 1, 0)) > 2
+                            },
+                        },
+                        options: {
+                            searchRadius: 5,
+                            sprint: true,
+                            timeout: 500,
+                        },
+                    }, priorities.critical - 1)
+                    return true
+                }
+
+                return false
+            })
+        }
+
+        if (this.bot.entity.metadata[0] & 0x01) {
+            const water = this.bot.findBlock({
+                matching: this.mc.registry.blocksByName['water'].id,
+                count: 1,
+                maxDistance: 32,
+            })
+            if (water) {
+                this.tasks.push(this, {
+                    task: tasks.goto.task,
+                    id: () => `goto-water`,
+                    humanReadableId: () => `Goto water`,
+                }, {
+                    point: water.position,
+                    distance: 0,
+                }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
+            }
+        }
+
+        if (runningTask && runningTask.priority >= priorities.critical) {
+            return
+        }
+
+        const hostile = this.bot.nearestEntity(v => {
+            if (v.metadata[2]) { // Has custom name
+                // console.log(`"${v.name}": Has custom name`)
+                return false
+            }
+            if (v.metadata[6] === EntityPose.DYING) {
+                // console.log(`"${v.name}": Dying`)
+                return false
+            }
+
+            if (this.defendMyselfGoal &&
+                !this.defendMyselfGoal.isDone &&
+                this.tasks.has(this.defendMyselfGoal.id) &&
+                'targets' in this.defendMyselfGoal.args &&
+                this.defendMyselfGoal.args.targets[v.id]) {
+                // console.log(`"${v.name}": Already attacking`)
+                return false
+            }
+
+            const _hostile = Minecraft.hostiles[v.name]
+            if (!_hostile) {
+                // console.log(`"${v.name}": Not hostile`)
+                return false
+            }
+
+            if (!_hostile.alwaysAngry) {
+                if (v.name === 'enderman') {
+                    // Isn't screaming
+                    if (!v.metadata[17]) {
+                        // console.log(`"${v.name}": Not screaming`)
+                        return false
+                    }
+                } else if (!(v.metadata[15] & 0x04)) { // Not aggressive
+                    // console.log(`"${v.name}": Not aggressive`)
+                    // console.log(v.name)
+                    return false
+                }
+            }
+
+            if ((typeof v.metadata[15] === 'number') &&
+                (v.metadata[15] & 0x01)) { // Has no AI
+                // console.log(`"${v.name}": No AI`)
+                return false
+            }
+
+            const distance = v.position.distanceTo(this.bot.entity.position)
+
+            if (distance > _hostile.rangeOfSight) {
+                // console.log(`${distance.toFixed(2)} > ${_hostile.rangeOfSight.toFixed(2)}`)
+                return false
+            }
+
+            return true
+        })
+
+        if (hostile) {
+            this.defendAgainst(hostile)
+        }
+
+        if (!this.bot.pathfinder.path?.length && this.bot.oxygenLevel < 18) {
+            if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
+                this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
+                this.tasks.push(this, {
+                    task: function(bot, args) {
+                        return tasks.goto.task(bot, {
+                            goal: {
+                                heuristic: (node) => {
+                                    const dx = bot.bot.entity.position.x - node.x
+                                    const dy = bot.bot.entity.position.y - node.y
+                                    const dz = bot.bot.entity.position.z - node.z
+                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+                                },
+                                isEnd: (node) => {
+                                    const blockFoot = bot.bot.blockAt(node)
+                                    const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
+                                    if (blockFoot.name !== 'water' && blockHead.name !== 'water') {
+                                        return true
+                                    }
+                                    return false
+                                },
+                                hasChanged: () => false,
+                                isValid: () => true,
+                            },
+                            options: {
+                                searchRadius: 20,
+                                timeout: 1000,
+                            },
+                        })
+                    },
+                    id: function(args) { return `get-out-water` },
+                    humanReadableId: function(args) { return `Getting out of water` },
+                }, {}, priorities.surviving + 1)
+            }
+
+            if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
+                this.bot.setControlState('jump', true)
+            } else if (this.bot.controlState['jump']) {
+                this.bot.setControlState('jump', false)
+            }
+        }
+
+        if (this.bot.food < 18 &&
+            !this.quietMode) {
+            if ((this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints', false).length > 0)) {
+                this.tasks.push(this, tasks.eat, {
+                    sortBy: 'foodPoints',
+                    includeRaw: false,
+                }, priorities.surviving)
+                return
+            }
+        }
+
+        {
+            const now = performance.now()
+            for (const by in this.memory.hurtBy) {
+                for (let i = 0; i < this.memory.hurtBy[by].length; i++) {
+                    const at = this.memory.hurtBy[by][i]
+                    if (now - at > 10000) {
+                        this.memory.hurtBy[by].splice(i, 1)
+                    }
+                }
+
+                if (!this.memory.hurtBy[by] ||
+                    this.memory.hurtBy[by].length === 0) { continue }
+
+                {
+                    const entity = this.bot.entities[by]
+                    if (entity &&
+                        entity.isValid) {
+                        let canAttack = true
+                        // @ts-ignore
+                        const player = Object.values(this.bot.players).find(v => v && v.entity && v.entity.id == by)
+                        if (player && (
+                            player.gamemode === 1 ||
+                            player.gamemode === 3
+                        )) {
+                            canAttack = false
+                        }
+                        if (!canAttack) {
+                            console.warn(`[Bot "${this.username}"]: Can't attack ${entity.name}`)
+                            delete this.memory.hurtBy[by]
+                        } else if (mathUtils.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), entity) < 4) {
+                            this.bot.attack(entity)
+                            delete this.memory.hurtBy[by]
+                        } else if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
+                            this.defendAgainst(entity)
+                        }
+                    }
+                }
+
+                /*
+                if (!this.memory.hurtBy[by] ||
+                    this.memory.hurtBy[by].length === 0) { continue }
+
+                {
+                    this.tasks.push(this, {
+                        task: function*(bot, args) {
+                            if (!args.by || !args.by.isValid) {
+                                throw `Entity disappeared`
+                            }
+                            yield* goto.task(bot, {
+                                point: args.by.position,
+                                distance: 4,
+                            })
+                            if (!args.by || !args.by.isValid) {
+                                throw `Entity disappeared`
+                            }
+                            bot.bot.attack(args.by)
+                        },
+                        id: function(args) {
+                            return `punch-${args.by?.displayName ?? args.by?.name ?? 'null'}`
+                        },
+                        humanReadableId: function(args) {
+                            return `Punch ${args.by?.displayName ?? args.by?.name ?? 'someone'}`
+                        },
+                    }, { by: this.bot.entities[by] }, 0)
+                    delete this.memory.hurtBy[by]
+                }
+                */
+            }
+        }
+
+        if (this.defendMyselfGoal &&
+            !this.defendMyselfGoal.isDone) {
+            return
+        }
+
+        for (const request of this.env.itemRequests) {
+            if (request.lock.by === this.username) { continue }
+            if (request.getStatus() !== 'none') { continue }
+            if (!this.itemCount(request.lock.item)) { continue }
+            console.log(`[Bot "${this.username}"] Serving ${request.lock.item} to ${request.lock.by}`)
+            request.onTheWay()
+            this.tasks.push(this, tasks.giveTo, {
+                player: request.lock.by,
+                items: [{
+                    name: request.lock.item,
+                    count: request.lock.count,
+                }],
+            }, priorities.otherBots)
+                .wait()
+                .then(result => {
+                    const givenCount = result[request.lock.item] ?? 0
+                    if (givenCount >= request.lock.count) {
+                        request.callback(true)
+                    } else {
+                        request.callback(false)
+                    }
+                })
+                .catch(reason => request.callback(false))
+        }
+
+        if (this.trySleepInterval?.done() &&
+            tasks.sleep.can(this)) {
+            this.tasks.push(this, tasks.sleep, {}, priorities.low)
+        }
+
+        if (this.memory.mlgJunkBlocks.length > 0) {
+            this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
+            return
+        }
+
+        if (this.memory.myArrows.length > 0) {
+            this.tasks.push(this, {
+                task: function*(bot) {
+                    const myArrow = bot.memory.myArrows.shift()
+                    if (!myArrow) {
+                        return
+                    }
+                    const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
+                    if (!entity) {
+                        console.warn(`[Bot "${bot.username}"] Can't find the arrow`)
+                        return
+                    }
+                    yield* tasks.goto.task(bot, {
+                        point: entity.position,
+                        distance: 1,
+                    })
+                    yield* taskUtils.sleepG(1000)
+                    if (entity.isValid) {
+                        console.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
+                    } else {
+                        console.log(`[Bot "${bot.username}"] Arrow picked up`)
+                    }
+                },
+                id: function() {
+                    return `pickup-my-arrows`
+                },
+                humanReadableId: function() {
+                    return `Picking up my arrows`
+                },
+            }, {}, priorities.cleanup)
+        }
+
+        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
+            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 20, minLifetime: 5000 }, priorities.unnecessary)
+        }
+
+        if (this.env.getClosestXp(this, { maxDistance: 20 })) {
+            this.tasks.push(this, tasks.pickupXp, { maxDistance: 20 }, priorities.unnecessary)
+        }
+
+        if (this.tryAutoHarvestInterval?.done()) {
+            if (this.env.getCrop(this, this.bot.entity.position.clone(), true)) {
+                this.tasks.push(this, tasks.harvest, {}, priorities.unnecessary)
+                    ?.wait()
+                    .then(() => {
+                        let canCompost = true
+                        for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+                            const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
+                            if (!blockAt) { continue }
+                            if (blockAt.name !== 'air') { continue }
+                            canCompost = false
+                            break
+                        }
+                        if (canCompost) {
+                            this.tasks.push(this, tasks.compost, {}, priorities.unnecessary)
+                        }
+                    })
+                    .catch(() => { })
+            }
+        }
+
+        if (this.tryRestoreCropsInterval?.done()) {
+            /** @type {Array<import('./environment').SavedCrop>} */
+            const crops = []
+            for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+                const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
+                if (!blockAt) { continue }
+                if (blockAt.name === 'air') { crops.push(crop) }
+            }
+            if (crops.length > 0) {
+                this.tasks.push(this, tasks.plantSeed, {
+                    harvestedCrops: crops,
+                }, priorities.unnecessary)
+            }
+        }
+
+        if (this.dumpTrashInterval?.done()) {
+            const trashItems = this.getTrashItems()
+            if (trashItems.length > 0) {
+                this.tasks.push(this, tasks.dumpToChest, {
+                    items: trashItems
+                }, priorities.unnecessary)
+            }
+        }
+
+        if (this.ensureEquipmentInterval?.done()) {
+            const equipment = require('./equipment')
+
+            let foodPointsInInventory = 0
+            for (const item of this.bot.inventory.items()) {
+                if (!Minecraft.badFoods.includes(item.name)) {
+                    const food = this.mc.registry.foods[item.type]
+                    if (food) {
+                        foodPointsInInventory += food.foodPoints * item.count
+                    }
+                }
+            }
+
+            for (const item of equipment) {
+                switch (item.type) {
+                    case 'food': {
+                        if (foodPointsInInventory >= item.food) { break }
+                        const foods = this.mc.getGoodFoods(false).map(v => v.name)
+                        console.warn(`[Bot "${this.username}"] Low on food`)
+                        this.tasks.push(this, tasks.gatherItem, {
+                            item: foods,
+                            count: 1,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            force: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                        }, priorities.low)
+                        break
+                    }
+                    case 'single': {
+                        if (this.itemCount(item.item) > 0) { break }
+                        this.tasks.push(this, tasks.gatherItem, {
+                            item: item.item,
+                            count: 1,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                        }, priorities.unnecessary)
+                        break
+                    }
+                    case 'any': {
+                        if (item.item.find(v => this.itemCount(v) > 0)) { break }
+                        this.tasks.push(this, tasks.gatherItem, {
+                            item: item.prefer,
+                            count: 1,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                        }, priorities.unnecessary)
+                        break
+                    }
+                    default: {
+                        break
+                    }
+                }
+            }
+        }
+
+        if (this.tasks.isIdle) {
+            if (this.goBackInterval?.done() &&
+                this.memory.idlePosition &&
+                this.dimension === this.memory.idlePosition.dimension && (
+                    this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)
+                    )) > 10) {
+                this.tasks.push(this, {
+                    task: tasks.goto.task,
+                    id: function() { return `goto-idle-position` },
+                    humanReadableId: function() { return `Goto idle position` },
+                }, {
+                    point: this.memory.idlePosition,
+                    distance: 4,
+                    sprint: false,
+                }, -999)
+            }
+        } else {
+            this.goBackInterval?.restart()
+        }
+
+        if (this.tasks.isIdle || (
+            runningTask &&
+            runningTask.id.startsWith('follow') &&
+            !this.bot.pathfinder.goal
+        )
+        ) {
+            if (this.moveAwayInterval?.done()) {
+                const roundedSelfPosition = this.bot.entity.position.rounded()
+                for (const playerName in this.bot.players) {
+                    if (playerName === this.username) { continue }
+                    const playerEntity = this.bot.players[playerName].entity
+                    if (!playerEntity) { continue }
+                    if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
+                        this.tasks.push(this, tasks.goto, {
+                            flee: playerEntity,
+                            distance: 2,
+                        }, priorities.unnecessary)
+                        return
+                    }
+                }
+            }
+
+            if (this.lookAtNearestPlayer()) {
+                this.randomLookInterval?.restart()
+                return
+            }
+
+            if (this.randomLookInterval?.done()) {
+                this.lookRandomly()
+                return
+            }
+        }
     }
 
     /**
-     * @param {string} by
-     * @param {string} item
-     * @param {number} count
-     * @returns {ItemLock | null}
+     * @param {import("prismarine-entity").Entity} hazard
      */
-    tryLockItems(by, item, count) {
-        if (!count) { return null }
-        const trash = this.getTrashItems().filter(v => v.name === item)
-        if (trash.length === 0) { return null }
-        let have = 0
-        for (const trashItem of trash) { have += trashItem.count }
-        const lock = new ItemLock(by, item, Math.min(count, have))
-        this.lockedItems.push(lock)
-        return lock
+    defendAgainst(hazard) {
+        // if (!tasks.attack.can(this, hazard, {
+        //     useBow: true,
+        //     useMelee: true,
+        //     useMeleeWeapon: true,
+        // })) {
+        //     console.log(`"${hazard.name}": Can't attack`)
+        //     return
+        // }
+        // console.log(`[Bot "${this.username}"] Defend against ${hazard.name}`)
+        if (!this.defendMyselfGoal || (
+            this.defendMyselfGoal.status !== 'running' &&
+            this.defendMyselfGoal.status !== 'queued') ||
+            !this.tasks.has(this.defendMyselfGoal.id)) {
+            console.log(`[Bot "${this.username}"] New attack task`)
+            this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
+                targets: { [hazard.id]: hazard },
+                useBow: true,
+                useMelee: true,
+                useMeleeWeapon: true,
+            }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2))
+        } else {
+            if ('targets' in this.defendMyselfGoal.args) {
+                // console.log(`[Bot "${this.username}"] Add hazard`)
+                this.defendMyselfGoal.args.targets[hazard.id] = hazard
+            } else {
+                throw new Error(`Invalid task for defending myself`)
+            }
+        }
     }
 
     /**
@@ -2492,6 +2541,8 @@ module.exports = class BruhBot {
         }
     }
 
+    //#region Basic Chat Interactions
+
     /**
      * @param {string} message
      * @param {(message: string) => void} send
@@ -2603,29 +2654,37 @@ module.exports = class BruhBot {
         }
     }
 
+    //#endregion
+
+    //#region Items & Inventory
+
     /**
-     * @param {'right' | 'left'} hand
+     * @returns {Array<{ name: string; count: number; }>}
      */
-    activateHand(hand) {
-        if (hand === 'right') {
-            this._isRightHandActive = true
-            this.bot.activateItem(false)
-            return
-        }
-
-        if (hand === 'left') {
-            this._isLeftHandActive = true
-            this.bot.activateItem(true)
-            return
-        }
-
-        throw new Error(`Invalid hand "${hand}"`)
+    getTrashItems() {
+        let result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count }))
+        result = filterOutEquipment(result, this.mc.registry)
+        result = filterOutItems(result, this.lockedItems
+            .filter(v => !v.isUnlocked)
+            .map(v => ({ name: v.item, count: v.count })))
+        return result
     }
 
-    deactivateHand() {
-        this._isLeftHandActive = false
-        this._isRightHandActive = false
-        this.bot.deactivateItem()
+    /**
+     * @param {string} by
+     * @param {string} item
+     * @param {number} count
+     * @returns {ItemLock | null}
+     */
+    tryLockItems(by, item, count) {
+        if (!count) { return null }
+        const trash = this.getTrashItems().filter(v => v.name === item)
+        if (trash.length === 0) { return null }
+        let have = 0
+        for (const trashItem of trash) { have += trashItem.count }
+        const lock = new ItemLock(by, item, Math.min(count, have))
+        this.lockedItems.push(lock)
+        return lock
     }
 
     /**
@@ -2668,6 +2727,51 @@ module.exports = class BruhBot {
             if (!item) { continue }
             yield item
         }
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} [window] 
+     */
+    slots(window) {
+        const hasWindow = !!window
+        window ??= this.bot.inventory
+
+        const specialSlotIds = hasWindow ? [] : [
+            this.bot.getEquipmentDestSlot('head'),
+            this.bot.getEquipmentDestSlot('torso'),
+            this.bot.getEquipmentDestSlot('legs'),
+            this.bot.getEquipmentDestSlot('feet'),
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        /**
+         * @type {Record<number, { name: string; count: number; }>}
+         */
+        const slots = {}
+
+        const inventoryStart = window.inventoryStart
+        const inventoryEnd = window.inventoryEnd
+
+        for (let i = inventoryStart; i < inventoryEnd; i++) {
+            const item = window.slots[i]
+            if (!item) { continue }
+            slots[i] = {
+                name: item.name,
+                count: item.count,
+            }
+        }
+
+        for (const specialSlotId of specialSlotIds) {
+            const item = window.slots[specialSlotId]
+            if (!item) { continue }
+            slots[specialSlotId] = {
+                name: item.name,
+                count: item.count,
+            }
+        }
+
+        return slots
     }
 
     /**
@@ -2748,25 +2852,108 @@ module.exports = class BruhBot {
 
     /**
      * @param {import('prismarine-windows').Window} chest
-     * @param {string | null} item
+     * @param {string | null} [item]
      * @returns {number | null}
      */
     static firstFreeSlot(chest, item = null) {
-        let empty = chest.firstEmptyContainerSlot()
-        if (empty !== null && empty !== undefined) {
-            return empty
-        }
-
         if (item) {
             const items = chest.containerItems()
             for (const _item of items) {
-                if (_item.count >= _item.stackSize) { continue }
                 if (_item.name !== item) { continue }
+                if (_item.count >= _item.stackSize) { continue }
                 return _item.slot
             }
         }
 
+        let empty = chest.firstEmptyContainerSlot()
+        if (empty !== null) {
+            return empty
+        }
+
         return null
+    }
+
+    /**
+     * @param {MineFlayer.Chest} chest
+     * @param {Vec3} chestBlock
+     * @param {string} item
+     * @param {number} count
+     * @returns {import('./task').Task<number>}
+     */
+    *chestTransfer(chest, chestBlock, item, count) {
+        const depositCount = (count === Infinity) ? this.itemCount(item) : count
+        if (depositCount === 0) {
+            return 0
+        }
+
+        const stackSize = this.mc.registry.itemsByName[item].stackSize
+
+        const botSlots = this.slots(chest)
+        const botItems = Object.keys(botSlots)
+            .map(i => Number.parseInt(i))
+            .map(i => ({ slot: i, item: botSlots[i] }))
+            .filter(v => (v.item) && (v.item.name === item) && (v.item.count))
+
+        if (botItems.length === 0) {
+            return 0
+        }
+
+        if (!botItems[0]?.item) {
+            return 0
+        }
+
+        const actualCount = Math.min(
+            depositCount,
+            botItems[0].item.count,
+            stackSize
+        )
+
+        const destinationSlot = BruhBot.firstFreeSlot(chest, item)
+        if (destinationSlot === null) {
+            return 0
+        }
+
+        const sourceSlot = botItems[0].slot
+
+        yield* this.env.chestDeposit(
+            this,
+            chest,
+            new Vec3Dimension(chestBlock, this.dimension),
+            item,
+            actualCount,
+            sourceSlot,
+            destinationSlot)
+
+        return actualCount
+    }
+
+    //#endregion
+
+    //#region Basic Actions
+
+    /**
+     * @param {'right' | 'left'} hand
+     */
+    activateHand(hand) {
+        if (hand === 'right') {
+            this._isRightHandActive = true
+            this.bot.activateItem(false)
+            return
+        }
+
+        if (hand === 'left') {
+            this._isLeftHandActive = true
+            this.bot.activateItem(true)
+            return
+        }
+
+        throw new Error(`Invalid hand "${hand}"`)
+    }
+
+    deactivateHand() {
+        this._isLeftHandActive = false
+        this._isRightHandActive = false
+        this.bot.deactivateItem()
     }
 
     /**
@@ -2951,4 +3138,6 @@ module.exports = class BruhBot {
             return true
         }
     }
+
+    //#endregion
 }

@@ -1658,18 +1658,23 @@ module.exports = class Minecraft {
 
     /**
      * @param {ReadonlyArray<Item>} foods
-     * @param {'foodPoints' | 'saturation' | undefined} [sort]
+     * @param {'foodPoints' | 'saturation'} sort
+     * @param {boolean} includeRaw
      * @returns {Array<Item>}
      */
-    filterFoods(foods, sort) {
-        const bad = Minecraft.badFoods
-        const allFoods = this.registry.foodsByName
+    filterFoods(foods, sort, includeRaw) {
+        const goodFoods = Object.keys(this.registry.foodsByName)
+            .filter(v => {
+                if (Minecraft.badFoods.includes(v)) { return false }
+                if (!includeRaw && Minecraft.rawFoods.includes(v)) { return false }
+                return true
+            })
 
         const _foods = foods
-            .filter((item) => item.name in allFoods)
-            .filter((item) => !bad.includes(item.name))
+            .filter(v => v.name in this.registry.foodsByName)
+            .filter(v => goodFoods.includes(v.name))
         if (sort) {
-            return _foods.sort((a, b) => allFoods[b.name][sort] - allFoods[a.name][sort])
+            return _foods.sort((a, b) => this.registry.foodsByName[b.name][sort] - this.registry.foodsByName[a.name][sort])
         } else {
             return _foods
         }

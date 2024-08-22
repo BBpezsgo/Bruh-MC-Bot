@@ -44,4 +44,3 @@ class TypedPromise<TResult, TError = any> extends Promise<TResult> {
      */
     catch<TResult = never>(onrejected?: ((reason: TError) => TResult | PromiseLike<TResult>) | undefined | null): TypedPromise<TResult, TError>;
 }
-

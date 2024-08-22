@@ -584,8 +584,10 @@ module.exports = class Environment {
      * @param {Vec3Dimension} chestPosition
      * @param {string} item
      * @param {number} count
+     * @param {number | null} [sourceSlot = null]
+     * @param {number | null} [destinationSlot = null]
      */
-    *chestDeposit(bot, chest, chestPosition, item, count) {
+    *chestDeposit(bot, chest, chestPosition, item, count, sourceSlot = null, destinationSlot = null) {
         /**
          * @type {SavedChest | null}
          */
@@ -612,7 +614,16 @@ module.exports = class Environment {
 
         if (count > 0) {
             actualCount = Math.min(count, bot.itemCount(item))
-            yield* wrap(chest.deposit(bot.mc.registry.itemsByName[item].id, null, actualCount))
+            yield* wrap(bot.bot.transfer({
+                window: chest,
+                itemType: bot.mc.registry.itemsByName[item].id,
+                metadata: null,
+                count: actualCount,
+                sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
+                sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
+                destStart: (destinationSlot !== null) ? destinationSlot : 0,
+                destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
+            }))
         } else {
             actualCount = Math.min(-count, chest.containerCount(bot.mc.registry.itemsByName[item].id, null))
             yield* wrap(chest.withdraw(bot.mc.registry.itemsByName[item].id, null, actualCount))

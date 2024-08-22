@@ -124,7 +124,7 @@ class PredictedEnvironment {
     inventory
     /**
      * @readonly
-     * @type {Record<import('../environment').PositionHash, Record<string, number>>}
+     * @type {Record<import('../environment').PositionHash, { location: Vec3Dimension; delta: Record<string, number>; }>}
      */
     chests
 
@@ -145,9 +145,12 @@ class PredictedEnvironment {
                      * @type {import('../environment').PositionHash}
                      */
                     const hash = `${step.chest.x}-${step.chest.y}-${step.chest.z}-${step.chest.dimension}`
-                    this.chests[hash] ??= {}
-                    this.chests[hash][step.item] ??= 0
-                    this.chests[hash][step.item] -= step.count
+                    this.chests[hash] ??= {
+                        location: step.chest,
+                        delta: {},
+                    }
+                    this.chests[hash].delta[step.item] ??= 0
+                    this.chests[hash].delta[step.item] -= step.count
                     continue
                 }
                 case 'inventory': {
@@ -363,7 +366,7 @@ const planners = [
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check chests ...`)
         const inChests = bot.env.searchForItem(bot, item)
         const inChestsWithMyItems = inChests.filter(v => {
-            const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.[item] ?? 0)
+            const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.delta[item] ?? 0)
             return have > 0 && v.position.dimension === bot.dimension
         })
         inChestsWithMyItems.sort((a, b) => {
@@ -374,7 +377,7 @@ const planners = [
 
         for (const inChestWithMyItems of inChestsWithMyItems) {
             yield
-            const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.[item] ?? 0)
+            const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.delta[item] ?? 0)
             const needFromChest = Math.min(have, count)
             if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Found ${have} in a chest`)
 
@@ -1164,7 +1167,7 @@ function* evaluatePlan(bot, plan) {
                             break
                         }
 
-                        if (timeout.is()) {
+                        if (timeout.done()) {
                             for (const key in delta) {
                                 if (delta[key] > 0) {
                                     yield* giveTo.task(bot, {
@@ -1176,7 +1179,7 @@ function* evaluatePlan(bot, plan) {
                             throw `${requestPlayer} didn't give me ${step.count} ${step.item}`
                         }
 
-                        if (interval.is()) {
+                        if (interval.done()) {
                             bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta[step.item] ?? 0)} ${step.item}`)
                         }
                     }
@@ -1476,12 +1479,12 @@ const def = {
 
             let chestsBuilder = ''
             for (const position in future.chests) {
-                /** @type {Record<string, number>} */ // @ts-ignore
+                /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
                 const chest = future.chests[position]
-                chestsBuilder += `  at ${position}`
-                for (const name in chest) {
-                    const delta = chest[name]
-                    chestsBuilder += `    ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                chestsBuilder += `  at "${chest.location}"`
+                for (const name in chest.delta) {
+                    const delta = chest.delta[name]
+                    chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
                 }
             }
             if (chestsBuilder) {

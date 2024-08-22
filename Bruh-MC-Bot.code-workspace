@@ -26,8 +26,6 @@
 		},
 		"files.exclude": {
 			"node_modules": true,
-			"package-lock.json": true,
-			"bun.lockb": true,
 		},
 		"material-icon-theme.files.associations": {
 			"template.js": "template",
