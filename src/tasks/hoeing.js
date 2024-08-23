@@ -15,7 +15,10 @@ const Vec3Dimension = require('../vec3-dimension')
  *   nearPlayer: string;
  * } | {
  *   block: Vec3Dimension;
- * })>}
+ * }), {
+ *   hoes: ReadonlyArray<string>;
+ *   ensureHoe: (bot: import('../bruh-bot')) => import('../task').Task<boolean>;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -23,24 +26,18 @@ module.exports = {
             throw `Can't hoe in quiet mode`
         }
 
-        const hoes = [
-            bot.mc.registry.itemsByName['wooden_hoe'].id,
-            bot.mc.registry.itemsByName['stone_hoe'].id,
-            bot.mc.registry.itemsByName['iron_hoe'].id,
-            bot.mc.registry.itemsByName['golden_hoe'].id,
-            bot.mc.registry.itemsByName['diamond_hoe'].id,
-            bot.mc.registry.itemsByName['netherite_hoe'].id,
-        ]
+        const hoes = this.hoes
+
         let n = 0
 
         {
             let hasHoe = false
             for (const hoe of hoes) {
-                const hoeItem = bot.searchItem(bot.mc.registry.items[hoe].name)
+                const hoeItem = bot.searchInventoryItem(null, hoe)
                 if (hoeItem) {
                     hasHoe = true
                     break
-                } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoe) {
+                } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === hoe) {
                     hasHoe = true
                     break
                 }
@@ -51,29 +48,17 @@ module.exports = {
         }
 
         const equipHoe = function*() {
-            for (const hoe of hoes) {
-                const hoeItem = bot.searchItem(bot.mc.registry.items[hoe].name)
-                if (hoeItem) {
-                    if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoe) {
-                        yield* wrap(bot.bot.equip(hoe, 'hand'))
-                    }
-                    return
-                } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoe) {
-                    return
+            const hoeItem = yield* bot.ensureItems(...hoes)
+            if (hoeItem) {
+                if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoeItem.type) {
+                    yield* wrap(bot.bot.equip(hoeItem.type, 'hand'))
                 }
+                return
+            } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoeItem.type) {
+                return
             }
 
-            if (!args.gatherTool || true) {
-                throw `I don't have a hoe`
-            }
-
-            // const gatherResult = await (new GatherItemGoal(this, context.mc.registry.itemsByName['wooden_hoe'].id, 1, false, false, false, true)).wait()
-            // if ('error' in gatherResult) {
-            //     return gatherResult
-            // }
-            // 
-            // await context.bot.equip(context.mc.registry.itemsByName['wooden_hoe'].id, 'hand')
-            // return { result: true }
+            throw `I don't have a hoe`
         }
 
         /** @type {Vec3 | null} */
@@ -87,9 +72,9 @@ module.exports = {
             if (!target) {
                 throw `I can't find you`
             }
-        
+
             water = bot.bot.findBlock({
-                matching: [ bot.mc.registry.blocksByName['water'].id ],
+                matching: [bot.mc.registry.blocksByName['water'].id],
                 point: target.xyz(bot.dimension),
                 maxDistance: 4,
             })?.position.clone()
@@ -126,8 +111,9 @@ module.exports = {
 
             yield* equipHoe()
             yield
-            yield* wrap(bot.bot.activateBlock(dirt))
+            yield* wrap(bot.bot.activateBlock(dirt, null, null, true))
             n++
+            yield* sleepG(100)
 
             return n
         }
@@ -153,7 +139,7 @@ module.exports = {
 
             let dirts = bot.bot.findBlocks({
                 matching: (/** @type {Block} */ block) => {
-                    if (![ 'grass_block', 'dirt' ].includes(block.name)) { return false }
+                    if (!['grass_block', 'dirt'].includes(block.name)) { return false }
                     return true
                 },
                 useExtraInfo: (/** @type {Block} */ block) => {
@@ -185,7 +171,7 @@ module.exports = {
                 yield* equipHoe()
 
                 yield* sleepG(100)
-                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension))))
+                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, true))
                 n++
                 yield* sleepG(100)
                 shouldContinue = true
@@ -210,4 +196,12 @@ module.exports = {
             return `Hoeing ${args.block}`
         }
     },
+    hoes: Object.freeze([
+        'wooden_hoe',
+        'stone_hoe',
+        'iron_hoe',
+        'golden_hoe',
+        'diamond_hoe',
+        'netherite_hoe',
+    ]),
 }

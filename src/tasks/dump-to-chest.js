@@ -30,7 +30,7 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @typedef {{ name: string; count: number; }} CountedItem
+ * @typedef {{ name: string; nbt?: import('../bruh-bot').NBT; count: number; }} CountedItem
  */
 
 /**
@@ -52,12 +52,10 @@ module.exports = {
         }
         const fullChests = []
 
-        const BruhBot = require('../bruh-bot')
-
         while (true) {
             yield
 
-            if (!args.items.some(v => bot.itemCount(v.name))) { break }
+            if (!args.items.some(v => bot.inventoryItemCount(null, v))) { break }
 
             let chestBlock = null
 
@@ -102,16 +100,17 @@ module.exports = {
 
                     let shouldBreak = true
                     for (const itemToDeposit of args.items) {
-                        if (BruhBot.firstFreeSlot(chest, itemToDeposit.name) === null) {
+                        yield
+                        if (bot.firstFreeContainerSlot(chest, itemToDeposit) === null) {
                             fullChests.push(chestBlock.position.clone())
                             shouldBreak = true
                             break
                         }
 
-                        const deposited = yield* bot.chestTransfer(
+                        const deposited = yield* bot.chestDeposit(
                             chest,
                             chestBlock.position,
-                            itemToDeposit.name,
+                            itemToDeposit,
                             itemToDeposit.count)
                         shouldBreak = !deposited
                     }
@@ -127,11 +126,7 @@ module.exports = {
 
         return true
     },
-    id: function() {
-        return `dump`
-    },
-    humanReadableId: function() {
-        return `Dump items`
-    },
+    id: `dump`,
+    humanReadableId: `Dump items`,
     definition: 'dumpToChest',
 }

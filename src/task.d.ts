@@ -7,8 +7,8 @@ export type SimpleTaskDef<TResult, TArgs> = (bot: BruhBot, args: TArgs) => Task<
 
 export type TaskDef<TResult = void, TArgs extends {} = {}, TUtilities extends {} = {}> = {
     readonly task: (bot: BruhBot, args: CommonArgs<TArgs>) => Task<TResult>;
-    readonly id: (args: TArgs) => string;
-    readonly humanReadableId: (args: TArgs) => string;
+    readonly id: string | ((args: TArgs) => string);
+    readonly humanReadableId: string | ((args: TArgs) => string);
     readonly definition?: import('./tasks').TaskId;
 } & TUtilities
 

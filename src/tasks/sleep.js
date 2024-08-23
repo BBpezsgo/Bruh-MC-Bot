@@ -91,12 +91,8 @@ module.exports = {
             yield* sleepG(500)
         }
     },
-    id: function() {
-        return 'sleep'
-    },
-    humanReadableId: function() {
-        return `Sleeping`
-    },
+    id: 'sleep',
+    humanReadableId: `Sleeping`,
     definition: 'sleep',
     can: can,
 }

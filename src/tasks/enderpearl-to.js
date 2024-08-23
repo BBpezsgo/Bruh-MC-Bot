@@ -15,7 +15,7 @@ module.exports = {
             return 'here'
         }
 
-        const enderpearl = bot.searchItem('ender_pearl')
+        const enderpearl = bot.searchInventoryItem(null, 'ender_pearl')
         if (!enderpearl) {
             throw `I have no enderpearl`
         }

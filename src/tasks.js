@@ -4,7 +4,6 @@
 
 module.exports = class {
     /** @readonly */ static get attack() { return require('./tasks/attack') }
-    /** @readonly */ static get blockExplosion() { return require('./tasks/block-explosion') }
     /** @readonly */ static get bonemealing() { return require('./tasks/bonemealing') }
     /** @readonly */ static get build() { return require('./tasks/build') }
     /** @readonly */ static get clearMlgJunk() { return require('./tasks/clear-mlg-junk') }

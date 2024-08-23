@@ -310,11 +310,7 @@ function searchRangeWeapon(bot) {
     const keys = Object.values(Weapons)
 
     for (const weapon of keys) {
-        const searchFor = bot.mc.registry.itemsByName[weapon]?.id
-
-        if (!searchFor) { continue }
-
-        const found = bot.bot.inventory.findInventoryItem(searchFor, null, false)
+        const found = bot.searchInventoryItem(null, weapon)
         if (!found) { continue }
 
         let ammo
@@ -354,7 +350,7 @@ function searchRangeWeapon(bot) {
  */
 function bestMeleeWeapon(bot) {
     for (const meleeWeapon of meleeWeapons) {
-        const item = bot.searchItem(meleeWeapon.name)
+        const item = bot.searchInventoryItem(null, meleeWeapon.name)
         if (!item) { continue }
         return {
             ...meleeWeapon,
@@ -396,7 +392,7 @@ module.exports = {
         /** @type {(MeleeWeapon & { item: Item }) | null}*/
         let meleeWeapon = null
         /** @type {Item | null} */
-        let shield = bot.searchItem('shield')
+        let shield = bot.searchInventoryItem(null, 'shield')
 
         const deactivateShield = function(/** @type {Item | null} */ shield) {
             if (shield && bot.isLeftHandActive) {
@@ -626,11 +622,11 @@ module.exports = {
                 const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
-                    if (distance > 6) {
+                    if (distance > 4) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         yield* goto.task(bot, {
                             entity: target,
-                            distance: 5,
+                            distance: 4,
                             timeout: 500,
                         })
                         reequipMeleeWeapon = true
@@ -639,7 +635,7 @@ module.exports = {
 
                     if (reequipMeleeWeapon) {
                         // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
-                        shield = bot.searchItem('shield')
+                        shield = bot.searchInventoryItem(null, 'shield')
                         yield* equipMeleeWeapon()
                         // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                         reequipMeleeWeapon = false
@@ -798,7 +794,7 @@ module.exports = {
                     // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                     yield* goto.task(bot, {
                         entity: target,
-                        distance: 5,
+                        distance: 4,
                         timeout: 500,
                     })
                     reequipMeleeWeapon = true

@@ -1,14 +1,14 @@
 const Minecraft = require('../minecraft')
 
 /**
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; }>>} items
+ * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} items
  * @param {import('../minecraft')['registry']} registry
- * @returns {Array<{ name: string; count: number; }>}
+ * @returns {Array<{ name: string; count: number; nbt: import('../bruh-bot').NBT; }>}
  */
 function filterOutEquipment(items, registry) {
     const equipment = require('../equipment')
 
-    const result = items.map(v => ({ name: v.name, count: v.count, originalCount: v.count }))
+    const result = items.map(v => ({ name: v.name, count: v.count, nbt: v.nbt, originalCount: v.count }))
     /**
      * @type {ReadonlyArray<import('../equipment').SatisfiedEquipmentItem>}
      */
@@ -83,12 +83,12 @@ function filterOutEquipment(items, registry) {
 
 
 /**
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; }>>} items
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; }>>} exclude
- * @returns {Array<{ name: string; count: number; }>}
+ * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} items
+ * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} exclude
+ * @returns {Array<{ name: string; count: number; nbt: import('../bruh-bot').NBT; }>}
  */
 function filterOutItems(items, exclude) {
-    const result = items.map(v => ({ name: v.name, count: v.count }))
+    const result = items.map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
    
     for (const _exclude of exclude.map(v => ({ ...v }))) {
         if (_exclude.count <= 0) { continue }

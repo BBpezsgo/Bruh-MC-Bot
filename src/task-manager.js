@@ -52,7 +52,7 @@ module.exports = class TaskManager {
         if (this._isStopping) {
             return null
         }
-        const id = task.id(args)
+        const id = (typeof task.id === 'string') ? task.id : task.id(args)
         if (this.has(id)) {
             // console.log(`Task "${id}" already added`)
             return null

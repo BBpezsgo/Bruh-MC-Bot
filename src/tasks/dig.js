@@ -30,7 +30,7 @@ module.exports = {
          */
         let current = args.block
 
-        const itemsBefore = toArray(bot.items()).reduce((map, item) => {
+        const itemsBefore = toArray(bot.inventoryItems()).reduce((map, item) => {
             if (!map[item.name]) { map[item.name] = 0 }
             map[item.name] -= item.count
             return map
@@ -163,7 +163,7 @@ module.exports = {
             }
         }
     
-        const itemsDelta = toArray(bot.items()).reduce((map, item) => {
+        const itemsDelta = toArray(bot.inventoryItems()).reduce((map, item) => {
             if (!map[item.name]) { map[item.name] = 0 }
             map[item.name] += item.count
             return map
@@ -177,8 +177,6 @@ module.exports = {
     id: function(args) {
         return `dig-${args.block.position.x}-${args.block.position.y}-${args.block.position.z}`
     },
-    humanReadableId: function() {
-        return `Digging`
-    },
+    humanReadableId: `Digging`,
     definition: 'dig',
 }

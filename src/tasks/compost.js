@@ -59,7 +59,7 @@ const getItem = function(bot, includeNono) {
             }
         }
         if (isSeed && trashItem.count <= 4) { continue }
-        const has = bot.searchItem(trashItem.name)
+        const has = bot.searchInventoryItem(null, trashItem.name)
         if (!has) { continue }
         return has
     }
@@ -119,11 +119,7 @@ module.exports = {
 
         return composted
     },
-    id: function() {
-        return 'compost'
-    },
-    humanReadableId: function() {
-        return `Compost`
-    },
+    id: 'compost',
+    humanReadableId: `Compost`,
     definition: 'compost',
 }

@@ -40,11 +40,7 @@ module.exports = {
     
         return 'ok'
     },
-    id: function() {
-        return 'eat'
-    },
-    humanReadableId: function() {
-        return `Eating`
-    },
+    id: 'eat',
+    humanReadableId: `Eating`,
     definition: 'eat',
 }

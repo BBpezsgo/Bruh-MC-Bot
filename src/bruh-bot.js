@@ -19,7 +19,7 @@ const levenshtein = require('damerau-levenshtein')
 
 const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
-const { Interval, parseLocationH, parseYesNoH, isNBTEquals, Timeout, parseAnyLocationH } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const Environment = require('./environment')
@@ -70,6 +70,10 @@ const priorities = Object.freeze({
  *     }
  *   }
  * }} BotConfig
+ */
+
+/**
+ * @typedef {import('prismarine-nbt').Tags[import('prismarine-nbt').TagType]} NBT
  */
 
 class ItemLock {
@@ -218,10 +222,15 @@ module.exports = class BruhBot {
      */
     randomLookInterval
     /**
-     * @private @readonly
-     * @type {Record<string, { startedLookingAt: number; endedLookingAt: number; }>}
+     * @private
+     * @type {number}
      */
-    lookAtPlayers
+    lookAtPlayer
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    lookAtPlayerTimeout
     /**
      * @private @readonly
      * @type {Interval}
@@ -409,23 +418,24 @@ module.exports = class BruhBot {
         this.aimingEntities = {}
         this.incomingProjectiles = {}
         this.lockedItems = []
-        this.lookAtPlayers = {}
         this.commands = new Commands(this.bot)
         this._currentPath = null
+        this.lookAtPlayer = 0
 
         this.saveInterval = new Interval(30000)
 
         // this.saveTasksInterval = new Interval(5000)
         // this.trySleepInterval = new Interval(5000)
         // this.checkQuietInterval = new Interval(500)
-        // this.randomLookInterval = new Interval(10000)
 
+        this.randomLookInterval = new Interval(10000)
         this.ensureEquipmentInterval = new Interval(60000)
         this.goBackInterval = new Interval(20000)
         this.tryAutoHarvestInterval = new Interval(5000)
         this.tryRestoreCropsInterval = new Interval(15000)
         this.moveAwayInterval = new Interval(3000)
         this.dumpTrashInterval = new Interval(20000)
+        this.lookAtPlayerTimeout = new Interval(5000)
 
         this.permissiveMovements = null
         this.restrictedMovements = null
@@ -794,10 +804,10 @@ module.exports = class BruhBot {
 
                         // yield* tasks.build.task(bot, { blocks: blocks })
                     },
-                    id: function(args) { return 'test1' },
-                    humanReadableId: function(args) { return 'test1' },
+                    id: 'test1',
+                    humanReadableId: 'test1',
                 }, {}, priorities.user, true)
-                    .wait()
+                    ?.wait()
                     .then(() => respond(`K`))
                     .catch(reason => reason === 'cancelled' || respond(reason))
             },
@@ -871,7 +881,7 @@ module.exports = class BruhBot {
                         if (bot.dimension !== location.dimension) {
                             throw `We are in a different dimension`
                         }
-                        const elytraItem = bot.searchItem('elytra')
+                        const elytraItem = bot.searchInventoryItem(null, 'elytra')
                         if (!elytraItem) {
                             throw `I have no elytra`
                         }
@@ -914,17 +924,18 @@ module.exports = class BruhBot {
                 }
 
                 this.tasks.push(this, tasks.gatherItem, {
+                    count: count,
+                    item: items,
+                    onStatusMessage: respond,
+                    canTrade: true,
                     canCraft: true,
                     canDig: true,
                     canKill: false,
                     canUseChests: true,
                     canUseInventory: false,
-                    count: count,
-                    item: items,
-                    onStatusMessage: respond,
                     canRequestFromPlayers: false,
                 }, priorities.user, true)
-                    .wait()
+                    ?.wait()
                     .then(result => result.count <= 0 ? respond(`I couldn't gather the item(s)`) : respond(`I gathered ${result.count} ${result.item}`))
                     .catch(error => error === 'cancelled' || respond(error))
             },
@@ -948,7 +959,7 @@ module.exports = class BruhBot {
                         const plan = yield* tasks.gatherItem.plan(bot, args.item, args.count, args, {
                             depth: 0,
                             recursiveItems: [],
-                        })
+                        }, [])
                         const organizedPlan = tasks.gatherItem.organizePlan(plan)
                         const planResult = tasks.gatherItem.planResult(organizedPlan, args.item)
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
@@ -989,17 +1000,18 @@ module.exports = class BruhBot {
                         return `Planning ${args.count} ${args.item}`
                     }
                 }, {
+                    item: item.name,
+                    count: count,
+                    onStatusMessage: respond,
                     canCraft: true,
                     canDig: true,
                     canKill: false,
                     canUseChests: true,
                     canUseInventory: false,
-                    count: count,
-                    item: item.name,
-                    onStatusMessage: respond,
                     canRequestFromPlayers: false,
+                    canTrade: true,
                 }, priorities.user, true)
-                    .wait()
+                    ?.wait()
                     .then(() => { })
                     .catch(error => error === 'cancelled' || respond(error))
                 return
@@ -1030,12 +1042,8 @@ module.exports = class BruhBot {
             command: (sender, message, respond) => {
                 const task = this.tasks.push(this, {
                     task: () => this.env.scanChests(this),
-                    id: function() {
-                        return `scan-chests`
-                    },
-                    humanReadableId: function() {
-                        return `Scanning chests`
-                    },
+                    id: `scan-chests`,
+                    humanReadableId: `Scanning chests`,
                 }, {}, priorities.user, true)
                 if (task) {
                     respond(`Okay`)
@@ -1053,12 +1061,8 @@ module.exports = class BruhBot {
             command: (sender, message, respond) => {
                 const task = this.tasks.push(this, {
                     task: () => this.env.scanVillagers(this),
-                    id: function() {
-                        return `scan-villagers`
-                    },
-                    humanReadableId: function() {
-                        return `Scanning villagers`
-                    },
+                    id: `scan-villagers`,
+                    humanReadableId: `Scanning villagers`,
                 }, {}, priorities.user, true)
                 if (task) {
                     respond(`Okay`)
@@ -1094,17 +1098,13 @@ module.exports = class BruhBot {
                 const items = this.bot.inventory.items()
 
                 /**
-                 * @type {Array<{ count: number; item: Item; nbt?: import('prismarine-nbt').Tags[import('prismarine-nbt').TagType] }>}
+                 * @type {Array<{ count: number; item: Item; nbt?: NBT }>}
                  */
                 const normal = []
                 for (const item of items) {
                     let found = false
                     for (const item2 of normal) {
-                        if (item2.item.type !== item.type) { continue }
-                        if (item.nbt) {
-                            if (!item2.nbt) { continue }
-                            if (!isNBTEquals(item.nbt, item2.nbt)) { continue }
-                        } else if (item2.nbt) { continue }
+                        if (!isItemEquals(item2.item, item)) { continue }
 
                         item2.count += item.count
                         found = true
@@ -1847,8 +1847,8 @@ module.exports = class BruhBot {
                     }
                     this.tasks.push(this, {
                         task: tasks.goto.task,
-                        id: () => `flee-from-${e.id}`,
-                        humanReadableId: () => `Flee from small fireball`,
+                        id: `flee-from-${e.id}`,
+                        humanReadableId: `Flee from small fireball`,
                     }, {
                         goal: {
                             hasChanged: () => false,
@@ -1882,8 +1882,8 @@ module.exports = class BruhBot {
             if (water) {
                 this.tasks.push(this, {
                     task: tasks.goto.task,
-                    id: () => `goto-water`,
-                    humanReadableId: () => `Goto water`,
+                    id: `goto-water`,
+                    humanReadableId: `Goto water`,
                 }, {
                     point: water.position,
                     distance: 0,
@@ -1984,8 +1984,8 @@ module.exports = class BruhBot {
                             },
                         })
                     },
-                    id: function(args) { return `get-out-water` },
-                    humanReadableId: function(args) { return `Getting out of water` },
+                    id: `get-out-water`,
+                    humanReadableId: `Getting out of water`,
                 }, {}, priorities.surviving + 1)
             }
 
@@ -2085,7 +2085,7 @@ module.exports = class BruhBot {
         for (const request of this.env.itemRequests) {
             if (request.lock.by === this.username) { continue }
             if (request.getStatus() !== 'none') { continue }
-            if (!this.itemCount(request.lock.item)) { continue }
+            if (!this.inventoryItemCount(null, { name: request.lock.item })) { continue }
             console.log(`[Bot "${this.username}"] Serving ${request.lock.item} to ${request.lock.by}`)
             request.onTheWay()
             this.tasks.push(this, tasks.giveTo, {
@@ -2095,7 +2095,7 @@ module.exports = class BruhBot {
                     count: request.lock.count,
                 }],
             }, priorities.otherBots)
-                .wait()
+                ?.wait()
                 .then(result => {
                     const givenCount = result[request.lock.item] ?? 0
                     if (givenCount >= request.lock.count) {
@@ -2140,12 +2140,8 @@ module.exports = class BruhBot {
                         console.log(`[Bot "${bot.username}"] Arrow picked up`)
                     }
                 },
-                id: function() {
-                    return `pickup-my-arrows`
-                },
-                humanReadableId: function() {
-                    return `Picking up my arrows`
-                },
+                id: `pickup-my-arrows`,
+                humanReadableId: `Picking up my arrows`,
             }, {}, priorities.cleanup)
         }
 
@@ -2224,18 +2220,19 @@ module.exports = class BruhBot {
                         this.tasks.push(this, tasks.gatherItem, {
                             item: foods,
                             count: 1,
+                            force: true,
                             canCraft: true,
                             canDig: true,
                             canKill: false,
                             canUseChests: true,
                             canUseInventory: true,
-                            force: true,
                             canRequestFromPlayers: false && item.priority === 'must',
+                            canTrade: true,
                         }, priorities.low)
                         break
                     }
                     case 'single': {
-                        if (this.itemCount(item.item) > 0) { break }
+                        if (this.inventoryItemCount(null, { name: item.item }) > 0) { break }
                         this.tasks.push(this, tasks.gatherItem, {
                             item: item.item,
                             count: 1,
@@ -2245,11 +2242,12 @@ module.exports = class BruhBot {
                             canUseChests: true,
                             canUseInventory: true,
                             canRequestFromPlayers: false && item.priority === 'must',
+                            canTrade: true,
                         }, priorities.unnecessary)
                         break
                     }
                     case 'any': {
-                        if (item.item.find(v => this.itemCount(v) > 0)) { break }
+                        if (item.item.find(v => this.inventoryItemCount(null, { name: v }) > 0)) { break }
                         this.tasks.push(this, tasks.gatherItem, {
                             item: item.prefer,
                             count: 1,
@@ -2259,6 +2257,7 @@ module.exports = class BruhBot {
                             canUseChests: true,
                             canUseInventory: true,
                             canRequestFromPlayers: false && item.priority === 'must',
+                            canTrade: true,
                         }, priorities.unnecessary)
                         break
                     }
@@ -2277,8 +2276,8 @@ module.exports = class BruhBot {
                     )) > 10) {
                 this.tasks.push(this, {
                     task: tasks.goto.task,
-                    id: function() { return `goto-idle-position` },
-                    humanReadableId: function() { return `Goto idle position` },
+                    id: `goto-idle-position`,
+                    humanReadableId: `Goto idle position`,
                 }, {
                     point: this.memory.idlePosition,
                     distance: 4,
@@ -2361,61 +2360,49 @@ module.exports = class BruhBot {
      * @private
      */
     lookAtNearestPlayer() {
-        /**
-         * @type {import('mineflayer').Player | null}
-         */
-        let selected = null
-        const lookDuration = 3000
-        const notLookDuration = 2000
+        const selfEye = (this.bot.entity.metadata[6] === 5)
+            ? this.bot.entity.position.offset(0, 1.2, 0)
+            : this.bot.entity.position.offset(0, 1.6, 0)
 
-        for (const playerUsername in this.bot.players) {
-            if (playerUsername === this.username) { continue }
-            const player = this.bot.players[playerUsername]
+        const players = Object.values(this.bot.players)
+            .filter(v => v.username !== this.username)
+            .filter(v => v.entity)
+            .filter(v => v.entity.position.distanceTo(this.bot.entity.position) < 5)
+            .filter(v => {
+                const playerEye = (v.entity.metadata[6] === 5)
+                    ? v.entity.position.offset(0, 1.2, 0)
+                    : v.entity.position.offset(0, 1.6, 0)
 
-            if (!player.entity ||
-                this.bot.entity.position.distanceTo(player.entity.position) > 5) {
-                delete this.lookAtPlayers[playerUsername]
-                continue
-            }
+                const dirToSelf = selfEye.clone().subtract(playerEye).normalize()
+                const playerDir = mathUtils.rotationToVectorRad(v.entity.pitch, v.entity.yaw)
+                return dirToSelf.dot(playerDir) > 0.9
+            })
 
-            if (!this.lookAtPlayers[playerUsername]) {
-                this.lookAtPlayers[playerUsername] = {
-                    startedLookingAt: performance.now(),
-                    endedLookingAt: 0,
-                }
-            } else {
-                const p = this.lookAtPlayers[playerUsername]
-                if (p.startedLookingAt) {
-                    if (performance.now() - p.startedLookingAt < lookDuration) {
-                        selected = this.bot.players[playerUsername]
-                        break
-                    } else if (!p.endedLookingAt) {
-                        p.endedLookingAt = performance.now()
-                        p.startedLookingAt = 0
-                        continue
-                    }
-                }
-                if (p.endedLookingAt) {
-                    if (performance.now() - p.endedLookingAt < notLookDuration) {
-                        continue
-                    } else if (!p.startedLookingAt) {
-                        p.endedLookingAt = 0
-                        p.startedLookingAt = performance.now()
-                        selected = this.bot.players[playerUsername]
-                        break
-                    }
-                }
-                delete this.lookAtPlayers[playerUsername]
-            }
+        if (players.length === 0) { return false }
+
+        if (this.lookAtPlayerTimeout.done()) {
+            this.lookAtPlayerTimeout.restart()
+            this.lookAtPlayer++
         }
 
-        if (!selected) {
-            return false
+        while (this.lookAtPlayer < 0) {
+            this.lookAtPlayerTimeout.restart()
+            this.lookAtPlayer += players.length
         }
+
+        while (this.lookAtPlayer >= players.length) {
+            this.lookAtPlayerTimeout.restart()
+            this.lookAtPlayer -= players.length
+        }
+
+        const selected = players[this.lookAtPlayer]
+
+        if (!selected?.entity) { return false }
 
         const playerEye = (selected.entity.metadata[6] === 5)
             ? selected.entity.position.offset(0, 1.2, 0)
             : selected.entity.position.offset(0, 1.6, 0)
+
         // const vec = rotationToVector(nearest.pitch, nearest.yaw)
         // 
         // const vecIn = bot.entity.position.offset(0, 1.6, 0).subtract(playerEye).normalize()
@@ -2659,10 +2646,10 @@ module.exports = class BruhBot {
     //#region Items & Inventory
 
     /**
-     * @returns {Array<{ name: string; count: number; }>}
+     * @returns {Array<{ name: string; count: number; nbt?: NBT; }>}
      */
     getTrashItems() {
-        let result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count }))
+        let result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
         result = filterOutEquipment(result, this.mc.registry)
         result = filterOutItems(result, this.lockedItems
             .filter(v => !v.isUnlocked)
@@ -2688,11 +2675,12 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @param {import('prismarine-windows').Window | null} window
      * @param {ReadonlyArray<string>} items
      * @returns {Item | null}
      */
-    searchItem(...items) {
-        const gen = this.searchItems(v => {
+    searchInventoryItem(window, ...items) {
+        const gen = this.searchInventoryItems(window, v => {
             for (const searchFor of items) {
                 if (v.name === searchFor) { return true }
             }
@@ -2704,10 +2692,31 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @param {import('prismarine-windows').Window | null} window
+     * @param {ReadonlyArray<string>} items
+     * @returns {Item | null}
+     */
+    searchContainerItem(window, ...items) {
+        const gen = this.searchContainerItems(window, v => {
+            for (const searchFor of items) {
+                if (v.name === searchFor) { return true }
+            }
+            return false
+        })
+        const result = gen.next()
+        if (typeof result.value === 'undefined') { return null }
+        return result.value
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} [window]
      * @returns {Generator<Item, void, void>}
      */
-    *items() {
-        const specialSlotIds = [
+    *inventoryItems(window) {
+        const hasWindow = !!window
+        window ??= this.bot.inventory
+
+        const specialSlotIds = hasWindow ? [] : [
             this.bot.getEquipmentDestSlot('head'),
             this.bot.getEquipmentDestSlot('torso'),
             this.bot.getEquipmentDestSlot('legs'),
@@ -2716,14 +2725,26 @@ module.exports = class BruhBot {
             this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
-        for (let i = this.bot.inventory.inventoryStart; i < this.bot.inventory.inventoryEnd; ++i) {
-            const item = this.bot.inventory.slots[i]
+        for (let i = window.inventoryStart; i < window.inventoryEnd; ++i) {
+            const item = window.slots[i]
             if (!item) { continue }
             yield item
         }
 
         for (const specialSlotId of specialSlotIds) {
-            const item = this.bot.inventory.slots[specialSlotId]
+            const item = window.slots[specialSlotId]
+            if (!item) { continue }
+            yield item
+        }
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} window
+     * @returns {Generator<Item, void, void>}
+     */
+    *containerItems(window) {
+        for (let i = 0; i < window.inventoryStart; ++i) {
+            const item = window.slots[i]
             if (!item) { continue }
             yield item
         }
@@ -2732,7 +2753,7 @@ module.exports = class BruhBot {
     /**
      * @param {import('prismarine-windows').Window} [window] 
      */
-    slots(window) {
+    inventorySlots(window) {
         const hasWindow = !!window
         window ??= this.bot.inventory
 
@@ -2746,7 +2767,7 @@ module.exports = class BruhBot {
         ]
 
         /**
-         * @type {Record<number, { name: string; count: number; }>}
+         * @type {Record<number, { name: string; count: number; nbt: NBT | null; }>}
          */
         const slots = {}
 
@@ -2758,6 +2779,7 @@ module.exports = class BruhBot {
             if (!item) { continue }
             slots[i] = {
                 name: item.name,
+                nbt: item.nbt,
                 count: item.count,
             }
         }
@@ -2767,6 +2789,7 @@ module.exports = class BruhBot {
             if (!item) { continue }
             slots[specialSlotId] = {
                 name: item.name,
+                nbt: item.nbt,
                 count: item.count,
             }
         }
@@ -2775,28 +2798,151 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @param {import('prismarine-windows').Window} window
+     */
+    containerSlots(window) {
+        /**
+         * @type {Record<number, { name: string; count: number; nbt: NBT | null; }>}
+         */
+        const slots = {}
+
+        for (let i = 0; i < window.inventoryStart; i++) {
+            const item = window.slots[i]
+            if (!item) { continue }
+            slots[i] = {
+                name: item.name,
+                nbt: item.nbt,
+                count: item.count,
+            }
+        }
+
+        return slots
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window | null} window
      * @param {(item: Item) => boolean} match
      * @returns {Generator<Item, void, void>}
      */
-    *searchItems(match) {
-        for (const item of this.items()) {
+    *searchInventoryItems(window, match) {
+        for (const item of this.inventoryItems(window)) {
             if (!match(item)) { continue }
             yield item
         }
     }
 
     /**
-     * @param {string} item
+     * @param {import('prismarine-windows').Window} window
+     * @param {(item: Item) => boolean} match
+     * @returns {Generator<Item, void, void>}
+     */
+    *searchContainerItems(window, match) {
+        for (const item of this.containerItems(window)) {
+            if (!match(item)) { continue }
+            yield item
+        }
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} window
+     * @param {Readonly<{ name: string; nbt?: NBT; }>} item
      * @returns {number}
      */
-    itemCount(item) {
+    inventoryItemCount(window, item) {
         let count = 0
 
-        for (const matchedItem of this.searchItems(v => v.name === item)) {
+        for (const matchedItem of this.searchInventoryItems(window, v => isItemEquals(v, item))) {
             count += matchedItem.count
         }
 
         return count
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} window
+     * @param {Readonly<{ name: string; nbt?: NBT; }>} item
+     * @returns {number}
+     */
+    containerItemCount(window, item) {
+        let count = 0
+
+        for (const matchedItem of this.searchContainerItems(window, v => isItemEquals(v, item))) {
+            count += matchedItem.count
+        }
+
+        return count
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window | null} [window]
+     * @param {Readonly<{ name: string; nbt?: NBT; }> | null} [item]
+     * @returns {number | null}
+     */
+    firstFreeInventorySlot(window = null, item = null) {
+        const hasWindow = !!window
+        window ??= this.bot.inventory
+
+        const specialSlotIds = hasWindow ? [] : [
+            this.bot.getEquipmentDestSlot('head'),
+            this.bot.getEquipmentDestSlot('torso'),
+            this.bot.getEquipmentDestSlot('legs'),
+            this.bot.getEquipmentDestSlot('feet'),
+            this.bot.getEquipmentDestSlot('hand'),
+            this.bot.getEquipmentDestSlot('off-hand'),
+        ]
+
+        if (item) {
+            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
+                const _item = window.slots[i]
+                if (!_item) { continue }
+                if (!isItemEquals(_item, item)) { continue }
+                if (_item.count >= _item.stackSize) { continue }
+                return i
+            }
+
+            for (const i of specialSlotIds) {
+                const _item = window.slots[i]
+                if (!_item) { continue }
+                if (!isItemEquals(_item, item)) { continue }
+                if (_item.count >= _item.stackSize) { continue }
+                return i
+            }
+        }
+
+        for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
+            if (!window.slots[i]) { return i }
+        }
+
+        for (const i of specialSlotIds) {
+            if (!window.slots[i]) { return i }
+        }
+
+        return null
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} window
+     * @param {Readonly<{ name: string; nbt?: NBT; }> | null} [item]
+     * @returns {number | null}
+     */
+    firstFreeContainerSlot(window, item = null) {
+        if (item) {
+            for (let i = 0; i < window.inventoryStart; i++) {
+                const _item = window.slots[i]
+                if (!_item) { continue }
+                if (!isItemEquals(_item, item)) { continue }
+                if (_item.count >= _item.stackSize) { continue }
+                return i
+            }
+        }
+
+        for (let i = 0; i < window.inventoryStart; i++) {
+            if (window.slots[i] === null) {
+                return i
+            }
+        }
+
+        return null
     }
 
     *clearMainHand() {
@@ -2851,48 +2997,25 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {import('prismarine-windows').Window} chest
-     * @param {string | null} [item]
-     * @returns {number | null}
-     */
-    static firstFreeSlot(chest, item = null) {
-        if (item) {
-            const items = chest.containerItems()
-            for (const _item of items) {
-                if (_item.name !== item) { continue }
-                if (_item.count >= _item.stackSize) { continue }
-                return _item.slot
-            }
-        }
-
-        let empty = chest.firstEmptyContainerSlot()
-        if (empty !== null) {
-            return empty
-        }
-
-        return null
-    }
-
-    /**
      * @param {MineFlayer.Chest} chest
      * @param {Vec3} chestBlock
-     * @param {string} item
+     * @param {Readonly<{ name: string; nbt?: NBT; }>} item
      * @param {number} count
      * @returns {import('./task').Task<number>}
      */
-    *chestTransfer(chest, chestBlock, item, count) {
-        const depositCount = (count === Infinity) ? this.itemCount(item) : count
+    *chestDeposit(chest, chestBlock, item, count) {
+        const depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
         if (depositCount === 0) {
             return 0
         }
 
-        const stackSize = this.mc.registry.itemsByName[item].stackSize
+        const stackSize = this.mc.registry.itemsByName[item.name].stackSize
 
-        const botSlots = this.slots(chest)
+        const botSlots = this.inventorySlots(chest)
         const botItems = Object.keys(botSlots)
             .map(i => Number.parseInt(i))
             .map(i => ({ slot: i, item: botSlots[i] }))
-            .filter(v => (v.item) && (v.item.name === item) && (v.item.count))
+            .filter(v => (v.item) && isItemEquals(v.item, item) && (v.item.count))
 
         if (botItems.length === 0) {
             return 0
@@ -2908,23 +3031,152 @@ module.exports = class BruhBot {
             stackSize
         )
 
-        const destinationSlot = BruhBot.firstFreeSlot(chest, item)
+        const destinationSlot = this.firstFreeContainerSlot(chest, item)
         if (destinationSlot === null) {
             return 0
         }
 
         const sourceSlot = botItems[0].slot
 
-        yield* this.env.chestDeposit(
+        yield* taskUtils.wrap(this.bot.transfer({
+            window: chest,
+            itemType: this.mc.registry.itemsByName[item.name].id,
+            metadata: null,
+            count: actualCount,
+            sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
+            sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
+            destStart: (destinationSlot !== null) ? destinationSlot : 0,
+            destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
+        }))
+
+        this.env.recordChestTransfer(
             this,
             chest,
             new Vec3Dimension(chestBlock, this.dimension),
-            item,
-            actualCount,
-            sourceSlot,
-            destinationSlot)
+            item.name,
+            actualCount)
 
         return actualCount
+    }
+
+    /**
+     * @param {MineFlayer.Chest} chest
+     * @param {Vec3} chestBlock
+     * @param {Readonly<{ name: string; nbt?: NBT; }>} item
+     * @param {number} count
+     * @returns {import('./task').Task<number>}
+     */
+    *chestWithdraw(chest, chestBlock, item, count) {
+        const withdrawCount = (count === Infinity) ? this.containerItemCount(chest, item) : count
+        if (withdrawCount === 0) {
+            console.warn(`No ${item} in the chest`)
+            return 0
+        }
+
+        const stackSize = this.mc.registry.itemsByName[item.name].stackSize
+
+        const containerSlots = this.containerSlots(chest)
+        const containerItems = Object.keys(containerSlots)
+            .map(i => Number.parseInt(i))
+            .map(i => ({ slot: i, item: containerSlots[i] }))
+            .filter(v => (v.item) && isItemEquals(v.item, item) && (v.item.count))
+
+        if (containerItems.length === 0) {
+            console.warn(`No ${item} in the chest (what?)`)
+            return 0
+        }
+
+        if (!containerItems[0]?.item) {
+            console.warn(`No ${item} in the chest (what???)`)
+            return 0
+        }
+
+        const actualCount = Math.min(
+            withdrawCount,
+            containerItems[0].item.count,
+            stackSize
+        )
+
+        const destinationSlot = this.firstFreeInventorySlot(chest, item)
+        if (destinationSlot === null) {
+            console.warn(`Inventory is full`)
+            return 0
+        }
+
+        const sourceSlot = containerItems[0].slot
+
+        yield* taskUtils.wrap(this.bot.transfer({
+            window: chest,
+            itemType: this.mc.registry.itemsByName[item.name].id,
+            metadata: null,
+            count: actualCount,
+            sourceStart: (sourceSlot !== null) ? sourceSlot : 0,
+            sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryStart,
+            destStart: (destinationSlot !== null) ? destinationSlot : chest.inventoryStart,
+            destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryEnd,
+        }))
+
+        this.env.recordChestTransfer(
+            this,
+            chest,
+            new Vec3Dimension(chestBlock, this.dimension),
+            item.name,
+            -actualCount)
+
+        return actualCount
+    }
+
+    /**
+     * @param {ReadonlyArray<string>} item
+     * @returns {import('./task').Task<Item | null>}
+     */
+    *ensureItems(...item) {
+        let result = this.searchInventoryItem(null, ...item)
+        if (result) { return result }
+
+        try {
+            const gathered = yield* tasks.gatherItem.task(this, {
+                item: item,
+                count: 1,
+                canUseInventory: true,
+                canUseChests: true,
+            })
+            result = this.searchInventoryItem(null, gathered.item)
+            if (result) { return result }
+        } catch (error) { }
+
+        return null
+    }
+
+    /**
+     * @param {string} item
+     * @param {number} count
+     * @returns {import('./task').Task<Item | null>}
+     */
+    *ensureItem(item, count = 1) {
+        if (count === null || count === undefined) {
+            count = 1
+        }
+
+        const has = this.inventoryItemCount(null, { name: item })
+
+        if (has >= count) {
+            const result = this.searchInventoryItem(null, item)
+            if (result) { return result }
+        }
+
+        try {
+            const gathered = yield* tasks.gatherItem.task(this, {
+                item: item,
+                count: count,
+                canUseInventory: true,
+                canUseChests: true,
+            })
+            const result = this.searchInventoryItem(null, gathered.item)
+            if (result) { return result }
+        } catch (error) { }
+
+        return null
     }
 
     //#endregion
@@ -3028,7 +3280,7 @@ module.exports = class BruhBot {
         ]
 
         let tossed = 0
-        for (const have of this.items()) {
+        for (const have of this.inventoryItems()) {
             if (have.name !== item) { continue }
             for (const specialSlotName of specialSlotNames) {
                 if (this.bot.getEquipmentDestSlot(specialSlotName) !== have.slot) { continue }
@@ -3119,22 +3371,22 @@ module.exports = class BruhBot {
 
     /**
      * @param {import('prismarine-block').Block} block
-     * @param {boolean | 'ignore'} [forceLook]
+     * @param {boolean} [forceLook]
      * @param {boolean} [allocate]
      * @returns {import('./task').Task<boolean>}
      * @throws {Error}
      */
-    *activate(block, forceLook = 'ignore', allocate = true) {
+    *activate(block, forceLook = false, allocate = true) {
         if (allocate) {
             const blockLocation = new Vec3Dimension(block.position, this.dimension)
             if (!this.env.allocateBlock(this.username, blockLocation, 'activate')) {
                 return false
             }
-            yield* taskUtils.wrap(this.bot.activateBlock(block))
+            yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
             this.env.deallocateBlock(this.username, blockLocation)
             return true
         } else {
-            yield* taskUtils.wrap(this.bot.activateBlock(block))
+            yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
             return true
         }
     }

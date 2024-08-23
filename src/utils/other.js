@@ -460,6 +460,18 @@ function NBT2JSON(nbt) {
 }
 
 /**
+ * @param {{ name: string; nbt?: NBT.Tags[NBT.TagType] | null | undefined; }} a 
+ * @param {{ name: string; nbt?: NBT.Tags[NBT.TagType] | null | undefined; }} b 
+ * @returns {boolean}
+ */
+function isItemEquals(a, b) {
+    if (a.name !== b.name) { return false }
+    if (a.nbt === undefined) { return true }
+    if (b.nbt === undefined) { return true }
+    return isNBTEquals(a.nbt, b.nbt)
+}
+
+/**
  * @param {NBT.Tags[NBT.TagType] | null | undefined} a
  * @param {NBT.Tags[NBT.TagType] | null | undefined} b
  * @returns {boolean}
@@ -598,4 +610,5 @@ module.exports = {
     toArray,
     yeah,
     sequenceEquals,
+    isItemEquals,
 }

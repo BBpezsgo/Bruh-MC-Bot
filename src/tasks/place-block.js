@@ -222,7 +222,7 @@ module.exports = {
         const item = ('item' in args) ? args.item : getCorrectItem(args.block)
         const block = ('block' in args) ? args.block : getCorrectBlock(args.item)[0]
 
-        if (!args.cheat && !bot.searchItem(item)) { throw `I don't have ${item}` }
+        if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
 
         /**
          * @param {Vec3} target
@@ -452,7 +452,7 @@ module.exports = {
             if (args.cheat) {
                 yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
             } else {
-                if (!bot.searchItem(item)) { throw `I don't have ${item}` }
+                if (!bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
             }
 
             try {

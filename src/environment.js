@@ -584,10 +584,8 @@ module.exports = class Environment {
      * @param {Vec3Dimension} chestPosition
      * @param {string} item
      * @param {number} count
-     * @param {number | null} [sourceSlot = null]
-     * @param {number | null} [destinationSlot = null]
      */
-    *chestDeposit(bot, chest, chestPosition, item, count, sourceSlot = null, destinationSlot = null) {
+    recordChestTransfer(bot, chest, chestPosition, item, count) {
         /**
          * @type {SavedChest | null}
          */
@@ -610,40 +608,20 @@ module.exports = class Environment {
             this.chests.push(saved)
         }
 
-        let actualCount
-
-        if (count > 0) {
-            actualCount = Math.min(count, bot.itemCount(item))
-            yield* wrap(bot.bot.transfer({
-                window: chest,
-                itemType: bot.mc.registry.itemsByName[item].id,
-                metadata: null,
-                count: actualCount,
-                sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
-                sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
-                destStart: (destinationSlot !== null) ? destinationSlot : 0,
-                destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
-            }))
-        } else {
-            actualCount = Math.min(-count, chest.containerCount(bot.mc.registry.itemsByName[item].id, null))
-            yield* wrap(chest.withdraw(bot.mc.registry.itemsByName[item].id, null, actualCount))
-        }
-
         saved.content = {}
 
-        for (const item of chest.containerItems()) {
+        for (const item of bot.containerItems(chest)) {
             saved.content[item.name] ??= 0
             saved.content[item.name] += item.count
         }
 
         saved.myItems[item] ??= 0
-        if (count > 0) {
-            saved.myItems[item] += actualCount
-        } else {
-            saved.myItems[item] -= actualCount
-        }
+        saved.myItems[item] += count
 
-        return actualCount
+        for (const item in saved.content) {
+            if (!saved.myItems[item]) { continue }
+            saved.myItems[item] = Math.min(saved.myItems[item], saved.content[item])
+        }
     }
 
     /**

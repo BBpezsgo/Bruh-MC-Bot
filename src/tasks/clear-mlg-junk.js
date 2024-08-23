@@ -31,21 +31,21 @@ module.exports = {
                         point: junk.position.xyz(bot.dimension),
                     })) {
                         yield
-                        
+
                         notFirst = true
                         if (junkBlock.name !== 'water') {
                             console.warn(`[Bot "${bot.username}"] Unknown MLG junk block: "${junkBlock.name}"`)
                             break
                         }
-    
+
                         console.log(`[Bot "${bot.username}"] Clearing MLG junk: water ...`)
                         yield* goto.task(bot, {
                             block: junkBlock.position,
                             reach: 2,
                         })
-    
+
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = bot.searchItem('bucket')
+                        const bucket = yield* bot.ensureItem('bucket')
                         if (!bucket) {
                             console.warn(`[Bot "${bot.username}"] No bucket found`)
                             break
@@ -108,11 +108,7 @@ module.exports = {
             }
         }
     },
-    id: function() {
-        return `clear-mlg-junk`
-    },
-    humanReadableId: function() {
-        return `Clearing MLG junk`
-    },
+    id: `clear-mlg-junk`,
+    humanReadableId: `Clearing MLG junk`,
     definition: 'clearMlgJunk',
 }

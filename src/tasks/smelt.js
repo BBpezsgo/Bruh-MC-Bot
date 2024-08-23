@@ -110,7 +110,7 @@ function* doCampfire(bot, campfire, recipe, count) {
             console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
             continue
         }
-        item = bot.searchItem(_i.name)
+        item = bot.searchInventoryItem(null, _i.name)
         if (item) {
             break
         }
@@ -272,7 +272,7 @@ module.exports = {
 
             if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                 for (const fuel of fuels) {
-                    const have = bot.searchItem(fuel.item)
+                    const have = bot.searchInventoryItem(furnace, fuel.item)
                     if (have) {
                         yield* wrap(furnace.putFuel(have.type, null, 1))
                         break
@@ -291,7 +291,7 @@ module.exports = {
                     console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
                     continue
                 }
-                if (!bot.searchItem(_i.name)) {
+                if (!bot.searchInventoryItem(furnace, _i.name)) {
                     continue
                 }
                 yield* wrap(furnace.putInput(_i.id, null, 1))
@@ -308,7 +308,7 @@ module.exports = {
 
                 if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                     for (const fuel of fuels) {
-                        const have = bot.searchItem(fuel.item)
+                        const have = bot.searchInventoryItem(furnace, fuel.item)
                         if (have) {
                             yield* wrap(furnace.putFuel(have.type, null, 1))
                             break

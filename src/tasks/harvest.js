@@ -177,7 +177,7 @@ module.exports = {
                 try {
                     // console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
 
-                    const seed = bot.bot.inventory.findInventoryItem(bot.mc.registry.itemsByName[cropInfo.seed].id, null, false)
+                    const seed = bot.searchInventoryItem(null, cropInfo.seed)
                     if (!seed) {
                         throw `Can't replant this: doesn't have "${cropInfo.seed}"`
                     }

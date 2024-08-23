@@ -99,7 +99,7 @@ module.exports = {
         while (isFishing) {
             yield
 
-            const fishingRod = bot.searchItem('fishing_rod')
+            const fishingRod = yield* bot.ensureItem('fishing_rod')
             if (!fishingRod) {
                 if (n) { return n }
                 throw `I have no fishing rod`
@@ -203,11 +203,7 @@ module.exports = {
 
         return n
     },
-    id: function() {
-        return 'fish'
-    },
-    humanReadableId: function() {
-        return `Fishing`
-    },
+    id: 'fish',
+    humanReadableId: `Fishing`,
     definition: 'fish',
 }

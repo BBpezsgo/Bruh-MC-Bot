@@ -332,12 +332,8 @@ module.exports = {
             throw `Failed`
         }
     },
-    id: function(args) {
-        return `build`
-    },
-    humanReadableId: function(args) {
-        return 'Build something'
-    },
+    id: `build`,
+    humanReadableId: 'Build something',
     definition: 'build',
     findPosition: findPosition,
     readStructure: readStructure,

@@ -37,13 +37,13 @@ class ManagedTask {
      * @readonly
      * @type {string}
      */
-    get id() { return this._def.id(this.args) }
+    get id() { return (typeof this._def.id === 'string') ? this._def.id : this._def.id(this.args) }
 
     /**
      * @readonly
      * @type {string}
      */
-    get humanReadableId() { return this._def.humanReadableId(this.args) }
+    get humanReadableId() { return (typeof this._def.humanReadableId === 'string') ? this._def.humanReadableId : this._def.humanReadableId(this.args) }
 
     /**
      * @readonly

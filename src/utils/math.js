@@ -51,18 +51,24 @@ const deg2rad = Math.PI / 180
 const rad2deg = 180 / Math.PI
 
 /**
- * @param {number} pitch
- * @param {number} yaw
+ * @param {number} pitchRad
+ * @param {number} yawRad
  */
-function rotationToVector(pitch, yaw) {
-    if (yaw < -180) { yaw += 360 }
-    if (yaw > 180) { yaw -= 360 }
+function rotationToVectorRad(pitchRad, yawRad) {
 
-    const f = Math.cos(-(yaw * (Math.PI / 180)) - Math.PI)
-    const f1 = Math.sin(-(yaw * (Math.PI / 180)) - Math.PI)
-    const f2 = -Math.cos(-pitch)
-    const f3 = Math.sin(pitch)
+    const f = Math.cos(-yawRad - Math.PI)
+    const f1 = Math.sin(-yawRad - Math.PI)
+    const f2 = -Math.cos(-pitchRad)
+    const f3 = Math.sin(pitchRad)
     return new Vec3((f1 * f2), f3, -(f * f2))
+}
+
+/**
+ * @param {number} pitchDeg
+ * @param {number} yawDeg
+ */
+function rotationToVector(pitchDeg, yawDeg) {
+    return rotationToVectorRad(pitchDeg * deg2rad, yawDeg * deg2rad)
 }
 
 /**
@@ -179,6 +185,7 @@ module.exports = {
     lerpDeg,
     lerpRad,
     rotationToVector,
+    rotationToVectorRad,
     vectorAngle,
     nonce,
     boxDistance,

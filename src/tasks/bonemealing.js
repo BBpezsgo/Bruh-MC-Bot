@@ -12,7 +12,7 @@ module.exports = {
             throw `Can't bonemeal in quiet mode`
         }
 
-        let bonemeal = bot.searchItem('bonemeal')
+        let bonemeal = bot.searchInventoryItem(null, 'bonemeal')
         let n = 0
 
         while (bonemeal) {
@@ -30,18 +30,18 @@ module.exports = {
 
             crops = backNForthSort(crops)
 
-            bonemeal = bot.searchItem('bonemeal')
+            bonemeal = bot.searchInventoryItem(null, 'bonemeal')
             if (!bonemeal) { break }
 
             for (const crop of crops) {
-                bonemeal = bot.searchItem('bonemeal')
+                bonemeal = bot.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }
 
                 yield* goto.task(bot, {
                     block: crop,
                 })
                 
-                bonemeal = bot.searchItem('bonemeal')
+                bonemeal = bot.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }
                 
                 bot.bot.equip(bonemeal, 'hand')
@@ -56,11 +56,7 @@ module.exports = {
 
         return n
     },
-    id: function() {
-        return 'bonemealing'
-    },
-    humanReadableId: function() {
-        return `Bonemealing`
-    },
+    id: 'bonemealing',
+    humanReadableId: `Bonemealing`,
     definition: 'bonemealing',
 }

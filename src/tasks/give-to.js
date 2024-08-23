@@ -3,18 +3,18 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<Record<string, number>, { player: string; items: ReadonlyArray<{ count: number; name: string; }> }>}
+ * @type {import('../task').TaskDef<Record<string, number>, { player: string; items: ReadonlyArray<{ count: number; name: string; nbt?: import('../bruh-bot').NBT; }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        if (toArray(bot.items()).length === 0) {
+        if (toArray(bot.inventoryItems()).length === 0) {
             throw `I don't have anything`
         }
 
         let canGiveSomething = false
 
         for (const itemToGive of args.items) {
-            const has = bot.itemCount(itemToGive.name)
+            const has = bot.inventoryItemCount(null, itemToGive)
             if (!has) { continue }
             canGiveSomething = true
             break
@@ -45,7 +45,7 @@ module.exports = {
         const tossedMap = {}
 
         for (const itemToGive of args.items) {
-            const has = bot.itemCount(itemToGive.name)
+            const has = bot.inventoryItemCount(null, itemToGive)
             if (!has) { continue }
             const countCanGive = Math.min(has, itemToGive.count)
             yield* bot.toss(itemToGive.name, countCanGive)

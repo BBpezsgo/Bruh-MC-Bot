@@ -48,18 +48,28 @@ module.exports = {
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
             const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))
+
+            /** @type {Record<string, number>} */
+            const seedsNeed = {}
+            for (const savedCrop of sortedCropPositions) {
+                const crop = Minecraft.cropsByBlockName[savedCrop.block]
+                if (!crop) { continue }
+                const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
+                seedsNeed[seedName] ??= 0
+                seedsNeed[seedName] += 1
+            }
+
+            // for (const seedName in seedsNeed) {
+            //     yield* bot.ensureItem(seedName, seedsNeed[seedName])
+            // }
+
             for (const savedCrop of sortedCropPositions) {
                 // yield
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
-                
+
                 const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
-                const seed = bot.bot.inventory.findInventoryItem(bot.mc.registry.itemsByName[seedName].id, null, false)
-                if (!seed) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${seedName}"`)
-                    continue
-                }
 
                 const at = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
 
@@ -75,7 +85,7 @@ module.exports = {
                 let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${seed.name}": couldn't find a good spot`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant "${seedName}": Couldn't find a good spot`)
                     continue
                 }
 
@@ -102,12 +112,19 @@ module.exports = {
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn.isExactBlock) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant ${seed.name}: couldn't find a good spot`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant ${seedName}: couldn't find a good spot`)
+                    continue
+                }
+
+                const seed = yield* bot.ensureItem(seedName, seedsNeed[seedName])
+                if (!seed) {
+                    console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${seedName}"`)
                     continue
                 }
 
                 // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
+                seedsNeed[seedName] -= 1
                 plantedCount++
                 continue
             }
@@ -115,7 +132,7 @@ module.exports = {
             while (true) {
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)
 
-                const seed = bot.searchItem(...args.seedItems.map(v => bot.mc.registry.items[v].name))
+                const seed = bot.searchInventoryItem(null, ...args.seedItems.map(v => bot.mc.registry.items[v].name))
                 if (!seed) { break }
 
                 const cropInfo = Object.values(Minecraft.cropsByBlockName).find(v => {
