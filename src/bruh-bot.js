@@ -845,8 +845,8 @@ module.exports = class BruhBot {
                         }
                         console.log(`[Bot "${bot.username}"] Mobs to kill`, mobsToKill)
                     },
-                    id: function(args) { return 'test' },
-                    humanReadableId: function(args) { return 'test' },
+                    id: 'test',
+                    humanReadableId: 'test',
                 }, {}, priorities.user, true)
             },
         }))
