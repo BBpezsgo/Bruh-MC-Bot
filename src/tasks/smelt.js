@@ -105,12 +105,8 @@ function* doCampfire(bot, campfire, recipe, count) {
 
     let item
     for (const ingredient of recipe.ingredient) {
-        const _i = bot.mc.registry.itemsByName[ingredient]
-        if (!_i) {
-            console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
-            continue
-        }
-        item = bot.searchInventoryItem(null, _i.name)
+        const actualIngredient = (ingredient.startsWith('#') ? bot.mc.local.resolveItemTag(ingredient.replace('#', '')) : [ingredient])
+        item = bot.searchInventoryItem(null, ...actualIngredient)
         if (item) {
             break
         }
@@ -286,15 +282,12 @@ module.exports = {
             }
 
             for (const ingredient of recipe.ingredient) {
-                const _i = bot.mc.registry.itemsByName[ingredient]
-                if (!_i) {
-                    console.warn(`[Bot "${bot.username}"] Unknown ingredient "${ingredient}"`)
+                const actualIngredient = (ingredient.startsWith('#') ? bot.mc.local.resolveItemTag(ingredient.replace('#', '')) : [ingredient])
+                const ingredientItem = bot.searchInventoryItem(furnace, ...actualIngredient)
+                if (!ingredientItem) {
                     continue
                 }
-                if (!bot.searchInventoryItem(furnace, _i.name)) {
-                    continue
-                }
-                yield* wrap(furnace.putInput(_i.id, null, 1))
+                yield* wrap(furnace.putInput(ingredientItem.type, null, 1))
                 break
             }
 

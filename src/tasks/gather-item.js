@@ -479,7 +479,7 @@ const planners = [
          */
         const visitRecipe = function*(recipe) {
             const actualCraftCount = Math.ceil(count / recipe.result.count)
-            
+
             /**
              * @type {Array<ReadonlyArray<PlanStep>>}
              */
@@ -651,8 +651,14 @@ const planners = [
                         item,
                     ],
                 }, [...planSoFar, ...ingredientPlans])
-                const subplanResult = planResult(subplan, ingredient)
-                if (subplanResult < 1) {
+                let goodItems
+                if (ingredient.startsWith('#')) {
+                    goodItems = bot.mc.local.resolveItemTag(ingredient.replace('#', ''))
+                } else {
+                    goodItems = [ingredient]
+                }
+                const isGood = goodItems.some(v => planResult(subplan, v))
+                if (!isGood) {
                     if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
                     return null
                 }
@@ -681,7 +687,12 @@ const planners = [
 
         for (const recipe of usableRecipes.recipes) {
             yield
-            yield* visitRecipe(recipe)
+            for (const ingredient of recipe.ingredient) {
+                yield* visitRecipe({
+                    ...recipe,
+                    ingredient: [ingredient],
+                })
+            }
         }
 
         if (!bestRecipe) {
@@ -850,6 +861,84 @@ const planners = [
 
 /**
  * @param {import('../bruh-bot')} bot
+ * @param {ReadonlyArray<string>} item
+ * @param {number} count
+ * @param {PermissionArgs & { force?: boolean }} permissions
+ * @param {PlanningContext} context
+ * @param {Plan} planSoFar
+ * @returns {import('../task').Task<{ item: string; plan: Plan; }>}
+ */
+function* planAny(bot, item, count, permissions, context, planSoFar) {
+    /**
+     * @type {{ item: string; plan: Plan; planCost: number; planResult: number; } | null}
+     */
+    let bestPlan = null
+
+    /**
+     * @param {string} item
+     */
+    const visitItem = function*(item) {
+        const itemPlan = yield* plan(bot, item, count, permissions, context, planSoFar)
+        const _itemPlan = {
+            item: item,
+            plan: itemPlan,
+            planCost: planCost(itemPlan),
+            planResult: planResult(itemPlan, item),
+        }
+        if (!bestPlan) {
+            bestPlan = _itemPlan
+            return
+        }
+        if (!_itemPlan.planResult) { return }
+        const bestIsGood = bestPlan.planResult >= count
+        const currentIsGood = _itemPlan.planResult >= count
+        if (bestIsGood && !currentIsGood) { return }
+        if (!bestIsGood && currentIsGood) {
+            bestPlan = _itemPlan
+            return
+        }
+        if (_itemPlan.planCost < bestPlan.planCost) {
+            bestPlan = _itemPlan
+            return
+        }
+    }
+
+    const scoredItems = item.map(v => ({
+        item: v,
+        score: bot.memory.successfulGatherings[v]?.successCount ?? 0,
+    }))
+    yield
+    scoredItems.sort((a, b) => (b.score - a.score))
+    yield
+    const lastSuccessfulItems = scoredItems.filter(v => v.score)
+    yield
+    const lastFailedItems = scoredItems.filter(v => !v.score)
+
+    for (const item of lastSuccessfulItems) {
+        yield* visitItem(item.item)
+        if (bestPlan &&
+            bestPlan.planCost === 0 &&
+            bestPlan.planResult >= count) {
+            break
+        }
+    }
+
+    if (!bestPlan || (bestPlan.planResult < count)) {
+        for (const item of lastFailedItems) {
+            yield* visitItem(item.item)
+            if (bestPlan &&
+                bestPlan.planCost === 0 &&
+                bestPlan.planResult >= count) {
+                break
+            }
+        }
+    }
+
+    return bestPlan
+}
+
+/**
+ * @param {import('../bruh-bot')} bot
  * @param {string} item
  * @param {number} count
  * @param {PermissionArgs & { force?: boolean }} permissions
@@ -858,6 +947,22 @@ const planners = [
  * @returns {import('../task').Task<Plan>}
  */
 function* plan(bot, item, count, permissions, context, planSoFar) {
+    if (item.startsWith('#')) {
+        const resolvedItems = bot.mc.local.resolveItemTag(item.replace('#', ''))
+        return (yield* planAny(
+            bot,
+            resolvedItems,
+            count,
+            permissions,
+            context,
+            planSoFar))?.plan ?? []
+    }
+
+    if (!bot.mc.registry.itemsByName[item]) {
+        console.warn(`[Bot "${bot.username}"] Unknown item "${item}"`)
+        return []
+    }
+
     const _depthPrefix = ' '.repeat(context.depth)
     if (context.recursiveItems.includes(item)) {
         if (planningLogs) console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
@@ -1396,73 +1501,16 @@ const def = {
     task: function*(bot, args) {
         if (typeof args.item === 'string') args.item = [args.item]
 
-        /**
-         * @type {{ item: string; plan: Plan; planCost: number; planResult: number; } | null}
-         */
-        let bestPlan = null
-
-        /**
-         * @param {string} item
-         */
-        const visitItem = function*(item) {
-            const itemPlan = yield* plan(bot, item, args.count, args, {
+        const bestPlan = yield* planAny(
+            bot,
+            args.item,
+            args.count,
+            args,
+            {
                 depth: 0,
                 recursiveItems: [],
-            }, [])
-            const _itemPlan = {
-                item: item,
-                plan: itemPlan,
-                planCost: planCost(itemPlan),
-                planResult: planResult(itemPlan, item),
-            }
-            if (!bestPlan) {
-                bestPlan = _itemPlan
-                return
-            }
-            if (!_itemPlan.planResult) { return }
-            const bestIsGood = bestPlan.planResult >= args.count
-            const currentIsGood = _itemPlan.planResult >= args.count
-            if (bestIsGood && !currentIsGood) { return }
-            if (!bestIsGood && currentIsGood) {
-                bestPlan = _itemPlan
-                return
-            }
-            if (_itemPlan.planCost < bestPlan.planCost) {
-                bestPlan = _itemPlan
-                return
-            }
-        }
-
-        const scoredItems = args.item.map(v => ({
-            item: v,
-            score: bot.memory.successfulGatherings[v]?.successCount ?? 0,
-        }))
-        yield
-        scoredItems.sort((a, b) => (b.score - a.score))
-        yield
-        const lastSuccessfulItems = scoredItems.filter(v => v.score)
-        yield
-        const lastFailedItems = scoredItems.filter(v => !v.score)
-
-        for (const item of lastSuccessfulItems) {
-            yield* visitItem(item.item)
-            if (bestPlan &&
-                bestPlan.planCost === 0 &&
-                bestPlan.planResult >= args.count) {
-                break
-            }
-        }
-
-        if (!bestPlan || (bestPlan.planResult < args.count)) {
-            for (const item of lastFailedItems) {
-                yield* visitItem(item.item)
-                if (bestPlan &&
-                    bestPlan.planCost === 0 &&
-                    bestPlan.planResult >= args.count) {
-                    break
-                }
-            }
-        }
+            },
+            [])
 
         yield
 
