@@ -635,12 +635,12 @@ module.exports = {
 
                     if (reequipMeleeWeapon) {
                         // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
-                        shield = bot.searchInventoryItem(null, 'shield')
                         yield* equipMeleeWeapon()
                         // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                         reequipMeleeWeapon = false
                     }
 
+                    shield = bot.searchInventoryItem(null, 'shield')
                     if (shield) {
                         if (!bot.holds('shield', true)) {
                             yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
