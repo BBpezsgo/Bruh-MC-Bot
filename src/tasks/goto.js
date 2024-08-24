@@ -398,7 +398,7 @@ function setOptions(bot, args) {
 
     newMovements.digCost = originalMovements.digCost
     newMovements.entityCost = originalMovements.entityCost
-    newMovements.liquidCost = 100
+    newMovements.liquidCost = bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
     newMovements.placeCost = originalMovements.placeCost
 
     newMovements.entityIntersections = originalMovements.entityIntersections
@@ -468,6 +468,7 @@ function getTime(movements, path) {
  * }> & {
  *   getGoal: getGoal;
  *   getTime: getTime;
+ *   setOptions: setOptions;
  *   GoalBlockSimple: typeof GoalBlockSimple;
  *   GoalHawkeye: typeof GoalHawkeye;
  *   GoalEntity: typeof GoalEntity;
@@ -746,6 +747,7 @@ module.exports = {
     definition: 'goto',
     getGoal: getGoal,
     getTime: getTime,
+    setOptions: setOptions,
     GoalBlockSimple: GoalBlockSimple,
     GoalHawkeye: GoalHawkeye,
     GoalEntity: GoalEntity,

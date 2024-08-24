@@ -2,13 +2,12 @@ const { Entity } = require('prismarine-entity')
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Weapons } = require('minecrafthawkeye')
 const { Item } = require('prismarine-item')
-const { goals } = require('mineflayer-pathfinder')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
-const { entityDistance } = require('../utils/math')
+const { entityDistance, entityDistanceSquared } = require('../utils/math')
 
 /**
  * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
@@ -452,6 +451,62 @@ module.exports = {
         let reequipMeleeWeapon = false
 
         /**
+         * @type {import('mineflayer-pathfinder/lib/goals').GoalBase & {
+         *   rangeSq: number;
+         *   getEntities: () => Array<Entity>;
+         *   getEntityPositions: () => Array<Vec3>;
+         *   lastEntityPositions: Array<Vec3>;
+         *   name: 'attack_goal';
+         * }}
+         */
+        const goal = {
+            rangeSq: Math.sqrt(3),
+            isValid: function() {
+                for (const entity of this.getEntities()) {
+                    if (entity && entity.isValid) { return true }
+                }
+                return false
+            },
+            hasChanged: function() {
+                const entityPositions = this.getEntityPositions()
+                if (this.lastEntityPositions.length !== entityPositions.length) {
+                    return true
+                }
+                for (let i = 0; i < entityPositions.length; i++) {
+                    const d = entityPositions[i].distanceTo(this.lastEntityPositions[i])
+                    if (d >= 1) { return true }
+                }
+                return false
+            },
+            heuristic: function(node) {
+                let max = Number.MIN_VALUE
+                for (const entity of this.getEntities()) {
+                    const dx = entity.position.x - node.x
+                    const dy = entity.position.y - node.y
+                    const dz = entity.position.z - node.z
+                    max = Math.max(max, (Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)))
+                }
+                return -max
+            },
+            isEnd: function(node) {
+                for (const entity of this.getEntities()) {
+                    const d = entityDistanceSquared(node, entity)
+                    if (d <= this.rangeSq) { return false }
+                }
+                return true
+            },
+            getEntities: function() {
+                return (('target' in args) ? [args.target] : Object.values(args.targets)).filter(v => v?.isValid)
+            },
+            getEntityPositions: function() {
+                return this.getEntities().map(v => v.position.clone())
+            },
+            lastEntityPositions: [],
+            name: 'attack_goal',
+        }
+        goal.lastEntityPositions = goal.getEntityPositions()
+
+        /**
          * @param {Entity} entity
          * @param {(number | { easy: number; normal: number; hard: number; }) | ((entity: import("prismarine-entity").Entity) => number | { easy: number; normal: number; hard: number; }) | ((entity: import("prismarine-entity").Entity) => number | { easy: number; normal: number; hard: number; })} attack
          */
@@ -543,6 +598,45 @@ module.exports = {
                 activeDamageScore
         }
 
+        const ensureMovement = function() {
+            // @ts-ignore
+            if (bot.bot.pathfinder.goal?.['name'] === 'attack_goal') {
+                return
+            }
+            console.log(`[Bot "${bot.username}"] Set attacking movement`)
+            goto.setOptions(bot, {
+                timeout: 100,
+                searchRadius: 5,
+                sprint: true,
+                movements: bot.restrictedMovements,
+                lookAtTarget: false,
+            })
+            bot.bot.pathfinder.setGoal(goal, true)
+        }
+
+        const stopMovement = function() {
+            // @ts-ignore
+            if (bot.bot.pathfinder.goal?.['name'] !== 'attack_goal') {
+                return
+            }
+            bot.bot.pathfinder.stop()
+        }
+
+        const saveMyArrow = () => {
+            const arrow = bot.bot.nearestEntity((/** @type {Entity} */ v) => {
+                if (v.name !== 'arrow') { return false }
+                const velocity = v.velocity.clone().normalize()
+                const dir = v.position.clone().subtract(bot.bot.entity.position).normalize()
+                const dot = velocity.dot(dir)
+                if (dot < 0) { return false }
+                return true
+            })
+            if (arrow) {
+                // console.log(`[Bot "${bot.username}"] Arrow saved`)
+                bot.memory.myArrows.push(arrow.id)
+            }
+        }
+
         try {
             while (true) {
                 yield
@@ -597,17 +691,21 @@ module.exports = {
                     if (!isAlive(target)) { continue }
                 }
 
-                yield* goto.task(bot, {
-                    goal: new goals.GoalCompositeAll(('target' in args ? [args.target] : Object.values(args.targets)).filter(v => v && v.isValid).map(v => {
-                        return new goals.GoalInvert(new goto.GoalEntity(v, 2))
-                    })),
-                    options: {
-                        timeout: 100,
-                        searchRadius: 5,
-                        sprint: true,
-                        movements: bot.restrictedMovements,
-                    },
-                })
+                ensureMovement()
+
+                console.log(goal.isEnd(bot.bot.entity.position))
+
+                // yield* goto.task(bot, {
+                //     goal: new goals.GoalCompositeAll(('target' in args ? [args.target] : Object.values(args.targets)).filter(v => v && v.isValid).map(v => {
+                //         return new goals.GoalInvert(new goto.GoalEntity(v, 2))
+                //     })),
+                //     options: {
+                //         timeout: 100,
+                //         searchRadius: 5,
+                //         sprint: true,
+                //         movements: bot.restrictedMovements,
+                //     },
+                // })
 
                 // console.log(`[Bot "${bot.username}"] Attack ${target.name}`)
 
@@ -623,12 +721,13 @@ module.exports = {
 
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
-                        // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                        yield* goto.task(bot, {
+                        console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                        const res = yield* goto.task(bot, {
                             entity: target,
                             distance: 4,
                             timeout: 500,
                         })
+                        console.log(res)
                         reequipMeleeWeapon = true
                         continue
                     }
@@ -666,21 +765,6 @@ module.exports = {
                     continue
                 }
 
-                const saveMyArrow = () => {
-                    const arrow = bot.bot.nearestEntity((/** @type {Entity} */ v) => {
-                        if (v.name !== 'arrow') { return false }
-                        const velocity = v.velocity.clone().normalize()
-                        const dir = v.position.clone().subtract(bot.bot.entity.position).normalize()
-                        const dot = velocity.dot(dir)
-                        if (dot < 0) { return false }
-                        return true
-                    })
-                    if (arrow) {
-                        // console.log(`[Bot "${bot.username}"] Arrow saved`)
-                        bot.memory.myArrows.push(arrow.id)
-                    }
-                }
-
                 if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
                     const weapon = searchRangeWeapon(bot)
 
@@ -693,15 +777,16 @@ module.exports = {
 
                     if (weapon && weapon.ammo > 0) {
                         deactivateShield(shield)
-    
+
                         let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
-                            //  console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                            yield* goto.task(bot, {
+                            console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                            const res = yield* goto.task(bot, {
                                 entity: target,
                                 distance: distance - 2,
                                 timeout: 1000,
                             })
+                            console.log(res)
                             reequipMeleeWeapon = true
                             continue
                         }
@@ -791,12 +876,13 @@ module.exports = {
                 // }
 
                 if (target && target.isValid) {
-                    // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                    yield* goto.task(bot, {
+                    console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                    const res = yield* goto.task(bot, {
                         entity: target,
                         distance: 4,
                         timeout: 500,
                     })
+                    console.log(res)
                     reequipMeleeWeapon = true
                     continue
                 }
@@ -806,6 +892,7 @@ module.exports = {
             if (bot.isLeftHandActive) {
                 bot.deactivateHand()
             }
+            stopMovement()
         }
     },
     id: function(args) {
