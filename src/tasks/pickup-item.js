@@ -24,7 +24,7 @@ module.exports = {
             throw `This aint an item`
         }
 
-        if (bot.isInventoryFull(item.type)) {
+        if (bot.isInventoryFull(item.name)) {
             throw `Inventory is full`
         }
 
@@ -59,7 +59,7 @@ module.exports = {
         const item = nearest.getDroppedItem()
         if (!item) { return false }
 
-        if (bot.isInventoryFull(item.type)) { return false }
+        if (bot.isInventoryFull(item.name)) { return false }
 
         const goals = goto.getGoal(bot, {
             point: nearest.position,

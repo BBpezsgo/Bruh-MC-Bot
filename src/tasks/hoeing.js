@@ -50,11 +50,11 @@ module.exports = {
         const equipHoe = function*() {
             const hoeItem = yield* bot.ensureItems(...hoes)
             if (hoeItem) {
-                if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type !== hoeItem.type) {
-                    yield* wrap(bot.bot.equip(hoeItem.type, 'hand'))
+                if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name !== hoeItem.name) {
+                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[hoeItem.name].id, 'hand'))
                 }
                 return
-            } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.type === hoeItem.type) {
+            } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === hoeItem.name) {
                 return
             }
 

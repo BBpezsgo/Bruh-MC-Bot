@@ -19,7 +19,7 @@ const levenshtein = require('damerau-levenshtein')
 
 const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
-const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals, toArray } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const Environment = require('./environment')
@@ -2649,7 +2649,9 @@ module.exports = class BruhBot {
      * @returns {Array<{ name: string; count: number; nbt?: NBT; }>}
      */
     getTrashItems() {
-        let result = this.bot.inventory.items().map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
+        // TODO: dump from offhands and armor slots
+        let result = toArray(this.inventoryItems(this.bot.inventory))
+            .map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
         result = filterOutEquipment(result, this.mc.registry)
         result = filterOutItems(result, this.lockedItems
             .filter(v => !v.isUnlocked)
@@ -2767,31 +2769,22 @@ module.exports = class BruhBot {
         ]
 
         /**
-         * @type {Record<number, { name: string; count: number; nbt: NBT | null; }>}
+         * @type {Record<number, Item>}
          */
         const slots = {}
 
-        const inventoryStart = window.inventoryStart
-        const inventoryEnd = window.inventoryEnd
-
-        for (let i = inventoryStart; i < inventoryEnd; i++) {
+        for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
             const item = window.slots[i]
             if (!item) { continue }
-            slots[i] = {
-                name: item.name,
-                nbt: item.nbt,
-                count: item.count,
-            }
+            console.assert(item.slot === i)
+            slots[i] = item
         }
 
         for (const specialSlotId of specialSlotIds) {
             const item = window.slots[specialSlotId]
             if (!item) { continue }
-            slots[specialSlotId] = {
-                name: item.name,
-                nbt: item.nbt,
-                count: item.count,
-            }
+            console.assert(item.slot === specialSlotId)
+            slots[specialSlotId] = item
         }
 
         return slots
@@ -2802,18 +2795,15 @@ module.exports = class BruhBot {
      */
     containerSlots(window) {
         /**
-         * @type {Record<number, { name: string; count: number; nbt: NBT | null; }>}
+         * @type {Record<number, Item>}
          */
         const slots = {}
 
         for (let i = 0; i < window.inventoryStart; i++) {
             const item = window.slots[i]
             if (!item) { continue }
-            slots[i] = {
-                name: item.name,
-                nbt: item.nbt,
-                count: item.count,
-            }
+            console.assert(item.slot === i)
+            slots[i] = item
         }
 
         return slots
@@ -2974,7 +2964,7 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {number | null} item
+     * @param {string | null} item
      */
     isInventoryFull(item = null) {
         const slotIds = [
@@ -2990,7 +2980,7 @@ module.exports = class BruhBot {
             const slot = this.bot.inventory.slots[slotId]
             if (!slot) { return false }
             if (slot.count >= slot.stackSize) { continue }
-            if (item && item === slot.type) { return false }
+            if (item && item === slot.name) { return false }
         }
 
         return true
@@ -3015,7 +3005,7 @@ module.exports = class BruhBot {
         const botItems = Object.keys(botSlots)
             .map(i => Number.parseInt(i))
             .map(i => ({ slot: i, item: botSlots[i] }))
-            .filter(v => (v.item) && isItemEquals(v.item, item) && (v.item.count))
+            .filter(v => isItemEquals(v.item, item) && v.item.count)
 
         if (botItems.length === 0) {
             return 0
@@ -3128,7 +3118,7 @@ module.exports = class BruhBot {
 
     /**
      * @param {ReadonlyArray<string>} item
-     * @returns {import('./task').Task<Item | null>}
+     * @returns {import('./task').Task<{ name: string; count: number; nbt: NBT | null; slot: number; } | null>}
      */
     *ensureItems(...item) {
         let result = this.searchInventoryItem(null, ...item)
@@ -3289,7 +3279,7 @@ module.exports = class BruhBot {
             const tossCount = Math.min(count - tossed, have.count)
             if (tossCount <= 0) { continue }
 
-            yield* taskUtils.wrap(this.bot.toss(have.type, null, tossCount))
+            yield* taskUtils.wrap(this.bot.toss(this.mc.registry.itemsByName[have.name].id, null, tossCount))
             tossed += tossCount
         }
     }

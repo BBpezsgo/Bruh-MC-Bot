@@ -967,7 +967,7 @@ module.exports = class Environment {
             const droppedItem = entity.getDroppedItem()
             if (!droppedItem) { return false }
             if (filter && !filter(droppedItem)) { return false }
-            if (!args.evenIfFull && bot.isInventoryFull(droppedItem.type)) { return false }
+            if (!args.evenIfFull && bot.isInventoryFull(droppedItem.name)) { return false }
             if (args.minLifetime && this.entitySpawnTimes[entity.id]) {
                 const entityLifetime = performance.now() - this.entitySpawnTimes[entity.id]
                 if (entityLifetime < args.minLifetime) {
