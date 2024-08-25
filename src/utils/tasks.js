@@ -1,6 +1,6 @@
 /**
  * @param {number} ms
- * @returns {Generator<void, void, void>}
+ * @returns {import('../task').Task<void>}
  */
 function* sleepG(ms) {
     const end = performance.now() + ms
@@ -12,7 +12,7 @@ function* sleepG(ms) {
 
 /**
  * @param {number} [ticks = 1]
- * @returns {Generator<void, void, void>}
+ * @returns {import('../task').Task<void>}
  */
 function* sleepTicks(ticks = 1) {
     const end = performance.now() + ticks * 50
@@ -46,7 +46,7 @@ function timeout(task, ms) {
 /**
  * @template T
  * @param {Promise<T> | (() => Promise<T>)} promise
- * @returns {Generator<void, T, void>}
+ * @returns {import('../task').Task<T>}
  */
 function* wrap(promise) {
     if (typeof promise === 'function') { promise = promise() }
@@ -93,7 +93,7 @@ function* waitForEvent(emitter, event) {
 /**
  * @template T
  * @param {T} result
- * @returns {Generator<void, T, void>}
+ * @returns {import('../task').Task<T>}
  */
 function* finished(result) {
     return result

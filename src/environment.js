@@ -155,6 +155,12 @@ module.exports = class Environment {
 
     /**
      * @readonly
+     * @type {Record<number, number>}
+     */
+    animalBreedTimes
+
+    /**
+     * @readonly
      * @type {Array<SavedCrop>}
      */
     crops
@@ -201,6 +207,7 @@ module.exports = class Environment {
         this.playerPositions = {}
         this.entityHurtTimes = {}
         this.entitySpawnTimes = {}
+        this.animalBreedTimes = {}
         this.allocatedBlocks = {}
         this.itemRequests = []
         this.villagers = {}
@@ -215,6 +222,7 @@ module.exports = class Environment {
         this.crops = data.crops ?? this.crops
         this.chests = data.chests ?? this.chests
         this.villagers = data.villagers ?? this.villagers
+        this.animalBreedTimes = data.animalBreedTimes ?? this.animalBreedTimes
         console.log(`[Environment] Loaded`)
     }
 
@@ -293,6 +301,7 @@ module.exports = class Environment {
      */
     __entityDead(bot, entity) {
         delete this.entitySpawnTimes[entity.id]
+        delete this.animalBreedTimes[entity.id]
         delete this.entityHurtTimes[entity.id]
         delete this.entityOwners[entity.id]
         for (const id in this.entityOwners) {
@@ -696,6 +705,7 @@ module.exports = class Environment {
             crops: this.crops,
             chests: this.chests,
             villagers: this.villagers,
+            animalBreedTimes: this.animalBreedTimes,
         }, replacer, ' '))
     }
 

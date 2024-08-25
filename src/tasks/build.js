@@ -2,7 +2,7 @@ const { Block } = require('prismarine-block')
 const { wrap } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
-const { yeah } = require('../utils/other')
+const { incrementalNeighbors } = require('../utils/other')
 
 /**
  * @typedef {{
@@ -161,10 +161,10 @@ function* findPosition(bot, blocks, confirmationCallback) {
         }
     }
 
-    for (const x of yeah(botPosition.x, 20)) {
-        for (const z of yeah(botPosition.z, 20)) {
+    for (const x of incrementalNeighbors(botPosition.x, 20)) {
+        for (const z of incrementalNeighbors(botPosition.z, 20)) {
             yield
-            for (const y of yeah(botPosition.y, 5)) {
+            for (const y of incrementalNeighbors(botPosition.y, 5)) {
                 let isOnGround = true
                 for (const floorBlock of floorBlocks) {
                     const belowBlock = bot.bot.blockAt(floorBlock.offset(x, y - 1, z))

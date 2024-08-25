@@ -62,8 +62,8 @@ module.exports = {
         if (bot.isInventoryFull(item.name)) { return false }
 
         const goals = goto.getGoal(bot, {
-            point: nearest.position,
-            distance: 0,
+            entity: nearest,
+            distance: 1,
             savePathError: true,
         })
 

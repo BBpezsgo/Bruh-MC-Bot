@@ -7,7 +7,7 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
-const { parseLocationH, toArray, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
+const { parseLocationH, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
 const giveTo = require('./give-to')
 const { Vec3 } = require('vec3')
 const dig = require('./dig')
@@ -1226,7 +1226,7 @@ function* evaluatePlan(bot, plan) {
 
                     /** @type {Record<string, number>} */
                     const originalItems = {}
-                    toArray(bot.inventoryItems()).forEach(item => {
+                    bot.inventoryItems().forEach(item => {
                         originalItems[item.name] ??= 0
                         originalItems[item.name] += item.count
                     })
@@ -1238,7 +1238,7 @@ function* evaluatePlan(bot, plan) {
                         yield* sleepG(100)
                         /** @type {Record<string, number>} */
                         const newItems = {}
-                        toArray(bot.inventoryItems()).forEach(item => {
+                        bot.inventoryItems().forEach(item => {
                             newItems[item.name] ??= 0
                             newItems[item.name] += item.count
                         })

@@ -3,6 +3,7 @@ const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const NBT = require('prismarine-nbt')
 const { EntityPose } = require('../entity-metadata')
+const CoolIterable = require('../cool-iterable')
 
 /**
  * @param {ReadonlyArray<import('prismarine-item').Item>} before
@@ -539,30 +540,17 @@ function isNBTEquals(a, b) {
 }
 
 /**
- * @template TItem
- * @param {Generator<TItem, any, any>} generator
- * @returns {Array<TItem>}
- */
-function toArray(generator) {
-    const result = []
-    while (true) {
-        const v = generator.next()
-        if (v.done === true) { break }
-        result.push(v.value)
-    }
-    return result
-}
-
-/**
  * @param {number} origin
  * @param {number} d
- * @returns {Generator<number, void, void>}
+ * @returns {CoolIterable<number>}
  */
-function* yeah(origin, d) {
-    for (let i = 0; i < d; i++) {
-        yield origin + i
-        yield origin - i
-    }
+function incrementalNeighbors(origin, d) {
+    return new CoolIterable(function*() {
+        for (let i = 0; i < d; i++) {
+            yield origin + i
+            yield origin - i
+        }
+    })
 }
 
 /**
@@ -607,8 +595,7 @@ module.exports = {
     isDirectNeighbor,
     NBT2JSON,
     isNBTEquals,
-    toArray,
-    yeah,
+    incrementalNeighbors,
     sequenceEquals,
     isItemEquals,
 }

@@ -6,6 +6,7 @@ module.exports = class {
     /** @readonly */ static get attack() { return require('./tasks/attack') }
     /** @readonly */ static get bonemealing() { return require('./tasks/bonemealing') }
     /** @readonly */ static get build() { return require('./tasks/build') }
+    /** @readonly */ static get breed() { return require('./tasks/breed') }
     /** @readonly */ static get clearMlgJunk() { return require('./tasks/clear-mlg-junk') }
     /** @readonly */ static get compost() { return require('./tasks/compost') }
     /** @readonly */ static get dig() { return require('./tasks/dig') }

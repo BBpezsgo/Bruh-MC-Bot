@@ -4,7 +4,6 @@ const { wrap, sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
-const { toArray } = require('../utils/other')
 
 /**
  * @type {import('../task').TaskDef<{
@@ -30,7 +29,7 @@ module.exports = {
          */
         let current = args.block
 
-        const itemsBefore = toArray(bot.inventoryItems()).reduce((map, item) => {
+        const itemsBefore = bot.inventoryItems().toArray().reduce((map, item) => {
             if (!map[item.name]) { map[item.name] = 0 }
             map[item.name] -= item.count
             return map
@@ -163,7 +162,7 @@ module.exports = {
             }
         }
     
-        const itemsDelta = toArray(bot.inventoryItems()).reduce((map, item) => {
+        const itemsDelta = bot.inventoryItems().toArray().reduce((map, item) => {
             if (!map[item.name]) { map[item.name] = 0 }
             map[item.name] += item.count
             return map

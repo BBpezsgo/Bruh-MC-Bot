@@ -1,7 +1,7 @@
 import { Vec3 } from 'vec3'
 import BruhBot from './bruh-bot'
 
-export type Task<TResult> = Generator<string | void, TResult, void>
+export type Task<TResult> = Generator<void, TResult, void>
 
 export type SimpleTaskDef<TResult, TArgs> = (bot: BruhBot, args: TArgs) => Task<TResult>
 

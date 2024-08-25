@@ -157,7 +157,7 @@ class GoalEntity extends goals.Goal {
     /** @override */
     hasChanged() {
         const d = this.entity.position.distanceTo(new Vec3(this.x, this.y, this.z))
-        return d > 1
+        return d > 0.5
     }
 
     /** @override */
@@ -674,9 +674,7 @@ module.exports = {
                 return 'ok'
             } else {
                 let result
-                const _goals = getGoal(bot, args)
-
-                for (const _goal of _goals) {
+                for (const _goal of getGoal(bot, args)) {
                     if ('dimension' in _goal) {
                         result = yield* this.task(bot, _goal)
                     } else {

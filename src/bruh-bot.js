@@ -19,7 +19,7 @@ const levenshtein = require('damerau-levenshtein')
 
 const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
-const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals, toArray } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 const mathUtils = require('./utils/math')
 const Environment = require('./environment')
@@ -33,6 +33,7 @@ const BlockDisplay = require('./block-display')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
 const Vec3Dimension = require('./vec3-dimension')
 const { Vec3 } = require('vec3')
+const CoolIterable = require('./cool-iterable')
 
 //#endregion
 
@@ -246,6 +247,11 @@ module.exports = class BruhBot {
      * @type {Interval}
      */
     tryRestoreCropsInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    breedAnimalsInterval
 
     /**
      * @private
@@ -433,6 +439,7 @@ module.exports = class BruhBot {
         this.goBackInterval = new Interval(20000)
         this.tryAutoHarvestInterval = new Interval(5000)
         this.tryRestoreCropsInterval = new Interval(15000)
+        this.breedAnimalsInterval = new Interval(20000)
         this.moveAwayInterval = new Interval(3000)
         this.dumpTrashInterval = new Interval(20000)
         this.lookAtPlayerTimeout = new Interval(5000)
@@ -2189,6 +2196,27 @@ module.exports = class BruhBot {
             }
         }
 
+        if (this.breedAnimalsInterval?.done()) {
+            this.tasks.push(this, {
+                task: this.env.scanFencings,
+                id: `scan-fencings`,
+                humanReadableId: `Scanning fencings`,
+            }, {}, priorities.unnecessary)
+                ?.wait()
+                .then(fencings => {
+                    for (const fencing of fencings) {
+                        try {
+                            this.tasks.push(this, tasks.breed, {
+                                animals: Object.values(fencing.mobs),
+                            })
+                        } catch (error) {
+                            console.error(error)
+                        }
+                    }
+                })
+                .catch(() => { })
+        }
+
         if (this.dumpTrashInterval?.done()) {
             const trashItems = this.getTrashItems()
             if (trashItems.length > 0) {
@@ -2536,7 +2564,7 @@ module.exports = class BruhBot {
      * @param {string} [player]
      * @param {number} [timeout]
      * @param {(message: string, sender: string) => boolean} [matcher]
-     * @returns {Generator<void, { message: string; sender: string; }, void>}
+     * @returns {import('./task').Task<{ message: string; sender: string; }>}
      */
     *ask(message, send, player, timeout, matcher) {
         while (this.chatAwaits.length > 1) { yield }
@@ -2576,7 +2604,7 @@ module.exports = class BruhBot {
      * @param {(message: string) => void} send
      * @param {string} [player]
      * @param {number} [timeout]
-     * @returns {Generator<void, { message: true | false | null; sender: string; }, void>}
+     * @returns {import('./task').Task<{ message: true | false | null; sender: string; }>}
      */
     *askYesNo(message, send, player, timeout) {
         const yes = [
@@ -2650,7 +2678,8 @@ module.exports = class BruhBot {
      */
     getTrashItems() {
         // TODO: dump from offhands and armor slots
-        let result = toArray(this.inventoryItems(this.bot.inventory))
+        let result = this.inventoryItems(this.bot.inventory)
+            .toArray()
             .map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
         result = filterOutEquipment(result, this.mc.registry)
         result = filterOutItems(result, this.lockedItems
@@ -2682,39 +2711,19 @@ module.exports = class BruhBot {
      * @returns {Item | null}
      */
     searchInventoryItem(window, ...items) {
-        const gen = this.searchInventoryItems(window, v => {
+        return this.inventoryItems(window).filter(v => {
             for (const searchFor of items) {
                 if (v.name === searchFor) { return true }
             }
             return false
-        })
-        const result = gen.next()
-        if (typeof result.value === 'undefined') { return null }
-        return result.value
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window | null} window
-     * @param {ReadonlyArray<string>} items
-     * @returns {Item | null}
-     */
-    searchContainerItem(window, ...items) {
-        const gen = this.searchContainerItems(window, v => {
-            for (const searchFor of items) {
-                if (v.name === searchFor) { return true }
-            }
-            return false
-        })
-        const result = gen.next()
-        if (typeof result.value === 'undefined') { return null }
-        return result.value
+        }).first() ?? null
     }
 
     /**
      * @param {import('prismarine-windows').Window} [window]
-     * @returns {Generator<Item, void, void>}
+     * @returns {CoolIterable<Item>}
      */
-    *inventoryItems(window) {
+    inventoryItems(window) {
         const hasWindow = !!window
         window ??= this.bot.inventory
 
@@ -2727,29 +2736,33 @@ module.exports = class BruhBot {
             this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
-        for (let i = window.inventoryStart; i < window.inventoryEnd; ++i) {
-            const item = window.slots[i]
-            if (!item) { continue }
-            yield item
-        }
+        return new CoolIterable(function*() {
+            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
+                const item = window.slots[i]
+                if (!item) { continue }
+                yield item
+            }
 
-        for (const specialSlotId of specialSlotIds) {
-            const item = window.slots[specialSlotId]
-            if (!item) { continue }
-            yield item
-        }
+            for (const specialSlotId of specialSlotIds) {
+                const item = window.slots[specialSlotId]
+                if (!item) { continue }
+                yield item
+            }
+        })
     }
 
     /**
      * @param {import('prismarine-windows').Window} window
-     * @returns {Generator<Item, void, void>}
+     * @returns {CoolIterable<Item>}
      */
-    *containerItems(window) {
-        for (let i = 0; i < window.inventoryStart; ++i) {
-            const item = window.slots[i]
-            if (!item) { continue }
-            yield item
-        }
+    containerItems(window) {
+        return new CoolIterable(function*() {
+            for (let i = 0; i < window.inventoryStart; ++i) {
+                const item = window.slots[i]
+                if (!item) { continue }
+                yield item
+            }
+        })
     }
 
     /**
@@ -2810,30 +2823,6 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {import('prismarine-windows').Window | null} window
-     * @param {(item: Item) => boolean} match
-     * @returns {Generator<Item, void, void>}
-     */
-    *searchInventoryItems(window, match) {
-        for (const item of this.inventoryItems(window)) {
-            if (!match(item)) { continue }
-            yield item
-        }
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     * @param {(item: Item) => boolean} match
-     * @returns {Generator<Item, void, void>}
-     */
-    *searchContainerItems(window, match) {
-        for (const item of this.containerItems(window)) {
-            if (!match(item)) { continue }
-            yield item
-        }
-    }
-
-    /**
      * @param {import('prismarine-windows').Window} window
      * @param {Readonly<{ name: string; nbt?: NBT; }>} item
      * @returns {number}
@@ -2841,7 +2830,7 @@ module.exports = class BruhBot {
     inventoryItemCount(window, item) {
         let count = 0
 
-        for (const matchedItem of this.searchInventoryItems(window, v => isItemEquals(v, item))) {
+        for (const matchedItem of this.inventoryItems(window).filter(v => isItemEquals(v, item))) {
             count += matchedItem.count
         }
 
@@ -2856,7 +2845,7 @@ module.exports = class BruhBot {
     containerItemCount(window, item) {
         let count = 0
 
-        for (const matchedItem of this.searchContainerItems(window, v => isItemEquals(v, item))) {
+        for (const matchedItem of this.containerItems(window).filter(v => isItemEquals(v, item))) {
             count += matchedItem.count
         }
 

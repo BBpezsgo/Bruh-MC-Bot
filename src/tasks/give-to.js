@@ -1,4 +1,3 @@
-const { toArray } = require('../utils/other')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
@@ -7,7 +6,7 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (toArray(bot.inventoryItems()).length === 0) {
+        if (bot.inventoryItems().isEmpty()) {
             throw `I don't have anything`
         }
 
