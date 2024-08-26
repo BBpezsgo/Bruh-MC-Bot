@@ -8,6 +8,7 @@ const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
 const { entityDistance, entityDistanceSquared } = require('../utils/math')
+const Debug = require('../debug')
 
 /**
  * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
@@ -603,13 +604,14 @@ module.exports = {
             if (bot.bot.pathfinder.goal?.['name'] === 'attack_goal') {
                 return
             }
-            console.log(`[Bot "${bot.username}"] Set attacking movement`)
+            // console.log(`[Bot "${bot.username}"] Set attacking movement`)
             goto.setOptions(bot, {
                 timeout: 100,
                 searchRadius: 5,
                 sprint: true,
                 movements: bot.restrictedMovements,
                 lookAtTarget: false,
+                retryCount: 0,
             })
             bot.bot.pathfinder.setGoal(goal, true)
         }
@@ -637,6 +639,22 @@ module.exports = {
             }
         }
 
+        const timeUntilCriticalHit = () => {
+            return 600
+            const blockBelow = bot.bot.world.getBlock(bot.bot.entity.position.floored().offset(0, -0.5, 0))
+            const initialVelocity =
+                bot.bot.entity.onGround
+                    ? Math.fround(0.42) * ((blockBelow && blockBelow.name === 'honey_block') ? bot.bot.physics.honeyblockJumpSpeed : 1)
+                    : bot.bot.entity.velocity.y
+            // if (bot.bot.entity.jumpBoost > 0) {
+            //     initialVelocity += 0.1 * bot.bot.entity.jumpBoost
+            // }
+            const targetVelocity = 0
+            const acceleration = -bot.bot.physics.gravity
+            const t = (targetVelocity - initialVelocity) / acceleration
+            return t * 1000
+        }
+
         try {
             while (true) {
                 yield
@@ -653,9 +671,11 @@ module.exports = {
                     if (!isAlive(target)) { break }
                     targetScore = calculateScore(target)
 
-                    const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
-                    label.lockOn(target.id)
-                    label.text = { text: `${targetScore.toFixed(2)}` }
+                    if (Debug.enabled) {
+                        const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
+                        label.lockOn(target.id)
+                        label.text = { text: `${targetScore.toFixed(2)}` }
+                    }
 
                     if (bot.env.entityHurtTimes[target.id] &&
                         (performance.now() - bot.env.entityHurtTimes[target.id]) < hurtTime) {
@@ -678,9 +698,11 @@ module.exports = {
 
                         const candidateScore = calculateScore(candidate)
 
-                        const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
-                        label.lockOn(candidate.id)
-                        label.text = { text: `${candidateScore.toFixed(2)}` }
+                        if (Debug.enabled) {
+                            const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
+                            label.lockOn(candidate.id)
+                            label.text = { text: `${candidateScore.toFixed(2)}` }
+                        }
 
                         if (!target || candidateScore > targetScore) {
                             targetScore = candidateScore
@@ -693,7 +715,7 @@ module.exports = {
 
                 ensureMovement()
 
-                console.log(goal.isEnd(bot.bot.entity.position))
+                // console.log(goal.isEnd(bot.bot.entity.position))
 
                 // yield* goto.task(bot, {
                 //     goal: new goals.GoalCompositeAll(('target' in args ? [args.target] : Object.values(args.targets)).filter(v => v && v.isValid).map(v => {
@@ -715,19 +737,22 @@ module.exports = {
                     cooldown = hurtTime
                 }
 
-                TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
+                if (Debug.enabled) {
+                    TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
+                }
 
                 const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
-                        console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                        // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         const res = yield* goto.task(bot, {
                             entity: target,
                             distance: 4,
                             timeout: 500,
+                            retryCount: 0,
                         })
-                        console.log(res)
+                        // console.log(res)
                         reequipMeleeWeapon = true
                         continue
                     }
@@ -744,22 +769,30 @@ module.exports = {
                         if (!bot.holds('shield', true)) {
                             yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
                         }
-                        yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
+                        bot.bot.lookAt(target.position.offset(0, target.height, 0), true)
+                        // yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
                     }
 
                     const now = performance.now()
-                    if (now - lastPunch > cooldown) {
-                        if (deactivateShield(shield)) {
-                            yield
-                        }
 
+                    const timeUntilPunch = (cooldown - (now - lastPunch))
+                    // console.log(timeUntilPunch.toFixed(1))
+
+                    if (timeUntilPunch <= 0 && (
+                        bot.bot.entity.onGround ||
+                        bot.bot.entity.isInWater ||
+                        bot.bot.entity.velocity.y <= -0.2
+                    )) {
                         bot.bot.attack(target)
+                        // @ts-ignore
+                        bot._isLeftHandActive = false
                         lastPunch = now
                         bot.env.entityHurtTimes[target.id] = performance.now()
-
-                        yield
-
+                        
                         activateShield(shield)
+                    } else {
+                        bot.bot.setControlState('jump', true)
+                        bot.bot.setControlState('jump', false)
                     }
 
                     continue
@@ -780,13 +813,14 @@ module.exports = {
 
                         let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
-                            console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                            // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                             const res = yield* goto.task(bot, {
                                 entity: target,
                                 distance: distance - 2,
                                 timeout: 1000,
+                                retryCount: 0,
                             })
-                            console.log(res)
+                            // console.log(res)
                             reequipMeleeWeapon = true
                             continue
                         }
@@ -876,13 +910,14 @@ module.exports = {
                 // }
 
                 if (target && target.isValid) {
-                    console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
+                    // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                     const res = yield* goto.task(bot, {
                         entity: target,
                         distance: 4,
                         timeout: 500,
+                        retryCount: 0,
                     })
-                    console.log(res)
+                    // console.log(res)
                     reequipMeleeWeapon = true
                     continue
                 }

@@ -33,7 +33,7 @@ module.exports = {
 
         while (true) {
             yield
-            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 80, 20)
+            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 80, 20).map(v => v.position).toArray()
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
             cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)

@@ -24,7 +24,7 @@ module.exports = {
 
             const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
-            let crops = bot.env.getCrops(bot, farmPosition, false)
+            let crops = bot.env.getCrops(bot, farmPosition, false).map(v => v.position).toArray()
 
             if (crops.length === 0) { break }
 

@@ -159,7 +159,7 @@ module.exports = class TextDisplay {
 
         TextDisplay._registry[this._nonce] = this
 
-        this._commands.sendAsync(`/summon minecraft:text_display ~ ~2 ~ {billboard:"center",Tags:["debug","${this._nonce}"],text:'{"text":"NICKNAME"}'}`).catch(() => { })
+        this._commands.sendAsync(`/summon minecraft:text_display ~ ~2 ~ {billboard:"center",Tags:["debug","${this._nonce}"],text:'{"text":""}'}`).catch(() => { })
         this._selector = `@e[type=minecraft:text_display,limit=1,nbt={Tags:["debug","${this._nonce}"]}]`
     }
 

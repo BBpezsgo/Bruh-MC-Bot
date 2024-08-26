@@ -84,4 +84,22 @@ module.exports = class CoolIterable {
             }
         })
     }
+
+    /**
+     * @template U
+     * @param {(value: T, index: number) => U} callbackfn
+     * @returns {CoolIterable<U>}
+     */
+    map(callbackfn) {
+        const gen = this.generator()
+        return new CoolIterable(function*() {
+            let i = 0
+    
+            while (true) {
+                const v = gen.next()
+                if (v.done === true) { break }
+                yield callbackfn(v.value, i++)
+            }
+        })
+    }
 }

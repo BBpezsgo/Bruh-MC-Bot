@@ -1,5 +1,5 @@
 const { goals, Movements } = require('mineflayer-pathfinder')
-const { wrap } = require('../utils/tasks')
+const { wrap, sleepG } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
@@ -146,7 +146,7 @@ class GoalEntity extends goals.Goal {
      * @param {Vec3} node
      */
     isEnd(node) {
-        const d = entityDistanceSquared(node, this.entity)
+        const d = entityDistanceSquared(node.offset(0, 1.6, 0), this.entity)
         if (this.isFlee) {
             return d > this.rangeSq
         } else {
@@ -180,6 +180,7 @@ class GoalEntity extends goals.Goal {
  *   sprint?: boolean;
  *   excludeStep?: ReadonlyArray<Vec3>;
  *   lookAtTarget?: boolean;
+ *   retryCount?: number;
  * }} GeneralArgs
  */
 
@@ -639,39 +640,51 @@ module.exports = {
             } else if ('goal' in args) {
                 if (args.goal.isEnd(bot.bot.entity.position)) { return 'here' }
 
-                if (args.goal instanceof goals.GoalNear) {
-                    const distanceSq = bot.bot.entity.position.distanceSquared(new Vec3(args.goal.x, args.goal.y, args.goal.z))
-                    if (distanceSq <= args.goal.rangeSq) {
-                        return 'here'
-                    }
-                }
-
                 if (bot.memory.isGoalUnreachable(args.goal)) { throw `If I remember correctly I can't get there` }
 
-                setOptions(bot, args.options)
+                const retryCount = (('retryCount' in args.options) ? args.options.retryCount : 3) + 1
 
-                if (args.options.savePathError) {
-                    args.cancel = function*() { bot.bot.pathfinder.stop() }
-                    try {
-                        yield* wrap(bot.bot.pathfinder.goto(args.goal))
-                    } catch (error) {
-                        if (error.name === 'NoPath') {
-                            bot.memory.theGoalIsUnreachable(args.goal)
+                for (let i = 0; i < retryCount; i++) {
+                    setOptions(bot, args.options)
+    
+                    if (args.options.savePathError) {
+                        args.cancel = function*() { bot.bot.pathfinder.stop() }
+                        try {
+                            yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                        } catch (error) {
+                            if (error.name === 'NoPath') {
+                                bot.memory.theGoalIsUnreachable(args.goal)
+                            }
+                            throw error
+                        } finally {
+                            args.cancel = undefined
                         }
-                        throw error
-                    } finally {
-                        args.cancel = undefined
+                    } else {
+                        args.cancel = function*() { bot.bot.pathfinder.stop() }
+                        try {
+                            yield* wrap(bot.bot.pathfinder.goto(args.goal))
+                        } finally {
+                            args.cancel = undefined
+                        }
                     }
-                } else {
-                    args.cancel = function*() { bot.bot.pathfinder.stop() }
-                    try {
-                        yield* wrap(bot.bot.pathfinder.goto(args.goal))
-                    } finally {
-                        args.cancel = undefined
+    
+                    if (args.goal.isEnd(bot.bot.entity.position)) {
+                        return 'ok'
+                    }
+
+                    if (i === retryCount - 1) {
+                        console.warn(`[Bot "${bot.username}"] Goal not reached`)
+                        bot.bot.pathfinder.stop()
+                        return 'failed'
+                    } else {
+                        bot.bot.pathfinder.stop()
+                        console.warn(`[Bot "${bot.username}"] Goal not reached, retrying ...`)
+                        yield* sleepG(500)
                     }
                 }
 
-                return 'ok'
+                bot.bot.pathfinder.stop()
+                throw `bruh`
             } else {
                 let result
                 for (const _goal of getGoal(bot, args)) {

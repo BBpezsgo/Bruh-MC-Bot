@@ -879,7 +879,7 @@ module.exports = class Minecraft {
 
     /**
      * @readonly
-     * @type {ReadonlyArray<number>}
+     * @type {ReadonlySet<number>}
      */
     cropBlockIds
 
@@ -1396,23 +1396,23 @@ module.exports = class Minecraft {
         this.registry = getMcData(version)
         this.local = new LocalMinecraftData(jarPath)
 
-        /** @type {Array<number>} */
-        const cropBlockIds = []
+        /** @type {Set<number>} */
+        const cropBlockIds = new Set()
         for (const cropName in Minecraft.cropsByBlockName) {
             const crop = Minecraft.cropsByBlockName[cropName]
             switch (crop.type) {
                 case 'tree':
-                    cropBlockIds.push(this.registry.blocksByName[crop.log].id)
-                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
+                    cropBlockIds.add(this.registry.blocksByName[crop.log].id)
+                    cropBlockIds.add(this.registry.blocksByName[cropName].id)
                     break
                 case 'grows_block':
-                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
+                    cropBlockIds.add(this.registry.blocksByName[cropName].id)
                     if (crop.attachedCropName) {
-                        cropBlockIds.push(this.registry.blocksByName[crop.attachedCropName].id)
+                        cropBlockIds.add(this.registry.blocksByName[crop.attachedCropName].id)
                     }
                     break
                 default:
-                    cropBlockIds.push(this.registry.blocksByName[cropName].id)
+                    cropBlockIds.add(this.registry.blocksByName[cropName].id)
                     break
             }
         }

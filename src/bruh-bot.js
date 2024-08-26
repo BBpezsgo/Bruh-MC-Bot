@@ -1083,6 +1083,56 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
+            match: 'scan crops',
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, {
+                    task: function*(bot) {
+                        for (let i = bot.env.crops.length - 1; i >= 0; i--) {
+                            yield
+                            const savedCrop = bot.env.crops[i]
+                            if (savedCrop.position.dimension !== bot.dimension) { continue }
+                            const block = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
+                            if (!block) { continue }
+                            if (savedCrop.block !== block.name) {
+                                bot.env.crops.splice(i, 1)
+                            }
+                        }
+                        const cropNames = new Set(
+                            Object.keys(Minecraft.cropsByBlockName)
+                            .map(v => bot.mc.registry.blocksByName[v].id)
+                        )
+                        const blocks = bot.findBlocks({
+                            matching: cropNames,
+                            count: Infinity,
+                            maxDistance: 64,
+                        })
+                        let n = 0
+                        for (const block of blocks) {
+                            yield
+                            if (!block) { continue }
+                            bot.env.crops.push({
+                                block: block.name,
+                                position: new Vec3Dimension(block.position, bot.dimension),
+                            })
+                            n++
+                        }
+                        return n
+                    },
+                    id: `scan-crops`,
+                    humanReadableId: `Scanning crops`,
+                }, {}, priorities.user, true)
+                if (task) {
+                    respond(`Okay`)
+                    task.wait()
+                        .then(result => respond(`I scanned ${result} crops`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already scanning crops`)
+                }
+            }
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
             match: 'fish',
             command: (sender, message, respond) => {
                 const task = this.tasks.push(this, tasks.fish, {
@@ -1259,6 +1309,7 @@ module.exports = class BruhBot {
                 const task = this.tasks.push(this, {
                     /** @type {import('./task').SimpleTaskDef<'ok' | 'here', { player: string; }>} */
                     task: function*(bot, args) {
+                        const playerEntity = bot.bot.players[args.player]?.entity
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
                             try {
@@ -1277,37 +1328,50 @@ module.exports = class BruhBot {
                         // const startedAt = performance.now()
                         // let accumulatedTime = 0
 
-                        return yield* tasks.goto.task(bot, {
-                            point: location,
-                            distance: 1,
-                            timeout: 30000,
-                            // onPathUpdated: (path) => {
-                            //     const delta = performance.now() - startedAt
-                            //     const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
-                            //     accumulatedTime += time
-                            //     respond(`I'm here in ${Math.round((accumulatedTime - delta) / 100) / 10} seconds`)
-                            // },
-                            onPathReset: (reason) => {
-                                switch (reason) {
-                                    case 'dig_error': {
-                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Dig error`)
-                                        break
-                                    }
-                                    case 'no_scaffolding_blocks': {
-                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] No scaffolding blocks`)
-                                        break
-                                    }
-                                    case 'place_error': {
-                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Place error`)
-                                        break
-                                    }
-                                    case 'stuck': {
-                                        console.warn(`[Bot "${bot.username}"] [Pathfinder] Stuck`)
-                                        break
-                                    }
+                        while (true) {
+                            try {
+                                return yield* tasks.goto.task(bot, {
+                                    ...(playerEntity ? {
+                                        entity: playerEntity
+                                    } : {
+                                        point: location,
+                                    }),
+                                    distance: 1,
+                                    timeout: 30000,
+                                    // onPathUpdated: (path) => {
+                                    //     const delta = performance.now() - startedAt
+                                    //     const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
+                                    //     accumulatedTime += time
+                                    //     respond(`I'm here in ${Math.round((accumulatedTime - delta) / 100) / 10} seconds`)
+                                    // },
+                                    onPathReset: (reason) => {
+                                        switch (reason) {
+                                            case 'dig_error': {
+                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Dig error`)
+                                                break
+                                            }
+                                            case 'no_scaffolding_blocks': {
+                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] No scaffolding blocks`)
+                                                break
+                                            }
+                                            case 'place_error': {
+                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Place error`)
+                                                break
+                                            }
+                                            case 'stuck': {
+                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Stuck`)
+                                                break
+                                            }
+                                        }
+                                    },
+                                })
+                            } catch (error) {
+                                if (error === 'bruh') {
+                                    yield* taskUtils.sleepG(2000)
+                                    continue
                                 }
-                            },
-                        })
+                            }
+                        }
                     },
                     id: function(args) {
                         return `goto-${args.player}`
@@ -1962,6 +2026,7 @@ module.exports = class BruhBot {
         }
 
         if (!this.bot.pathfinder.path?.length && this.bot.oxygenLevel < 18) {
+            /*
             if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
                 this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
                 this.tasks.push(this, {
@@ -1975,9 +2040,12 @@ module.exports = class BruhBot {
                                     return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
                                 },
                                 isEnd: (node) => {
+                                    const blockGround = bot.bot.blockAt(node.offset(0, -1, 0))
                                     const blockFoot = bot.bot.blockAt(node)
                                     const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
-                                    if (blockFoot.name !== 'water' && blockHead.name !== 'water') {
+                                    if (blockFoot.name !== 'water' &&
+                                        blockHead.name !== 'water' &&
+                                        blockGround.name !== 'air') {
                                         return true
                                     }
                                     return false
@@ -1995,6 +2063,7 @@ module.exports = class BruhBot {
                     humanReadableId: `Getting out of water`,
                 }, {}, priorities.surviving + 1)
             }
+            */
 
             if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
                 this.bot.setControlState('jump', true)
@@ -2182,18 +2251,29 @@ module.exports = class BruhBot {
         }
 
         if (this.tryRestoreCropsInterval?.done()) {
-            /** @type {Array<import('./environment').SavedCrop>} */
-            const crops = []
-            for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-                const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
-                if (!blockAt) { continue }
-                if (blockAt.name === 'air') { crops.push(crop) }
-            }
-            if (crops.length > 0) {
-                this.tasks.push(this, tasks.plantSeed, {
-                    harvestedCrops: crops,
-                }, priorities.unnecessary)
-            }
+            this.tasks.push(this, {
+                task: function*(bot, args) {
+                    /** @type {Array<import('./environment').SavedCrop>} */
+                    const crops = []
+                    for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+                        yield
+                        const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
+                        if (!blockAt) { continue }
+                        if (blockAt.name === 'air') { crops.push(crop) }
+                    }
+                    return crops
+                },
+                id: `check-crops`,
+                humanReadableId: `Checking crops`,
+            }, priorities.unnecessary)
+                ?.wait()
+                .then(crops => {
+                    if (crops.length === 0) { return }
+                    this.tasks.push(this, tasks.plantSeed, {
+                        harvestedCrops: crops,
+                    }, priorities.unnecessary)
+                })
+                .catch(() => { })
         }
 
         if (this.breedAnimalsInterval?.done()) {
@@ -3371,4 +3451,93 @@ module.exports = class BruhBot {
     }
 
     //#endregion
+
+    /**
+     * @param {{
+     *   matching: ReadonlySetLike<number>;
+     *   filter?: (block: import('prismarine-block').Block) => boolean;
+     *   point?: Vec3
+     *   maxDistance?: number
+     *   count?: number
+     * }} options
+     * @returns {CoolIterable<import('prismarine-block').Block>}
+     */
+    findBlocks(options) {
+        const Block = require('prismarine-block')(this.bot.registry)
+
+        /**
+         * @param {import('prismarine-chunk').PCChunk['sections'][0]} section
+         */
+        const isBlockInSection = (section) => {
+            if (!section) return false // section is empty, skip it (yay!)
+            // If the chunk use a palette we can speed up the search by first
+            // checking the palette which usually contains less than 20 ids
+            // vs checking the 4096 block of the section. If we don't have a
+            // match in the palette, we can skip this section.
+            if (section.palette) {
+                for (const stateId of section.palette) {
+                    if (options.matching.has(Block.fromStateId(stateId, 0).type)) {
+                        return true // the block is in the palette
+                    }
+                }
+                return false // skip
+            }
+            return true // global palette, the block might be in there
+        }
+
+        const bot = this.bot
+
+        return new CoolIterable(function*() {
+            const point = (options.point || bot.entity.position).floored()
+            const maxDistance = options.maxDistance || 16
+            const count = options.count || 1
+            const start = new Vec3(Math.floor(point.x / 16), Math.floor(point.y / 16), Math.floor(point.z / 16))
+            const it = new (require('prismarine-world').iterators.OctahedronIterator)(start, Math.ceil((maxDistance + 8) / 16))
+            // the octahedron iterator can sometime go through the same section again
+            // we use a set to keep track of visited sections
+            const visitedSections = new Set()
+
+            let n = 0
+            let startedLayer = 0
+            let next = start
+            while (next) {
+                yield
+                const column = bot.world.getColumn(next.x, next.z)
+                // @ts-ignore
+                const sectionY = next.y + Math.abs(bot.game.minY >> 4)
+                // @ts-ignore
+                const totalSections = bot.game.height >> 4
+                if (sectionY >= 0 && sectionY < totalSections && column && !visitedSections.has(next.toString())) {
+                    /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */ //@ts-ignore
+                    const section = column.sections[sectionY]
+                    if (isBlockInSection(section)) {
+                        // @ts-ignore
+                        const begin = new Vec3(next.x * 16, sectionY * 16 + bot.game.minY, next.z * 16)
+                        const cursor = begin.clone()
+                        const end = cursor.offset(16, 16, 16)
+                        for (cursor.x = begin.x; cursor.x < end.x; cursor.x++) {
+                            for (cursor.y = begin.y; cursor.y < end.y; cursor.y++) {
+                                for (cursor.z = begin.z; cursor.z < end.z; cursor.z++) {
+                                    const block = bot.blockAt(cursor)
+                                    if (options.matching.has(block.type) && (!options.filter || options.filter(block)) && cursor.distanceTo(point) <= maxDistance) {
+                                        yield block
+                                        n++
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    visitedSections.add(next.toString())
+                }
+                // If we started a layer, we have to finish it otherwise we might miss closer blocks
+                // @ts-ignore
+                if (startedLayer !== it.apothem && n >= count) {
+                    break
+                }
+                // @ts-ignore
+                startedLayer = it.apothem
+                next = it.next()
+            }
+        })
+    }
 }

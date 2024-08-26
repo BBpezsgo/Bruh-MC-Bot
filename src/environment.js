@@ -12,6 +12,7 @@ const { Chest } = require('mineflayer')
 const { goals } = require('mineflayer-pathfinder')
 const Vec3Dimension = require('./vec3-dimension')
 const { EntityPose } = require('./entity-metadata')
+const CoolIterable = require('./cool-iterable')
 
 /**
  * @typedef {{
@@ -798,7 +799,7 @@ module.exports = class Environment {
         let isGrown = false
         const cropInfo = Minecraft.resolveCrop(block.name)
         if (!cropInfo) {
-            console.warn(`[Bot "${bot}"] This "${block.name}" aint a crop`)
+            // console.warn(`[Bot "${bot.username}"] This "${block.name}" aint a crop`)
             return false
         }
 
@@ -913,7 +914,7 @@ module.exports = class Environment {
      * @param {boolean} grown
      * @param {number} [count]
      * @param {number} [maxDistance]
-     * @returns {Array<Vec3>}
+     * @returns {CoolIterable<Block>}
      */
     getCrops(bot, farmPosition, grown, count = 1, maxDistance = undefined) {
         /**
@@ -921,13 +922,21 @@ module.exports = class Environment {
          */
         const mushrooms = []
 
-        return bot.bot.findBlocks({
+        return bot.findBlocks({
             matching: bot.mc.cropBlockIds,
-            useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
+            filter: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
             count: count,
             maxDistance: maxDistance,
-        })
+        }).filter(v => !!v)
+
+        // return bot.bot.findBlocks({
+        //     matching: bot.mc.cropBlockIds,
+        //     useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
+        //     point: farmPosition,
+        //     count: count,
+        //     maxDistance: maxDistance,
+        // })
     }
 
     /**
@@ -943,13 +952,13 @@ module.exports = class Environment {
          */
         const mushrooms = []
 
-        return bot.bot.findBlock({
+        return bot.findBlocks({
             matching: bot.mc.cropBlockIds,
-            useExtraInfo: block => this.cropFilter(bot, grown, block, mushrooms),
+            filter: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
             count: 1,
             maxDistance: maxDistance,
-        })
+        }).filter(v => !!v).first() ?? null
     }
 
     /**

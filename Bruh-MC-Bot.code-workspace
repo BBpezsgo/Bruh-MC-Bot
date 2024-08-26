@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "../mineflayer"
+		},
+		{
+			"path": "../prismarine-physics"
 		}
 	],
 	"settings": {
