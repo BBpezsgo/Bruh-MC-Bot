@@ -1099,7 +1099,7 @@ module.exports = class BruhBot {
                         }
                         const cropNames = new Set(
                             Object.keys(Minecraft.cropsByBlockName)
-                            .map(v => bot.mc.registry.blocksByName[v].id)
+                                .map(v => bot.mc.registry.blocksByName[v].id)
                         )
                         const blocks = bot.findBlocks({
                             matching: cropNames,
@@ -1307,7 +1307,6 @@ module.exports = class BruhBot {
             match: 'come',
             command: (sender, message, respond) => {
                 const task = this.tasks.push(this, {
-                    /** @type {import('./task').SimpleTaskDef<'ok' | 'here', { player: string; }>} */
                     task: function*(bot, args) {
                         const playerEntity = bot.bot.players[args.player]?.entity
                         let location = bot.env.getPlayerPosition(args.player, 10000)
@@ -1385,7 +1384,21 @@ module.exports = class BruhBot {
                 if (task) {
                     respond(`Okay`)
                     task.wait()
-                        .then(result => (result === 'ok') ? respond(`I'm here`) : respond(`I'm already here`))
+                        .then(result => {
+                            switch (result) {
+                                case 'ok':
+                                    respond(`I'm here`)
+                                    break
+                                case 'here':
+                                    respond(`I'm already here`)
+                                    break
+                                case 'failed':
+                                    respond(`I can't get there`)
+                                    break
+                                default:
+                                    break
+                            }
+                        })
                         .catch(error => error === 'cancelled' || respond(error))
                 } else {
                     respond(`I'm already coming to you`)
@@ -1685,13 +1698,21 @@ module.exports = class BruhBot {
                 const a = [0.26, 0.72, 1]
                 const b = [0.04, 1, 0.51]
                 this.debug.drawLines([
-                    this.bot.entity.position,
+                    // new (require('mineflayer-pathfinder/lib/move').Move)(this.bot.entity.position.x, this.bot.entity.position.y, this.bot.entity.position.z, 0, 0),
                     ...this._currentPath.path,
-                ], t => [
-                    mathUtils.lerp(a[0], b[0], t),
-                    mathUtils.lerp(a[1], b[1], t),
-                    mathUtils.lerp(a[2], b[2], t),
-                ])
+                ], (t, _a, _b) => {
+                    const cost = mathUtils.lerp(_a.cost, _b.cost, t) / 50
+                    return [
+                        mathUtils.lerp(0, 1, cost),
+                        mathUtils.lerp(1, 0, cost),
+                        mathUtils.lerp(0, 0, cost),
+                    ]
+                    return [
+                        mathUtils.lerp(a[0], b[0], cost),
+                        mathUtils.lerp(a[1], b[1], cost),
+                        mathUtils.lerp(a[2], b[2], cost),
+                    ]
+                })
             }
             this.debug.tick()
         }

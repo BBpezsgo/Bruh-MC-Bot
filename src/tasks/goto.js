@@ -338,6 +338,7 @@ function setOptions(bot, args) {
     } else {
         bot.bot.pathfinder.searchRadius = -1
     }
+    bot.bot.pathfinder.enablePathShortcut = false
 
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
@@ -456,7 +457,7 @@ function getTime(movements, path) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'here',
+ * @type {import('../task').TaskDef<'ok' | 'here' | 'failed',
  * (
  *   (
  *     (

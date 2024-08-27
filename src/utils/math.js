@@ -24,7 +24,7 @@ function nonce(length = 8) {
  * @param {number} t
  */
 function lerp(a, b, t) {
-    return a + ((b - a) * t)
+    return a + ((b - a) * Math.max(0, Math.min(1, t)))
 }
 
 /**
