@@ -123,9 +123,9 @@ class GoalEntity extends goals.Goal {
     constructor(entity, range) {
         super()
         this.entity = entity
-        this.x = Math.floor(entity.position.x)
-        this.y = Math.floor(entity.position.y)
-        this.z = Math.floor(entity.position.z)
+        this.x = entity.position.x
+        this.y = entity.position.y
+        this.z = entity.position.z
         this.rangeSq = range * range
         this.isFlee = range < 0
     }
@@ -331,15 +331,15 @@ function setOptions(bot, args) {
     if (args.timeout !== null && args.timeout !== undefined) {
         bot.bot.pathfinder.thinkTimeout = args.timeout
     } else {
-        bot.bot.pathfinder.thinkTimeout = 5000
+        bot.bot.pathfinder.thinkTimeout = Infinity
     }
     if (args.searchRadius !== null && args.searchRadius !== undefined) {
         bot.bot.pathfinder.searchRadius = args.searchRadius
     } else {
-        bot.bot.pathfinder.searchRadius = -1
+        bot.bot.pathfinder.searchRadius = Infinity
     }
+    bot.bot.pathfinder.tickTimeout = 20
     bot.bot.pathfinder.enablePathShortcut = false
-
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
     const originalMovements = args.movements ?? bot.restrictedMovements
@@ -412,7 +412,7 @@ function setOptions(bot, args) {
     newMovements.allowEntityDetection = originalMovements.allowEntityDetection
     newMovements.allowFreeMotion = originalMovements.allowFreeMotion
     newMovements.allowParkour = originalMovements.allowParkour
-    newMovements.allowSprinting = originalMovements.allowSprinting && !bot.quietMode && args.sprint
+    newMovements.allowSprinting = !bot.quietMode && (args.sprint ?? false)
     newMovements.canDig = originalMovements.canDig && !bot.quietMode
     newMovements.canOpenDoors = true && !bot.quietMode
     newMovements.dontCreateFlow = originalMovements.dontCreateFlow
@@ -647,7 +647,7 @@ module.exports = {
 
                 for (let i = 0; i < retryCount; i++) {
                     setOptions(bot, args.options)
-    
+
                     if (args.options.savePathError) {
                         args.cancel = function*() { bot.bot.pathfinder.stop() }
                         try {
@@ -668,18 +668,19 @@ module.exports = {
                             args.cancel = undefined
                         }
                     }
-    
+
                     if (args.goal.isEnd(bot.bot.entity.position)) {
                         return 'ok'
                     }
 
                     if (i === retryCount - 1) {
-                        console.warn(`[Bot "${bot.username}"] Goal not reached`)
+                        // console.warn(`[Bot "${bot.username}"] Goal not reached`)
                         bot.bot.pathfinder.stop()
-                        return 'failed'
+                        throw `I can't get there`
+                        // return 'failed'
                     } else {
                         bot.bot.pathfinder.stop()
-                        console.warn(`[Bot "${bot.username}"] Goal not reached, retrying ...`)
+                        // console.warn(`[Bot "${bot.username}"] Goal not reached, retrying ...`)
                         yield* sleepG(500)
                     }
                 }

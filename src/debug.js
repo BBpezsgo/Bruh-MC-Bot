@@ -29,6 +29,8 @@ module.exports = class Debug {
      */
     constructor(bot) {
         this._bot = bot
+        // @ts-ignore
+        this._bot.bot.debug = this
         this._pointQueue = []
     }
 
@@ -82,9 +84,10 @@ module.exports = class Debug {
     }
 
     /**
-     * @param {Vec3} a
-     * @param {Vec3} b
-     * @param {Color | ((t: number) => Color)} color
+     * @template {{ x: number; y: number; z: number; }} TPoint
+     * @param {TPoint} a
+     * @param {TPoint} b
+     * @param {Color | ((t: number, from: TPoint, to: TPoint) => Color)} color
      * @param {Color | undefined} [endColor]
      * @param {number} [scale]
      */
@@ -95,18 +98,19 @@ module.exports = class Debug {
         offset.normalize()
         if (typeof color === 'function') {
             for (let i = 0; i <= length; i += lineMinDistance) {
-                this.drawPoint(a.offset(offset.x * i, offset.y * i, offset.z * i), color(length ? (i / length) : 1), endColor, scale)
+                this.drawPoint(new Vec3(a.x + offset.x * i, a.y + offset.y * i, a.z + offset.z * i), color(length ? (i / length) : 1, a, b), endColor, scale)
             }
         } else {
             for (let i = 0; i <= length; i += lineMinDistance) {
-                this.drawPoint(a.offset(offset.x * i, offset.y * i, offset.z * i), color, endColor, scale)
+                this.drawPoint(new Vec3(a.x + offset.x * i, a.y + offset.y * i, a.z + offset.z * i), color, endColor, scale)
             }
         }
     }
 
     /**
-     * @param {ReadonlyArray<Vec3>} points
-     * @param {Color | ((t: number) => Color)} color
+     * @template {{ x: number; y: number; z: number; }} TPoint
+     * @param {ReadonlyArray<TPoint>} points
+     * @param {Color | ((t: number, from: TPoint, to: TPoint) => Color)} color
      * @param {Color | undefined} [endColor]
      * @param {number} [scale]
      */
@@ -115,7 +119,11 @@ module.exports = class Debug {
         if (typeof color === 'function') {
             let l = 0
             for (let i = 1; i < points.length; i++) {
-                l += points[i - 1].distanceTo(points[i])
+                l += Math.sqrt(
+                    Math.pow(points[i - 1].x - points[i].x, 2) +
+                    Math.pow(points[i - 1].y - points[i].y, 2) +
+                    Math.pow(points[i - 1].z - points[i].z, 2)
+                )
             }
             let t = 0
             for (let i = 1; i < points.length; i++) {
@@ -126,7 +134,7 @@ module.exports = class Debug {
                 offset.normalize()
                 for (let i = 0; i <= length; i += lineMinDistance) {
                     const _t = (t + i) / l
-                    this.drawPoint(a.offset(offset.x * i, offset.y * i, offset.z * i), color(_t), endColor, scale)
+                    this.drawPoint(new Vec3(a.x + offset.x * i, a.y + offset.y * i, a.z + offset.z * i), color(_t, a, b), endColor, scale)
                 }
                 t += length
             }

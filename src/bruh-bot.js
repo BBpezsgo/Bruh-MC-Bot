@@ -514,7 +514,7 @@ module.exports = class BruhBot {
             if (this.onHeard) { this.onHeard(soundId) }
         })
 
-        this.bot._client.on("damage_event", (packet) => {
+        this.bot._client.on('damage_event', (packet) => {
             const entity = this.bot.entities[packet.entityId]
             if (!entity) { return }
             /** @type {number} */
@@ -577,9 +577,30 @@ module.exports = class BruhBot {
             }
         })
 
-        this.bot.on('path_update', path => this._currentPath = path)
-        this.bot.on('path_reset', () => this._currentPath = null)
-        this.bot.on('path_stop', () => this._currentPath = null)
+        this.bot.on('path_update', path => {
+            // console.log(`[Bot "${this.username}"] [Pathfinder] Update`)
+            this._currentPath = path
+        })
+        this.bot.on('path_reset', reason => {
+            switch (reason) {
+                case 'dig_error':
+                case 'place_error':
+                case 'stuck':
+                    console.error(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    break
+                case 'no_scaffolding_blocks':
+                    console.warn(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    break
+                default:
+                    // console.log(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    break
+            }
+            this._currentPath = null
+        })
+        this.bot.on('path_stop', () => {
+            // console.log(`[Bot "${this.username}"] [Pathfinder] Stop`)
+            this._currentPath = null
+        })
 
         this.bot.on('entityMoved', (entity) => {
             entity.time = performance.now()
@@ -855,6 +876,94 @@ module.exports = class BruhBot {
                     id: 'test',
                     humanReadableId: 'test',
                 }, {}, priorities.user, true)
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: ['breed'],
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, {
+                    task: BruhBot.breedAnimals,
+                    id: `breed-animals`,
+                }, {}, priorities.user)
+
+                if (task) {
+                    task.wait()
+                        .then(result => result ? respond(`I fed ${result} animals`) : respond(`No animals to feed`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already breeding animals`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: ['harvest'],
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, {
+                    task: BruhBot.tryHarvestCrops,
+                    id: `harvest-crops`,
+                }, {}, priorities.user)
+
+                if (task) {
+                    task.wait()
+                        .then(result => result ? respond(`Done`) : respond(`No crops found that I can harvest`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already harvesting crops`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: ['check crops'],
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, {
+                    task: BruhBot.tryRestoreCrops,
+                    id: `check-crops`,
+                }, {}, priorities.user)
+
+                if (task) {
+                    task.wait()
+                        .then(() => respond(`Done`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already checking crops`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: ['dump', 'dump trash'],
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, tasks.dumpToChest, {
+                    items: this.getTrashItems()
+                }, priorities.user)
+
+                if (task) {
+                    task.wait()
+                        .then(result => result ? respond(`Done`) : respond(`I don't have any trash`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already dumping trash`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: ['ensure equipment', 'prepare', 'prep'],
+            command: (sender, message, respond) => {
+                const task = this.tasks.push(this, {
+                    task: BruhBot.ensureEquipment,
+                    id: 'ensure-equipment',
+                }, {}, priorities.user)
+                if (task) {
+                    task.wait()
+                        .then(() => respond(`Done`))
+                        .catch(error => error === 'cancelled' || respond(error))
+                } else {
+                    respond(`I'm already ensuring equipment`)
+                }
             },
         }))
 
@@ -1295,7 +1404,7 @@ module.exports = class BruhBot {
                     for (let i = 0; i < this.tasks.tasks.length; i++) {
                         const task = this.tasks.tasks[i]
                         if (builder) { builder += ' ; ' }
-                        builder += `${task.humanReadableId} with priority ${task.priority}`
+                        builder += `${task.humanReadableId ?? task.id} with priority ${task.priority}`
                     }
                     respond(builder)
                 }
@@ -1335,8 +1444,9 @@ module.exports = class BruhBot {
                                     } : {
                                         point: location,
                                     }),
-                                    distance: 1,
+                                    distance: 2,
                                     timeout: 30000,
+                                    sprint: true,
                                     // onPathUpdated: (path) => {
                                     //     const delta = performance.now() - startedAt
                                     //     const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
@@ -1593,6 +1703,7 @@ module.exports = class BruhBot {
                         this.tasks.push(this, tasks.goto, {
                             entity: location,
                             distance: 3,
+                            sprint: true,
                         }, priorities.user)
                             ?.wait()
                             .then(result => result === 'here' ? respond(`I'm already at ${rawLocation}`) : respond(`I'm here`))
@@ -1602,6 +1713,7 @@ module.exports = class BruhBot {
                         this.tasks.push(this, tasks.goto, {
                             point: location,
                             distance: 3,
+                            sprint: true,
                         }, priorities.user)
                             ?.wait()
                             .then(result => result === 'here' ? respond(`I'm already here`) : respond(`I'm here`))
@@ -1694,7 +1806,7 @@ module.exports = class BruhBot {
      */
     tick() {
         if (Debug.enabled) {
-            if (this._currentPath) {
+            if (false && this._currentPath) {
                 const a = [0.26, 0.72, 1]
                 const b = [0.04, 1, 0.51]
                 this.debug.drawLines([
@@ -1979,6 +2091,7 @@ module.exports = class BruhBot {
                 }, {
                     point: water.position,
                     distance: 0,
+                    sprint: true,
                 }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
             }
         }
@@ -2252,149 +2365,41 @@ module.exports = class BruhBot {
 
         if (this.tryAutoHarvestInterval?.done()) {
             if (this.env.getCrop(this, this.bot.entity.position.clone(), true)) {
-                this.tasks.push(this, tasks.harvest, {}, priorities.unnecessary)
-                    ?.wait()
-                    .then(() => {
-                        let canCompost = true
-                        for (const crop of this.env.crops.filter(v => v.position.dimension === this.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-                            const blockAt = this.bot.blockAt(crop.position.xyz(this.dimension))
-                            if (!blockAt) { continue }
-                            if (blockAt.name !== 'air') { continue }
-                            canCompost = false
-                            break
-                        }
-                        if (canCompost) {
-                            this.tasks.push(this, tasks.compost, {}, priorities.unnecessary)
-                        }
-                    })
-                    .catch(() => { })
+                this.tasks.push(this, {
+                    task: BruhBot.tryHarvestCrops,
+                    id: `harvest-crops`,
+                }, {}, priorities.unnecessary)
             }
         }
 
         if (this.tryRestoreCropsInterval?.done()) {
             this.tasks.push(this, {
-                task: function*(bot, args) {
-                    /** @type {Array<import('./environment').SavedCrop>} */
-                    const crops = []
-                    for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-                        yield
-                        const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
-                        if (!blockAt) { continue }
-                        if (blockAt.name === 'air') { crops.push(crop) }
-                    }
-                    return crops
-                },
+                task: BruhBot.tryRestoreCrops,
                 id: `check-crops`,
                 humanReadableId: `Checking crops`,
             }, priorities.unnecessary)
-                ?.wait()
-                .then(crops => {
-                    if (crops.length === 0) { return }
-                    this.tasks.push(this, tasks.plantSeed, {
-                        harvestedCrops: crops,
-                    }, priorities.unnecessary)
-                })
-                .catch(() => { })
         }
 
         if (this.breedAnimalsInterval?.done()) {
             this.tasks.push(this, {
-                task: this.env.scanFencings,
-                id: `scan-fencings`,
-                humanReadableId: `Scanning fencings`,
+                task: BruhBot.breedAnimals,
+                id: `breed-animals`,
+                humanReadableId: `Breed animals`,
             }, {}, priorities.unnecessary)
-                ?.wait()
-                .then(fencings => {
-                    for (const fencing of fencings) {
-                        try {
-                            this.tasks.push(this, tasks.breed, {
-                                animals: Object.values(fencing.mobs),
-                            })
-                        } catch (error) {
-                            console.error(error)
-                        }
-                    }
-                })
-                .catch(() => { })
         }
 
         if (this.dumpTrashInterval?.done()) {
-            const trashItems = this.getTrashItems()
-            if (trashItems.length > 0) {
-                this.tasks.push(this, tasks.dumpToChest, {
-                    items: trashItems
-                }, priorities.unnecessary)
-            }
+            this.tasks.push(this, {
+                task: BruhBot.dumpTrash,
+                id: 'dump-trash',
+            }, {}, priorities.unnecessary)
         }
 
         if (this.ensureEquipmentInterval?.done()) {
-            const equipment = require('./equipment')
-
-            let foodPointsInInventory = 0
-            for (const item of this.bot.inventory.items()) {
-                if (!Minecraft.badFoods.includes(item.name)) {
-                    const food = this.mc.registry.foods[item.type]
-                    if (food) {
-                        foodPointsInInventory += food.foodPoints * item.count
-                    }
-                }
-            }
-
-            for (const item of equipment) {
-                switch (item.type) {
-                    case 'food': {
-                        if (foodPointsInInventory >= item.food) { break }
-                        const foods = this.mc.getGoodFoods(false).map(v => v.name)
-                        console.warn(`[Bot "${this.username}"] Low on food`)
-                        this.tasks.push(this, tasks.gatherItem, {
-                            item: foods,
-                            count: 1,
-                            force: true,
-                            canCraft: true,
-                            canDig: true,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canTrade: true,
-                        }, priorities.low)
-                        break
-                    }
-                    case 'single': {
-                        if (this.inventoryItemCount(null, { name: item.item }) > 0) { break }
-                        this.tasks.push(this, tasks.gatherItem, {
-                            item: item.item,
-                            count: 1,
-                            canCraft: true,
-                            canDig: true,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canTrade: true,
-                        }, priorities.unnecessary)
-                        break
-                    }
-                    case 'any': {
-                        if (item.item.find(v => this.inventoryItemCount(null, { name: v }) > 0)) { break }
-                        this.tasks.push(this, tasks.gatherItem, {
-                            item: item.prefer,
-                            count: 1,
-                            canCraft: true,
-                            canDig: true,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canTrade: true,
-                        }, priorities.unnecessary)
-                        break
-                    }
-                    default: {
-                        break
-                    }
-                }
-            }
+            this.tasks.push(this, {
+                task: BruhBot.ensureEquipment,
+                id: 'ensure-equipment',
+            }, {}, priorities.unnecessary)
         }
 
         if (this.tasks.isIdle) {
@@ -2449,6 +2454,171 @@ module.exports = class BruhBot {
                 return
             }
         }
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef}
+     */
+    static *ensureEquipment(bot) {
+        const equipment = require('./equipment')
+
+        let foodPointsInInventory = 0
+        for (const item of bot.bot.inventory.items()) {
+            if (!Minecraft.badFoods.includes(item.name)) {
+                const food = bot.mc.registry.foods[item.type]
+                if (food) {
+                    foodPointsInInventory += food.foodPoints * item.count
+                }
+            }
+        }
+
+        const sortedEquipment = equipment.toSorted((a, b) => {
+            let _a = 0
+            let _b = 0
+            switch (a.priority) {
+                case 'must': _a = 2; break
+                case 'maybe': _a = 1; break
+                default: break
+            }
+            switch (b.priority) {
+                case 'must': _b = 2; break
+                case 'maybe': _b = 1; break
+                default: break
+            }
+            return _b - _a
+        })
+
+        for (const item of sortedEquipment) {
+            switch (item.type) {
+                case 'food': {
+                    if (foodPointsInInventory >= item.food) { break }
+                    const foods = bot.mc.getGoodFoods(false).map(v => v.name)
+                    console.warn(`[Bot "${bot.username}"] Low on food`)
+                    try {
+                        yield* tasks.gatherItem.task(bot, {
+                            item: foods,
+                            count: 1,
+                            force: true,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                        })
+                    } catch (error) {
+                        console.error(error)
+                    }
+                    break
+                }
+                case 'single': {
+                    if (bot.inventoryItemCount(null, { name: item.item }) > 0) { break }
+                    try {
+                        yield* tasks.gatherItem.task(bot, {
+                            item: item.item,
+                            count: 1,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                            canTrade: true,
+                        })
+                    } catch (error) {
+                        console.error(error)
+                    }
+                    break
+                }
+                case 'any': {
+                    if (item.item.find(v => bot.inventoryItemCount(null, { name: v }) > 0)) { break }
+                    try {
+                        yield* tasks.gatherItem.task(bot, {
+                            item: item.prefer,
+                            count: 1,
+                            canCraft: true,
+                            canDig: true,
+                            canKill: false,
+                            canUseChests: true,
+                            canUseInventory: true,
+                            canRequestFromPlayers: false && item.priority === 'must',
+                            canTrade: true,
+                        })
+                    } catch (error) {
+                        console.error(error)
+                    }
+                    break
+                }
+                default: {
+                    break
+                }
+            }
+        }
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef}
+     */
+    static *tryRestoreCrops(bot) {
+        /** @type {Array<import('./environment').SavedCrop>} */
+        const crops = []
+        for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+            yield
+            const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
+            if (!blockAt) { continue }
+            if (blockAt.name === 'air') { crops.push(crop) }
+        }
+        if (crops.length === 0) { return }
+        yield* tasks.plantSeed.task(bot, {
+            harvestedCrops: crops,
+        })
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef<number>}
+     */
+    static *tryHarvestCrops(bot) {
+        const harvested = yield* tasks.harvest.task(bot, {})
+
+        for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+            const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
+            if (!blockAt) { continue }
+            if (blockAt.name !== 'air') { continue }
+            return
+        }
+
+        yield* tasks.compost.task(bot, {})
+
+        return harvested
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef<number>}
+     */
+    static *breedAnimals(bot) {
+        const fencings = yield* bot.env.scanFencings(bot)
+        let n = 0
+        for (const fencing of fencings) {
+            try {
+                n += yield* tasks.breed.task(bot, {
+                    animals: Object.values(fencing.mobs),
+                })
+            } catch (error) {
+                console.error(error)
+            }
+        }
+        return n
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef<boolean>}
+     */
+    static *dumpTrash(bot) {
+        const trashItems = bot.getTrashItems()
+        if (trashItems.length === 0) { return false }
+        return yield* tasks.dumpToChest.task(bot, {
+            items: trashItems
+        })
     }
 
     /**

@@ -41,9 +41,9 @@ class ManagedTask {
 
     /**
      * @readonly
-     * @type {string}
+     * @type {string | null}
      */
-    get humanReadableId() { return (typeof this._def.humanReadableId === 'string') ? this._def.humanReadableId : this._def.humanReadableId(this.args) }
+    get humanReadableId() { return !this._def.humanReadableId ? null : (typeof this._def.humanReadableId === 'string') ? this._def.humanReadableId : this._def.humanReadableId(this.args) }
 
     /**
      * @readonly

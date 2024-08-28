@@ -5,7 +5,10 @@ const goto = require('./goto')
  */
 
 /**
- * @type {import('../task').TaskDef<void, Args> & { can: (bot: import('../bruh-bot'), args: Args) => boolean; }}
+ * @type {import('../task').TaskDef<void, Args> & {
+ *   can: (bot: import('../bruh-bot'), args: Args) => boolean;
+ *   getGoal: (item: import('prismarine-physics').Entity) => import('mineflayer-pathfinder/lib/goals').GoalBase;
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -28,11 +31,34 @@ module.exports = {
             throw `Inventory is full`
         }
 
-        yield* goto.task(bot, {
-            point: nearest.position,
-            distance: 0,
-            savePathError: true,
-        })
+        let isCollected = false
+        /**
+         * @param {import('prismarine-physics').Entity} collector
+         * @param {import('prismarine-physics').Entity} collected
+         */
+        const listener = (collector, collected) => {
+            if (collector.id !== bot.bot.entity.id) { return }
+            const droppedItem = collected.getDroppedItem()
+            if (droppedItem?.name && droppedItem.name !== item.name) { return }
+            isCollected = true
+            bot.bot.off('playerCollect', listener)
+        }
+        bot.bot.on('playerCollect', listener)
+
+        try {
+            yield* goto.task(bot, {
+                goal: this.getGoal( nearest),
+                options: {
+                    savePathError: true,
+                }
+            })
+        } catch (error) {
+            if (isCollected) { return }
+            throw error
+        }
+        if (!isCollected) {
+            throw `Couldn't pick up the item`
+        }
     },
     id: function(args) {
         if ('item' in args) {
@@ -73,5 +99,13 @@ module.exports = {
         }
 
         return true
+    },
+    getGoal: function(item) {
+        return {
+            isValid: () => item.isValid,
+            hasChanged: () => false,
+            heuristic: node => Math.sqrt(Math.pow(node.x - item.position.x, 2) + Math.pow(node.z - item.position.z, 2)) + Math.abs((node.y - item.position.y)),
+            isEnd: node => node.distanceTo(item.position) <= 1,
+        }
     },
 }

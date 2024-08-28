@@ -3,12 +3,12 @@ import BruhBot from './bruh-bot'
 
 export type Task<TResult> = Generator<void, TResult, void>
 
-export type SimpleTaskDef<TResult, TArgs> = (bot: BruhBot, args: TArgs) => Task<TResult>
+export type SimpleTaskDef<TResult = void, TArgs extends {} = {}> = (bot: BruhBot, args: TArgs) => Task<TResult>
 
 export type TaskDef<TResult = void, TArgs extends {} = {}, TUtilities extends {} = {}> = {
     readonly task: (bot: BruhBot, args: CommonArgs<TArgs>) => Task<TResult>;
     readonly id: string | ((args: TArgs) => string);
-    readonly humanReadableId: string | ((args: TArgs) => string);
+    readonly humanReadableId?: string | ((args: TArgs) => string);
     readonly definition?: import('./tasks').TaskId;
 } & TUtilities
 

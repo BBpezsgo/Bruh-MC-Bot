@@ -111,11 +111,18 @@ module.exports = {
             composted++
         }
 
-        yield* pickupItem.task(bot, {
-            point: composter.position,
-            inAir: false,
-            maxDistance: 4,
-        })
+        if (composted) {
+            try {
+                yield* pickupItem.task(bot, {
+                    point: composter.position,
+                    items: [ 'bonemeal' ],
+                    inAir: true,
+                    maxDistance: 4,
+                })
+            } catch (error) {
+                console.error(error)
+            }
+        }
 
         return composted
     },

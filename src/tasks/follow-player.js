@@ -61,11 +61,13 @@ module.exports = {
                     yield* goto.task(bot, {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
+                        sprint: true,
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
+                        sprint: true,
                     })
                 }
                 failStreak = 0

@@ -8,6 +8,7 @@ import * as viewer from 'prismarine-viewer'
 
 declare module 'mineflayer' {
     interface Bot {
+		readonly debug: import('./debug')
         // readonly viewer: viewer.ViewerAPI
 		readonly hawkEye: import('minecrafthawkeye').HawkEye
 		readonly pathfinder: Pathfinder
