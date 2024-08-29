@@ -295,6 +295,18 @@ module.exports = class BruhBot {
     defendMyselfGoal
 
     /**
+     * @private
+     * @type {number}
+     */
+    _lastImportantTaskTime
+
+    /**
+     * @private
+     * @type {import('./managed-task')}
+     */
+    _runningTask
+
+    /**
      * @readonly
      * @type {import('mineflayer').Dimension}
      */
@@ -427,8 +439,9 @@ module.exports = class BruhBot {
         this.commands = new Commands(this.bot)
         this._currentPath = null
         this.lookAtPlayer = 0
-
+        this._lastImportantTaskTime = performance.now()
         this.saveInterval = new Interval(30000)
+        this._runningTask = null
 
         // this.saveTasksInterval = new Interval(5000)
         // this.trySleepInterval = new Interval(5000)
@@ -1904,7 +1917,11 @@ module.exports = class BruhBot {
             this.memory.save()
         }
 
-        const runningTask = this.tasks.tick()
+        this._runningTask = this.tasks.tick()
+
+        if (this._runningTask && this._runningTask.priority >= 0) {
+            this._lastImportantTaskTime = performance.now()
+        }
 
         {
             const explodingCreeper = this.env.getExplodingCreeper(this)
@@ -2096,7 +2113,7 @@ module.exports = class BruhBot {
             }
         }
 
-        if (runningTask && runningTask.priority >= priorities.critical) {
+        if (this._runningTask && this._runningTask.priority >= priorities.critical) {
             return
         }
 
@@ -2322,6 +2339,14 @@ module.exports = class BruhBot {
             this.tasks.push(this, tasks.sleep, {}, priorities.low)
         }
 
+        if (performance.now() - this._lastImportantTaskTime < 10000) {
+            return
+        }
+
+        this.doBoredomTasks()
+    }
+
+    doBoredomTasks() {
         if (this.memory.mlgJunkBlocks.length > 0) {
             this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
             return
@@ -2401,7 +2426,11 @@ module.exports = class BruhBot {
                 id: 'ensure-equipment',
             }, {}, priorities.unnecessary)
         }
+    
+        this.doNothing()
+    }
 
+    doNothing() {
         if (this.tasks.isIdle) {
             if (this.goBackInterval?.done() &&
                 this.memory.idlePosition &&
