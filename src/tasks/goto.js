@@ -673,6 +673,10 @@ module.exports = {
                         return 'ok'
                     }
 
+                    if (args.goal.isEnd(bot.bot.entity.position.floored())) {
+                        return 'ok'
+                    }
+
                     if (i === retryCount - 1) {
                         // console.warn(`[Bot "${bot.username}"] Goal not reached`)
                         bot.bot.pathfinder.stop()
