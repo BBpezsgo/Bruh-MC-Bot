@@ -352,6 +352,7 @@ function bestMeleeWeapon(bot) {
     for (const meleeWeapon of meleeWeapons) {
         const item = bot.searchInventoryItem(null, meleeWeapon.name)
         if (!item) { continue }
+
         return {
             ...meleeWeapon,
             item: item,
@@ -529,25 +530,49 @@ module.exports = {
         }
 
         const ensureMovement = function() {
-            // @ts-ignore
-            if (bot.bot.pathfinder.goal?.['name'] === 'attack_goal') {
-                return
-            }
             // console.log(`[Bot "${bot.username}"] Set attacking movement`)
-            goto.setOptions(bot, {
+            const options = {
                 timeout: 100,
                 searchRadius: 5,
                 sprint: true,
                 movements: bot.restrictedMovements,
                 lookAtTarget: false,
                 retryCount: 0,
-            })
+            }
+            switch (movementState) {
+                case 'goto': {
+                    options.timeout = 1500
+                    options.searchRadius = 32
+                    options.lookAtTarget = true
+                    options.retryCount = 3
+                    break
+                }
+                case 'goto-range': {
+                    options.timeout = 1500
+                    options.searchRadius = 32
+                    options.lookAtTarget = true
+                    options.retryCount = 1
+                    break
+                }
+                case 'goto-melee': {
+                    options.timeout = 700
+                    options.searchRadius = 16
+                    options.lookAtTarget = true
+                    options.retryCount = 0
+                    break
+                }
+            }
+            goto.setOptions(bot, options)
+            // @ts-ignore
+            if (bot.bot.pathfinder.goal?.['name'] === goal.name) {
+                return
+            }
             bot.bot.pathfinder.setGoal(goal, true)
         }
 
         const stopMovement = function() {
             // @ts-ignore
-            if (bot.bot.pathfinder.goal?.['name'] !== 'attack_goal') {
+            if (bot.bot.pathfinder.goal?.['name'] !== goal.name) {
                 return
             }
             bot.bot.pathfinder.stop()
@@ -597,6 +622,29 @@ module.exports = {
         }
 
         let reequipMeleeWeapon = false
+        let isGoalChanged = false
+
+        /**
+         * @param {Vec3} node
+         * @param {Entity} entity
+         */
+        const getEntityHeuristic = function(node, entity) {
+            const dx = entity.position.x - node.x
+            const dy = entity.position.y - node.y
+            const dz = entity.position.z - node.z
+            return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+        }
+
+        const goalHawkeye = new goto.GoalHawkeye(null, null, (from, to, weapon) => {
+            const savedBotPosition = bot.bot.entity.position
+            bot.bot.entity.position = from
+            const masterGrade = bot.bot.hawkEye.getMasterGrade({
+                position: to,
+                isValid: false,
+            }, new Vec3(0, 0, 0), weapon)
+            bot.bot.entity.position = savedBotPosition
+            return masterGrade
+        })
 
         /**
          * @type {import('mineflayer-pathfinder/lib/goals').GoalBase & {
@@ -616,30 +664,63 @@ module.exports = {
                 return false
             },
             hasChanged: function() {
+                if (isGoalChanged) {
+                    isGoalChanged = false
+                    return true
+                }
                 const entityPositions = this.getEntityPositions()
                 if (this.lastEntityPositions.length !== entityPositions.length) {
+                    this.lastEntityPositions = entityPositions
                     return true
                 }
                 for (let i = 0; i < entityPositions.length; i++) {
                     const d = entityPositions[i].distanceTo(this.lastEntityPositions[i])
-                    if (d >= 1) { return true }
+                    if (d >= 1) {
+                        this.lastEntityPositions = entityPositions
+                        return true
+                    }
                 }
                 return false
             },
             heuristic: function(node) {
-                let max = Number.MIN_VALUE
-                for (const entity of this.getEntities()) {
-                    const dx = entity.position.x - node.x
-                    const dy = entity.position.y - node.y
-                    const dz = entity.position.z - node.z
-                    max = Math.max(max, (Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)))
+                if (target) {
+                    switch (movementState) {
+                        case 'goto': {
+                            return getEntityHeuristic(node, target)
+                        }
+                        case 'goto-melee': {
+                            return getEntityHeuristic(node, target)
+                        }
+                        case 'goto-range': {
+                            return goalHawkeye.heuristic(node)
+                        }
+                    }
                 }
-                return -max
+                let fleeHeuristic = Number.MIN_VALUE
+                for (const entity of this.getEntities()) {
+                    fleeHeuristic = Math.max(fleeHeuristic, getEntityHeuristic(node, entity))
+                }
+                return -fleeHeuristic
             },
             isEnd: function(node) {
                 for (const entity of this.getEntities()) {
                     const d = entityDistanceSquared(node, entity)
                     if (d <= this.rangeSq) { return false }
+                }
+                if (target) {
+                    switch (movementState) {
+                        case 'goto': {
+                            const d = node.distanceTo(target.position)
+                            return d < 3.5
+                        }
+                        case 'goto-melee': {
+                            const d = node.distanceTo(target.position)
+                            return d < 4
+                        }
+                        case 'goto-range': {
+                            return goalHawkeye.isEnd(node)
+                        }
+                    }
                 }
                 return true
             },
@@ -654,17 +735,25 @@ module.exports = {
         }
         goal.lastEntityPositions = goal.getEntityPositions()
 
+        /**
+         * @type {'none' | 'goto' | 'goto-melee' | 'goto-range'}
+         */
+        let movementState = 'none'
+        /**
+         * @type {number}
+         */
+        let targetScore = 0
+        /**
+         * @type {Entity | null}
+         */
+        let target = null
+
         try {
             while (true) {
                 yield
-                /**
-                 * @type {number}
-                 */
-                let targetScore = 0
-                /**
-                 * @type {Entity | null}
-                 */
-                let target = null
+
+                target = null
+                targetScore = 0
                 if ('target' in args) {
                     target = args.target
                     if (!isAlive(target)) { break }
@@ -714,6 +803,15 @@ module.exports = {
 
                 ensureMovement()
 
+                // {
+                //     const now = performance.now()
+                //     const timeUntilPunch = (cooldown - (now - lastPunch))
+                //     const label = TextDisplay.ensure(bot.commands, 'attack-label')
+                //     label.lockOn(bot.bot.entity.id)
+                //     label.text = { text: `${movementState}` }
+                //     console.log(movementState)
+                // }
+
                 // console.log(goal.isEnd(bot.bot.entity.position))
 
                 // yield* goto.task(bot, {
@@ -745,16 +843,23 @@ module.exports = {
                 if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                        yield* goto.task(bot, {
-                            entity: target,
-                            distance: 4,
-                            timeout: 500,
-                            retryCount: 0,
-                            sprint: true,
-                        })
+                        // yield* goto.task(bot, {
+                        //     entity: target,
+                        //     distance: 4,
+                        //     timeout: 500,
+                        //     retryCount: 0,
+                        //     sprint: true,
+                        // })
                         reequipMeleeWeapon = true
+                        isGoalChanged = movementState !== 'goto-melee'
+                        movementState = 'goto-melee'
                         continue
                     }
+
+                    if (movementState !== 'none') {
+                        bot.bot.pathfinder.stop()
+                    }
+                    movementState = 'none'
 
                     if (reequipMeleeWeapon) {
                         // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
@@ -775,23 +880,24 @@ module.exports = {
                     const now = performance.now()
 
                     const timeUntilPunch = (cooldown - (now - lastPunch))
-                    // console.log(timeUntilPunch.toFixed(1))
 
                     if (timeUntilPunch <= 0 && (
                         bot.bot.entity.onGround ||
                         bot.bot.entity.isInWater ||
-                        bot.bot.entity.velocity.y <= -0.2
+                        bot.bot.entity.velocity.y <= -0.3
                     )) {
                         bot.bot.attack(target)
                         // @ts-ignore
                         bot._isLeftHandActive = false
                         lastPunch = now
                         bot.env.entityHurtTimes[target.id] = performance.now()
-                        
+
                         activateShield(shield)
                     } else {
-                        bot.bot.setControlState('jump', true)
-                        bot.bot.setControlState('jump', false)
+                        if (bot.bot.blockAt(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland') {
+                            bot.bot.setControlState('jump', true)
+                            bot.bot.setControlState('jump', false)
+                        }
                     }
 
                     continue
@@ -813,16 +919,22 @@ module.exports = {
                         let grade = getGrade()
                         if (!grade || grade.blockInTrayect) {
                             // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                            yield* goto.task(bot, {
-                                entity: target,
-                                distance: distance - 2,
-                                timeout: 1000,
-                                retryCount: 0,
-                            sprint: true,
-                        })
+                            // yield* goto.task(bot, {
+                            //     entity: target,
+                            //     distance: distance - 2,
+                            //     timeout: 1000,
+                            //     retryCount: 0,
+                            //     sprint: true,
+                            // })
                             reequipMeleeWeapon = true
+                            goalHawkeye.weapon = weapon.weapon
+                            goalHawkeye.target = target.position
+                            isGoalChanged = movementState !== 'goto-range'
+                            movementState = 'goto-range'
                             continue
                         }
+
+                        movementState = 'none'
 
                         yield* wrap(bot.bot.equip(weapon.item, 'hand'))
 
@@ -910,13 +1022,15 @@ module.exports = {
 
                 if (target && target.isValid) {
                     // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                    yield* goto.task(bot, {
-                        entity: target,
-                        distance: 4,
-                        timeout: 500,
-                        retryCount: 0,
-                        sprint: true,
-                    })
+                    // yield* goto.task(bot, {
+                    //     entity: target,
+                    //     distance: 4,
+                    //     timeout: 500,
+                    //     retryCount: 0,
+                    //     sprint: true,
+                    // })
+                    isGoalChanged = movementState !== 'goto'
+                    movementState = 'goto'
                     reequipMeleeWeapon = true
                     continue
                 }
