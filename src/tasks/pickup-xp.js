@@ -14,7 +14,7 @@ module.exports = {
 
         yield* goto.task(bot, {
             entity: nearest,
-            distance: 3, // max: 7.25
+            distance: 2, // max: 7.25
         })
 
         while (nearest && nearest.isValid) {

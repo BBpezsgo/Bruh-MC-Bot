@@ -1826,16 +1826,16 @@ module.exports = class BruhBot {
                     // new (require('mineflayer-pathfinder/lib/move').Move)(this.bot.entity.position.x, this.bot.entity.position.y, this.bot.entity.position.z, 0, 0),
                     ...this._currentPath.path,
                 ], (t, _a, _b) => {
-                    const cost = mathUtils.lerp(_a.cost, _b.cost, t) / 50
+                    const cost = Math.lerp(_a.cost, _b.cost, t) / 50
                     return [
-                        mathUtils.lerp(0, 1, cost),
-                        mathUtils.lerp(1, 0, cost),
-                        mathUtils.lerp(0, 0, cost),
+                        Math.lerp(0, 1, cost),
+                        Math.lerp(1, 0, cost),
+                        Math.lerp(0, 0, cost),
                     ]
                     return [
-                        mathUtils.lerp(a[0], b[0], cost),
-                        mathUtils.lerp(a[1], b[1], cost),
-                        mathUtils.lerp(a[2], b[2], cost),
+                        Math.lerp(a[0], b[0], cost),
+                        Math.lerp(a[1], b[1], cost),
+                        Math.lerp(a[2], b[2], cost),
                     ]
                 })
             }
@@ -1960,7 +1960,7 @@ module.exports = class BruhBot {
 
                 const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
 
-                const entityDirection = mathUtils.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
+                const entityDirection = Math.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
 
                 const angle = mathUtils.vectorAngle({
                     x: directionToSelf.x,
@@ -2452,8 +2452,8 @@ module.exports = class BruhBot {
         }
 
         if (this.tasks.isIdle || (
-            runningTask &&
-            runningTask.id.startsWith('follow') &&
+            this._runningTask &&
+            this._runningTask.id.startsWith('follow') &&
             !this.bot.pathfinder.goal
         )
         ) {
@@ -2613,7 +2613,7 @@ module.exports = class BruhBot {
             const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
             if (!blockAt) { continue }
             if (blockAt.name !== 'air') { continue }
-            return
+            return 0
         }
 
         yield* tasks.compost.task(bot, {})
@@ -2702,7 +2702,7 @@ module.exports = class BruhBot {
                     : v.entity.position.offset(0, 1.6, 0)
 
                 const dirToSelf = selfEye.clone().subtract(playerEye).normalize()
-                const playerDir = mathUtils.rotationToVectorRad(v.entity.pitch, v.entity.yaw)
+                const playerDir = Math.rotationToVectorRad(v.entity.pitch, v.entity.yaw)
                 return dirToSelf.dot(playerDir) > 0.9
             })
 
@@ -2764,7 +2764,7 @@ module.exports = class BruhBot {
     lookRandomly() {
         const pitch = mathUtils.randomInt(-40, 30)
         const yaw = mathUtils.randomInt(-180, 180)
-        this.bot.look(yaw * mathUtils.deg2rad, pitch * mathUtils.deg2rad)
+        this.bot.look(yaw * Math.deg2rad, pitch * Math.deg2rad)
     }
 
     /**

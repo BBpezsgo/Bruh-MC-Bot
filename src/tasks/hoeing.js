@@ -6,6 +6,15 @@ const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
+const hoes = Object.freeze([
+    'wooden_hoe',
+    'stone_hoe',
+    'iron_hoe',
+    'golden_hoe',
+    'diamond_hoe',
+    'netherite_hoe',
+])
+
 /**
  * @type {import('../task').TaskDef<number, {
  *   gatherTool: boolean;
@@ -25,8 +34,6 @@ module.exports = {
         if (bot.quietMode) {
             throw `Can't hoe in quiet mode`
         }
-
-        const hoes = this.hoes
 
         let n = 0
 
@@ -196,12 +203,5 @@ module.exports = {
             return `Hoeing ${args.block}`
         }
     },
-    hoes: Object.freeze([
-        'wooden_hoe',
-        'stone_hoe',
-        'iron_hoe',
-        'golden_hoe',
-        'diamond_hoe',
-        'netherite_hoe',
-    ]),
+    hoes: hoes,
 }

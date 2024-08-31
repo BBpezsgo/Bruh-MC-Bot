@@ -107,12 +107,20 @@ module.exports = {
                             break
                         }
 
-                        const deposited = yield* bot.chestDeposit(
-                            chest,
-                            chestBlock.position,
-                            itemToDeposit,
-                            itemToDeposit.count)
-                        shouldBreak = !deposited
+                        try {
+                            const deposited = yield* bot.chestDeposit(
+                                chest,
+                                chestBlock.position,
+                                itemToDeposit,
+                                itemToDeposit.count)
+                            shouldBreak = !deposited
+                        } catch (error) {
+                            if (error instanceof Error) {
+                                throw `Can't dump ${itemToDeposit.name}: ${error.message}`
+                            } else {
+                                throw `Can't dump ${itemToDeposit.name}: ${error}`
+                            }
+                        }
                     }
 
                     if (shouldBreak) { break }

@@ -49,7 +49,7 @@ module.exports = {
             yield* goto.task(bot, {
                 goal: this.getGoal( nearest),
                 options: {
-                    savePathError: true,
+                    // savePathError: true,
                 }
             })
         } catch (error) {
@@ -90,7 +90,7 @@ module.exports = {
         const goals = goto.getGoal(bot, {
             entity: nearest,
             distance: 1,
-            savePathError: true,
+            // savePathError: true,
         })
 
         for (const goal of goals) {

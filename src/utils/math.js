@@ -1,3 +1,5 @@
+/// <reference types="./math-extension.d.ts" />
+
 const { Vec3 } = require('vec3')
 
 /**
@@ -18,44 +20,35 @@ function nonce(length = 8) {
     return result
 }
 
-/**
- * @param {number} a
- * @param {number} b
- * @param {number} t
- */
-function lerp(a, b, t) {
+Math.lerp = function(a, b, t) {
     return a + ((b - a) * Math.max(0, Math.min(1, t)))
 }
 
-/**
- * @param {number} a
- * @param {number} b
- * @param {number} t
- */
-function lerpDeg(a, b, t) {
+Math.lerpDeg = function(a, b, t) {
     const shortest_angle = ((((b - a) % 360) + 540) % 360) - 180
     return shortest_angle * t
 }
 
-/**
- * @param {number} a
- * @param {number} b
- * @param {number} t
- */
-function lerpRad(a, b, t) {
-    return lerpDeg(a * rad2deg, b * rad2deg, t) * deg2rad
+Math.lerpRad = function(a, b, t) {
+    return Math.lerpDeg(a * Math.rad2deg, b * Math.rad2deg, t) * Math.deg2rad
+}
+
+Math.lerpColor = function(a, b, t) {
+    t = Math.max(0, Math.min(1, t))
+    return [
+        a[0] + ((b[0] - a[0]) * t),
+        a[1] + ((b[1] - a[1]) * t),
+        a[2] + ((b[2] - a[2]) * t),
+    ]
 }
 
 const costDepth = 20
-const deg2rad = Math.PI / 180
-const rad2deg = 180 / Math.PI
+// @ts-ignore
+Math.deg2rad = Math.PI / 180
+// @ts-ignore
+Math.rad2deg = 180 / Math.PI
 
-/**
- * @param {number} pitchRad
- * @param {number} yawRad
- */
-function rotationToVectorRad(pitchRad, yawRad) {
-
+Math.rotationToVectorRad = function(pitchRad, yawRad) {
     const f = Math.cos(-yawRad - Math.PI)
     const f1 = Math.sin(-yawRad - Math.PI)
     const f2 = -Math.cos(-pitchRad)
@@ -63,12 +56,8 @@ function rotationToVectorRad(pitchRad, yawRad) {
     return new Vec3((f1 * f2), f3, -(f * f2))
 }
 
-/**
- * @param {number} pitchDeg
- * @param {number} yawDeg
- */
-function rotationToVector(pitchDeg, yawDeg) {
-    return rotationToVectorRad(pitchDeg * deg2rad, yawDeg * deg2rad)
+Math.rotationToVector = function(pitchDeg, yawDeg) {
+    return Math.rotationToVectorRad(pitchDeg * Math.deg2rad, yawDeg * Math.deg2rad)
 }
 
 /**
@@ -179,13 +168,6 @@ function lineDistanceSquared(point, a, b) {
 module.exports = {
     costDepth,
     randomInt,
-    deg2rad,
-    rad2deg,
-    lerp,
-    lerpDeg,
-    lerpRad,
-    rotationToVector,
-    rotationToVectorRad,
     vectorAngle,
     nonce,
     boxDistance,

@@ -56,24 +56,6 @@ module.exports = {
                 
                         if (!tool.has &&
                             !current.canHarvest(null)) {
-                            // if (this.gatherTool) {
-                            //     console.log(`[Bot "${bot.username}"] Gathering ${tool.item.displayName} ...`)
-                            //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
-                            //     if ('error' in toolGathered) return error(toolGathered.error)
-                            // } else {
-                            //     bot.bot.chat(`I don't have a ${tool.item.displayName} to dig ${this.block.displayName} Should I try to get this tool?`)
-                            //     const res = await bot.awaitYesNoResponse(10000)
-                            //     if (!res) {
-                            //         return error(`Response timed out`)
-                            //     }
-                            //     if (!res.message) {
-                            //         return error(`Don't gather ${tool.item.displayName}`)
-                            //     }
-                            // 
-                            //     bot.bot.chat(`Okay, gathering ${tool.item.displayName}`)
-                            //     const toolGathered = await (new GatherItemGoal(this, tool.item.id, 1, false, true, false, true)).wait()
-                            //     if ('error' in toolGathered) return error(toolGathered.error)
-                            // }
                             throw 'No tool'
                         }
                     }
