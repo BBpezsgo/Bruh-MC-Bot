@@ -10,255 +10,6 @@ const TextDisplay = require('../text-display')
 const { entityDistance, entityDistanceSquared } = require('../utils/math')
 const Debug = require('../debug')
 
-/**
- * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
- */
-const toolLevels = Object.freeze([
-    'wood',
-    'stone',
-    'iron',
-    'gold',
-    'diamond',
-    'netherite',
-])
-
-/**
- * @typedef {{
-*   name: string;
-*   damage: number;
-*   speed: number;
-*   cooldown: number;
-*   level: typeof toolLevels[number];
-* }} MeleeWeapon
-*/
-
-/**
- * @type {ReadonlyArray<MeleeWeapon>}
- */
-const meleeWeapons = (/** @type {Array<MeleeWeapon>} */ ([
-    {
-        name: 'wooden_sword',
-        damage: 4,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'wood',
-    },
-    {
-        name: 'stone_sword',
-        damage: 5,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'stone',
-    },
-    {
-        name: 'iron_sword',
-        damage: 6,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'iron',
-    },
-    {
-        name: 'golden_sword',
-        damage: 4,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'gold',
-    },
-    {
-        name: 'diamond_sword',
-        damage: 7,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'diamond',
-    },
-    {
-        name: 'netherite_sword',
-        damage: 8,
-        speed: 1.6,
-        cooldown: 1 / 1.6,
-        level: 'netherite',
-    },
-    {
-        name: 'wooden_axe',
-        damage: 7,
-        speed: 0.8,
-        cooldown: 1 / 0.8,
-        level: 'wood',
-    },
-    {
-        name: 'stone_axe',
-        damage: 9,
-        speed: 0.8,
-        cooldown: 1 / 0.8,
-        level: 'stone',
-    },
-    {
-        name: 'iron_axe',
-        damage: 9,
-        speed: 0.9,
-        cooldown: 1 / 0.9,
-        level: 'iron',
-    },
-    {
-        name: 'golden_axe',
-        damage: 7,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'gold',
-    },
-    {
-        name: 'diamond_axe',
-        damage: 9,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'diamond',
-    },
-    {
-        name: 'netherite_axe',
-        damage: 10,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'netherite',
-    },
-    {
-        name: 'wooden_shovel',
-        damage: 2.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'wood',
-    },
-    {
-        name: 'stone_shovel',
-        damage: 3.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'stone',
-    },
-    {
-        name: 'iron_shovel',
-        damage: 4.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'iron',
-    },
-    {
-        name: 'golden_shovel',
-        damage: 2.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'gold',
-    },
-    {
-        name: 'diamond_shovel',
-        damage: 5.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'diamond',
-    },
-    {
-        name: 'netherite_shovel',
-        damage: 6.5,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'netherite',
-    },
-    {
-        name: 'wooden_pickaxe',
-        damage: 2,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'wood',
-    },
-    {
-        name: 'stone_pickaxe',
-        damage: 3,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'stone',
-    },
-    {
-        name: 'iron_pickaxe',
-        damage: 4,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'iron',
-    },
-    {
-        name: 'golden_pickaxe',
-        damage: 2,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'gold',
-    },
-    {
-        name: 'diamond_pickaxe',
-        damage: 5,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'diamond',
-    },
-    {
-        name: 'netherite_pickaxe',
-        damage: 6,
-        speed: 1.2,
-        cooldown: 1 / 1.2,
-        level: 'netherite',
-    },
-    {
-        name: 'wooden_hoe',
-        damage: 1,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'wood',
-    },
-    {
-        name: 'stone_hoe',
-        damage: 1,
-        speed: 2,
-        cooldown: 1 / 2,
-        level: 'stone',
-    },
-    {
-        name: 'iron_hoe',
-        damage: 1,
-        speed: 3,
-        cooldown: 1 / 3,
-        level: 'iron',
-    },
-    {
-        name: 'golden_hoe',
-        damage: 1,
-        speed: 1,
-        cooldown: 1 / 1,
-        level: 'gold',
-    },
-    {
-        name: 'diamond_hoe',
-        damage: 1,
-        speed: 4,
-        cooldown: 1 / 4,
-        level: 'diamond',
-    },
-    {
-        name: 'netherite_hoe',
-        damage: 1,
-        speed: 4,
-        cooldown: 1 / 4,
-        level: 'netherite',
-    },
-])).sort((a, b) => {
-    const aScore = a.damage * a.speed
-    const bScore = b.damage * b.speed
-
-    if (aScore === bScore) {
-        const aLevel = toolLevels.indexOf(a.level)
-        const bLevel = toolLevels.indexOf(b.level)
-        return aLevel - bLevel
-    }
-
-    return bScore - aScore
-})
-
 const distanceToUseRangeWeapons = 12
 
 /**
@@ -268,21 +19,6 @@ const distanceToUseRangeWeapons = 12
  *   useBow: boolean;
  * }} PermissionArgs
  */
-
-/**
- * @param {Weapons} item
- * @returns {number}
- */
-function getChargeTime(item) {
-    switch (item) {
-        case 'bow':
-            return 1200
-        case 'crossbow':
-            return 1300 // 1250
-        default:
-            return 0
-    }
-}
 
 /**
  * @param {Item} item
@@ -299,12 +35,69 @@ function isCrossbowCharged(item) {
 }
 
 /**
+ * @param {Item} weapon
+ */
+function resolveRangeWeapon(weapon) {
+    /** @type {Record<string, number>} */
+    const enchants = {}
+    weapon.enchants.forEach(v => enchants[v.name] = v.lvl)
+
+    switch (weapon.name) {
+        case Weapons.bow: {
+            let damage = 6
+            let powerDamage = 0
+            if (enchants['power']) {
+                const power = enchants['power']
+                powerDamage += powerDamage * 0.25 * (power + 1)
+            }
+            let knockback = 1.985
+            if (enchants['punch']) {
+                switch (enchants['punch']) {
+                    case 1:
+                        knockback = 5.492
+                        break
+                    case 2:
+                        knockback = 8.792
+                        break
+                }
+            }
+            return {
+                item: weapon,
+                damage: damage + powerDamage,
+                knockback: knockback,
+                chargeTime: 1200,
+            }
+        }
+        case Weapons.crossbow: {
+            let damage = 9
+            let chargeTime = 1250
+            if (enchants['quick_charge']) {
+                const quickCharge = enchants['quick_charge']
+                if (quickCharge > 5) {
+                    chargeTime = Infinity
+                } else {
+                    chargeTime = 1250 - (quickCharge * 250)
+                }
+            }
+            return {
+                item: weapon,
+                damage: damage,
+                chargeTime: chargeTime,
+            }
+        }
+        case Weapons.trident: {
+            return {
+                item: weapon,
+                damage: 8,
+            }
+        }
+    }
+
+    return null
+}
+
+/**
  * @param {import('../bruh-bot')} bot
- * @returns {{
- *   item: import('prismarine-item').Item;
- *   weapon: Weapons;
- *   ammo: number;
- * } | null}
  */
 function searchRangeWeapon(bot) {
     const keys = Object.values(Weapons)
@@ -313,7 +106,7 @@ function searchRangeWeapon(bot) {
         const found = bot.searchInventoryItem(null, weapon)
         if (!found) { continue }
 
-        let ammo
+        let ammo = 0
 
         switch (weapon) {
             case Weapons.bow:
@@ -330,12 +123,11 @@ function searchRangeWeapon(bot) {
             default: continue
         }
 
-        if (ammo === 0) {
-            continue
-        }
+        if (ammo === 0) { continue }
 
+        let resolved = resolveRangeWeapon(found)
         return {
-            item: found,
+            ...resolved,
             weapon: weapon,
             ammo: ammo,
         }
@@ -345,20 +137,363 @@ function searchRangeWeapon(bot) {
 }
 
 /**
- * @param {import('../bruh-bot')} bot
- * @returns {(MeleeWeapon & { item: Item }) | null}
+ * @type {readonly [ 'wood', 'stone', 'iron', 'gold', 'diamond', 'netherite' ]}
  */
-function bestMeleeWeapon(bot) {
+const toolLevels = Object.freeze([
+    'wood',
+    'stone',
+    'iron',
+    'gold',
+    'diamond',
+    'netherite',
+])
+
+const meleeWeapons = (/** @type {Array<{ name: string; damage: number; speed: number; level: typeof toolLevels[number]; }>} */ ([
+    {
+        name: 'wooden_sword',
+        damage: 4,
+        speed: 1.6,
+        level: 'wood',
+    },
+    {
+        name: 'stone_sword',
+        damage: 5,
+        speed: 1.6,
+        level: 'stone',
+    },
+    {
+        name: 'iron_sword',
+        damage: 6,
+        speed: 1.6,
+        level: 'iron',
+    },
+    {
+        name: 'golden_sword',
+        damage: 4,
+        speed: 1.6,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_sword',
+        damage: 7,
+        speed: 1.6,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_sword',
+        damage: 8,
+        speed: 1.6,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_axe',
+        damage: 7,
+        speed: 0.8,
+        level: 'wood',
+    },
+    {
+        name: 'stone_axe',
+        damage: 9,
+        speed: 0.8,
+        level: 'stone',
+    },
+    {
+        name: 'iron_axe',
+        damage: 9,
+        speed: 0.9,
+        level: 'iron',
+    },
+    {
+        name: 'golden_axe',
+        damage: 7,
+        speed: 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_axe',
+        damage: 9,
+        speed: 1,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_axe',
+        damage: 10,
+        speed: 1,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_shovel',
+        damage: 2.5,
+        speed: 1,
+        level: 'wood',
+    },
+    {
+        name: 'stone_shovel',
+        damage: 3.5,
+        speed: 1,
+        level: 'stone',
+    },
+    {
+        name: 'iron_shovel',
+        damage: 4.5,
+        speed: 1,
+        level: 'iron',
+    },
+    {
+        name: 'golden_shovel',
+        damage: 2.5,
+        speed: 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_shovel',
+        damage: 5.5,
+        speed: 1,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_shovel',
+        damage: 6.5,
+        speed: 1,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_pickaxe',
+        damage: 2,
+        speed: 1.2,
+        level: 'wood',
+    },
+    {
+        name: 'stone_pickaxe',
+        damage: 3,
+        speed: 1.2,
+        level: 'stone',
+    },
+    {
+        name: 'iron_pickaxe',
+        damage: 4,
+        speed: 1.2,
+        level: 'iron',
+    },
+    {
+        name: 'golden_pickaxe',
+        damage: 2,
+        speed: 1.2,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_pickaxe',
+        damage: 5,
+        speed: 1.2,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_pickaxe',
+        damage: 6,
+        speed: 1.2,
+        level: 'netherite',
+    },
+    {
+        name: 'wooden_hoe',
+        damage: 1,
+        speed: 1,
+        level: 'wood',
+    },
+    {
+        name: 'stone_hoe',
+        damage: 1,
+        speed: 2,
+        level: 'stone',
+    },
+    {
+        name: 'iron_hoe',
+        damage: 1,
+        speed: 3,
+        level: 'iron',
+    },
+    {
+        name: 'golden_hoe',
+        damage: 1,
+        speed: 1,
+        level: 'gold',
+    },
+    {
+        name: 'diamond_hoe',
+        damage: 1,
+        speed: 4,
+        level: 'diamond',
+    },
+    {
+        name: 'netherite_hoe',
+        damage: 1,
+        speed: 4,
+        level: 'netherite',
+    },
+    {
+        name: 'trident',
+        damage: 9,
+        speed: 1.1,
+        level: 'diamond', // ???
+    },
+])).map(v => ({
+    ...v,
+    cooldown: 1 / v.speed,
+    damagePerSecond: v.damage * v.speed,
+})).sort((a, b) => {
+    if (a.damagePerSecond === b.damagePerSecond) {
+        const aLevel = toolLevels.indexOf(a.level)
+        const bLevel = toolLevels.indexOf(b.level)
+        return aLevel - bLevel
+    }
+    return b.damagePerSecond - a.damagePerSecond
+})
+
+/**
+ * @typedef {(typeof meleeWeapons)[0]} MeleeWeapon
+*/
+
+const undeadMobs = [
+    'drowned',
+    'husk',
+    'phantom',
+    'skeletom',
+    'skeleton_horse',
+    'stray',
+    'wither',
+    'wither_skeleton',
+    'zoglin',
+    'zombie',
+    'zombie_horse',
+    'zombie_villager',
+    'zombified_piglin',
+]
+
+const arthropodMobs = [
+    'spider',
+    'cave_spider',
+    'bee',
+    'silverfish',
+    'endermite',
+]
+
+/**
+ * @param {import('../bruh-bot')} bot
+ * @param {string} targetEntity
+ */
+function searchMeleeWeapon(bot, targetEntity) {
+    let bestScore = 0
+    let bestWeapon = null
     for (const meleeWeapon of meleeWeapons) {
         const item = bot.searchInventoryItem(null, meleeWeapon.name)
         if (!item) { continue }
-
-        return {
+        const weapon = resolveMeleeWeapon({
             ...meleeWeapon,
             item: item,
+        }, targetEntity)
+        if (!bestWeapon || weapon.damagePerSecond > bestScore) {
+            bestWeapon = weapon
+            bestScore = weapon.damagePerSecond
         }
     }
-    return null
+    return bestWeapon
+}
+
+/**
+ * @param {MeleeWeapon & { item: Item }} weapon
+ * @param {string} targetEntity
+ */
+function resolveMeleeWeapon(weapon, targetEntity) {
+    /** @type {Record<string, number>} */
+    const enchants = {}
+    weapon.item.enchants.forEach(v => enchants[v.name] = v.lvl)
+
+    const swordItems = [
+        'golden_sword',
+        'wooden_sword',
+        'stone_sword',
+        'iron_sword',
+        'diamond_sword',
+        'netherite_sword',
+    ]
+
+    const axeItems = [
+        'golden_axe',
+        'wooden_axe',
+        'stone_axe',
+        'iron_axe',
+        'diamond_axe',
+        'netherite_axe',
+    ]
+
+    let knockback = 1
+    if (enchants['knockback'] &&
+        swordItems.includes(weapon.name)) {
+        switch (enchants['knockback']) {
+            case 1:
+                knockback *= 1.05
+                break
+            case 2:
+                knockback *= 1.90
+                break
+            default:
+                break
+        }
+    }
+
+    let sharpnessDamage = 0
+    if (enchants['sharpness'] && (
+        swordItems.includes(weapon.name) ||
+        axeItems.includes(weapon.name)
+    )) {
+        const sharpness = enchants['sharpness']
+        sharpnessDamage = 0.5 * sharpness + 0.5
+    }
+
+    let smiteDamage = 0
+    if (enchants['smite'] && (
+        swordItems.includes(weapon.name) ||
+        axeItems.includes(weapon.name)
+    )) {
+        const smite = enchants['smite']
+        smiteDamage = smite * 2.5
+    }
+
+    let baneOfArthropodsDamage = 0
+    if (enchants['bane_of_arthropods'] && (
+        swordItems.includes(weapon.name) ||
+        axeItems.includes(weapon.name)
+    )) {
+        const baneOfArthropods = enchants['bane_of_arthropods']
+        baneOfArthropodsDamage = baneOfArthropods * 2.5
+    }
+
+    let finalDamage = weapon.damage
+    finalDamage += sharpnessDamage
+    if (undeadMobs.includes(targetEntity)) {
+        finalDamage += smiteDamage
+    }
+    if (arthropodMobs.includes(targetEntity)) {
+        finalDamage += baneOfArthropodsDamage
+    }
+
+    let sweepDamage = 0
+    if (enchants['sweeping_edge'] && swordItems.includes(weapon.name)) {
+        const sweepingEdge = enchants['sweeping_edge']
+        sweepDamage = Math.round(1 + finalDamage * (sweepingEdge / (sweepingEdge + 1)))
+    }
+
+    if (weapon.name === 'trident') {
+        finalDamage = 9
+    }
+
+    return {
+        ...weapon,
+        damage: finalDamage,
+        sweepDamage: sweepDamage,
+        knockback: knockback,
+        cooldown: 1 / weapon.speed,
+        damagePerSecond: finalDamage * weapon.speed,
+    }
 }
 
 /**
@@ -390,7 +525,7 @@ module.exports = {
         const hurtTime = Minecraft.general.hurtTime
         let cooldown = hurtTime
 
-        /** @type {(MeleeWeapon & { item: Item }) | null}*/
+        /** @type {ReturnType<searchMeleeWeapon> | null}*/
         let meleeWeapon = null
         /** @type {Item | null} */
         let shield = bot.searchInventoryItem(null, 'shield')
@@ -413,8 +548,11 @@ module.exports = {
             return false
         }
 
-        const equipMeleeWeapon = function*() {
-            meleeWeapon = bestMeleeWeapon(bot)
+        /**
+         * @param {string} targetEntity
+         */
+        const equipMeleeWeapon = function*(targetEntity) {
+            meleeWeapon = searchMeleeWeapon(bot, targetEntity)
             const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
 
             if (meleeWeapon) {
@@ -562,12 +700,13 @@ module.exports = {
                     break
                 }
             }
-            goto.setOptions(bot, options)
             // @ts-ignore
-            if (bot.bot.pathfinder.goal?.['name'] === goal.name) {
+            if (bot.bot.pathfinder.goal?.['name'] === goal.name &&
+                !isGoalChanged) {
                 return
             }
-            bot.bot.pathfinder.setGoal(goal, true)
+            goto.setOptions(bot, options)
+            bot.bot.pathfinder.setGoal(goal, false)
         }
 
         const stopMovement = function() {
@@ -608,20 +747,39 @@ module.exports = {
             return t * 1000
         }
 
-        // console.log(`[Bot "${bot.username}"] Attack ...`)
-
-        if (args.useMelee) {
-            if (args.useMeleeWeapon) {
-                yield* equipMeleeWeapon()
+        let noPath = {
+            range: 0,
+            melee: 0,
+        }
+        /**
+         * @param {import('mineflayer-pathfinder').PartiallyComputedPath} path
+         */
+        const onPathUpdate = (path) => {
+            if (isGoalChanged) { return }
+            /**
+             * @type {keyof noPath}
+             */
+            let key
+            if (movementState === 'goto-melee') {
+                key = 'melee'
+            } else if (movementState === 'goto-range') {
+                key = 'range'
             } else {
-                // console.log(`[Bot "${bot.username}"] Attacking with bare hands`)
-                if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
-                    yield* wrap(bot.bot.unequip('hand'))
-                }
+                return
+            }
+
+            if (path.status === 'noPath') {
+                noPath[key] = performance.now()
+            } else {
+                noPath[key] = 0
             }
         }
 
-        let reequipMeleeWeapon = false
+        bot.bot.on('path_update', onPathUpdate)
+
+        // console.log(`[Bot "${bot.username}"] Attack ...`)
+
+        let reequipMeleeWeapon = true
         let isGoalChanged = false
 
         /**
@@ -801,6 +959,14 @@ module.exports = {
                     if (!isAlive(target)) { continue }
                 }
 
+                if (noPath.melee && performance.now() - noPath.melee > 5000) {
+                    noPath.melee = 0
+                }
+
+                if (noPath.range && performance.now() - noPath.range > 5000) {
+                    noPath.range = 0
+                }
+
                 ensureMovement()
 
                 // {
@@ -840,7 +1006,7 @@ module.exports = {
 
                 const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
-                if (args.useMelee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
+                if (args.useMelee && !noPath.melee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         // yield* goto.task(bot, {
@@ -862,8 +1028,15 @@ module.exports = {
                     movementState = 'none'
 
                     if (reequipMeleeWeapon) {
-                        // console.log(`[Bot "${bot.username}"] Reequipping melee weapon ...`)
-                        yield* equipMeleeWeapon()
+                        // console.log(`[Bot "${bot.username}"] Equipping melee weapon ...`)
+                        if (args.useMeleeWeapon) {
+                            yield* equipMeleeWeapon(target.name)
+                        } else {
+                            // console.log(`[Bot "${bot.username}"] Attacking with bare hands`)
+                            if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
+                                yield* wrap(bot.bot.unequip('hand'))
+                            }
+                        }
                         // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
                         reequipMeleeWeapon = false
                     }
@@ -903,7 +1076,7 @@ module.exports = {
                     continue
                 }
 
-                if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee) && target.name !== 'enderman') {
+                if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
                     const weapon = searchRangeWeapon(bot)
 
                     const getGrade = () => {
@@ -944,10 +1117,15 @@ module.exports = {
                             if (!isCharged) {
                                 // (`[Bot "${bot.username}"] Charging crossbow`)
                                 bot.activateHand('right')
-                                const chargeTime = getChargeTime(weapon.weapon)
+                                const chargeTime = weapon.chargeTime
                                 yield* sleepG(Math.max(100, chargeTime))
                                 bot.deactivateHand()
                                 // console.log(`[Bot "${bot.username}"] Crossbow charged`)
+                            }
+
+                            if (target.velocity.y < -0.1) {
+                                reequipMeleeWeapon = true
+                                continue
                             }
 
                             grade = getGrade()
@@ -967,6 +1145,11 @@ module.exports = {
                             }
                         } else if (weapon.weapon === Weapons.egg ||
                             weapon.weapon === Weapons.snowball) {
+                            if (target.velocity.y < -0.1) {
+                                reequipMeleeWeapon = true
+                                continue
+                            }
+
                             yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
                             if (bot.bot.supportFeature('useItemWithOwnPacket')) {
                                 bot.bot._client.write('use_item', {
@@ -975,12 +1158,17 @@ module.exports = {
                             }
                             bot.env.entityHurtTimes[target.id] = performance.now() - 50 - 50
                         } else if (weapon.weapon === Weapons.bow) {
+                            if (target.velocity.y < -0.1) {
+                                reequipMeleeWeapon = true
+                                continue
+                            }
+
                             // console.log(`[Bot "${bot.username}"] Pulling bow`)
                             bot.activateHand('right')
-                            const chargeTime = getChargeTime(weapon.weapon)
+                            const chargeTime = weapon.chargeTime
                             yield* sleepG(Math.max(hurtTime, chargeTime))
 
-                            if (!target || !target.isValid) {
+                            if (!target || !target.isValid || target.velocity.y < -0.1) {
                                 if (!(yield* bot.clearMainHand())) {
                                     console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
                                 }
@@ -1037,6 +1225,7 @@ module.exports = {
             }
             return true
         } finally {
+            bot.bot.off('path_update', onPathUpdate)
             if (bot.isLeftHandActive) {
                 bot.deactivateHand()
             }
