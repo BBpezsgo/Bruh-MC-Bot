@@ -470,6 +470,18 @@ module.exports = class Environment {
      */
     *scanChests(bot) {
         let scannedChests = 0
+
+        for (let i = this.chests.length - 1; i >= 0; i--) {
+            const chest = this.chests[i]
+            if (chest.position.dimension !== bot.dimension) { continue }
+            const blockAt = bot.bot.blockAt(chest.position.xyz(bot.dimension))
+            if (!blockAt) { continue }
+            if (blockAt.name !== 'chest') {
+                console.log(`[Bot "${bot.username}"] Chest at ${chest.position} disappeared`)
+                this.chests.splice(i, 1)
+            }
+        }
+
         console.log(`[Bot "${bot.username}"] Scanning chests ...`)
         const chestPositions = bot.bot.findBlocks({
             point: bot.bot.entity.position.clone(),
@@ -550,6 +562,8 @@ module.exports = class Environment {
             }
         }
         console.log(`[Bot "${bot.username}"] Chests scanned`)
+
+        this.save()
 
         return scannedChests
     }

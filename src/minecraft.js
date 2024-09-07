@@ -1427,7 +1427,7 @@ module.exports = class Minecraft {
 
     /**
      * @param {string} name
-     * @returns {Array<getMcData.Block>}
+     * @returns {Array<getMcData.IndexedBlock>}
      */
     getCorrectBlocks(name) {
         if (name === 'dirt') {

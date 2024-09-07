@@ -2522,7 +2522,7 @@ module.exports = class BruhBot {
                 case 'food': {
                     if (foodPointsInInventory >= item.food) { break }
                     const foods = bot.mc.getGoodFoods(false).map(v => v.name)
-                    console.warn(`[Bot "${bot.username}"] Low on food`)
+                    // console.warn(`[Bot "${bot.username}"] Low on food`)
                     try {
                         yield* tasks.gatherItem.task(bot, {
                             item: foods,
@@ -3346,9 +3346,9 @@ module.exports = class BruhBot {
      * @returns {import('./task').Task<number>}
      */
     *chestWithdraw(chest, chestBlock, item, count) {
-        const withdrawCount = (count === Infinity) ? this.containerItemCount(chest, item) : count
+        const withdrawCount = Math.min(this.containerItemCount(chest, item), count)
         if (withdrawCount === 0) {
-            console.warn(`No ${item} in the chest`)
+            console.warn(`No ${item?.name} in the chest`)
             return 0
         }
 
@@ -3361,12 +3361,12 @@ module.exports = class BruhBot {
             .filter(v => (v.item) && isItemEquals(v.item, item) && (v.item.count))
 
         if (containerItems.length === 0) {
-            console.warn(`No ${item} in the chest (what?)`)
+            console.warn(`No ${item?.name} in the chest (what?)`)
             return 0
         }
 
         if (!containerItems[0]?.item) {
-            console.warn(`No ${item} in the chest (what???)`)
+            console.warn(`No ${item?.name} in the chest (what???)`)
             return 0
         }
 
