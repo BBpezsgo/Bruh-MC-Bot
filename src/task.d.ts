@@ -15,4 +15,5 @@ export type TaskDef<TResult = void, TArgs extends {} = {}, TUtilities extends {}
 export type CommonArgs<TArgs extends {}> = TArgs & {
     onStatusMessage?: (message: string) => void;
     cancel?: () => Task<void>;
+    silent?: boolean;
 }

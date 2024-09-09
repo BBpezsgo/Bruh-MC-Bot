@@ -20,7 +20,6 @@
 */
 
 const { Vec3 } = require('vec3')
-const { nonce } = require('./utils/math')
 const Commands = require('./commands')
 
 /**
@@ -153,7 +152,7 @@ module.exports = class TextDisplay {
      */
     constructor(commands, uuid = null) {
         this._commands = commands
-        this._nonce = uuid ?? nonce(8)
+        this._nonce = uuid ?? Math.nonce(8)
         this._lastEvent = performance.now()
         this._lockOn = null
 

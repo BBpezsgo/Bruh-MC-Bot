@@ -225,17 +225,21 @@ class ManagedTask {
         if (!this._task) {
             this._task = this._def.task(this._bot, this.args)
             this._status = 'running'
-            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" started`)
+            if (!this.args.silent) {
+                console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" started`)
+            }
         }
 
         try {
             const v = this._task.next()
             if (v.done) {
                 this._status = 'done'
-                if (v.value === undefined) {
-                    console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
-                } else {
-                    console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                if (!this.args.silent) {
+                    if (v.value === undefined) {
+                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
+                    } else {
+                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                    }
                 }
                 if (this._resolve) { this._resolve(v.value) }
                 return true

@@ -21,7 +21,7 @@ const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
 const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
-const mathUtils = require('./utils/math')
+require('./utils/math')
 const Environment = require('./environment')
 const Memory = require('./memory')
 const Debug = require('./debug')
@@ -252,6 +252,11 @@ module.exports = class BruhBot {
      * @type {Interval}
      */
     breedAnimalsInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    loadCrossbowsInterval
 
     /**
      * @private
@@ -450,9 +455,7 @@ module.exports = class BruhBot {
         this.randomLookInterval = new Interval(10000)
         this.ensureEquipmentInterval = new Interval(60000)
         this.goBackInterval = new Interval(20000)
-        this.tryAutoHarvestInterval = new Interval(5000)
-        this.tryRestoreCropsInterval = new Interval(15000)
-        this.breedAnimalsInterval = new Interval(20000)
+        this.loadCrossbowsInterval = new Interval(5000)
         this.moveAwayInterval = new Interval(3000)
         this.dumpTrashInterval = new Interval(20000)
         this.lookAtPlayerTimeout = new Interval(5000)
@@ -1962,7 +1965,7 @@ module.exports = class BruhBot {
 
                 const entityDirection = Math.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
 
-                const angle = mathUtils.vectorAngle({
+                const angle = Math.vectorAngle({
                     x: directionToSelf.x,
                     y: directionToSelf.z,
                 }, {
@@ -2063,9 +2066,7 @@ module.exports = class BruhBot {
                     /**
                      * @param {Vec3} p
                      */
-                    const d = (p) => {
-                        return mathUtils.lineDistanceSquared(p, a, b)
-                    }
+                    const d = (p) => Math.lineDistanceSquared(p, a, b)
                     this.tasks.push(this, {
                         task: tasks.goto.task,
                         id: `flee-from-${e.id}`,
@@ -2263,7 +2264,7 @@ module.exports = class BruhBot {
                         if (!canAttack) {
                             console.warn(`[Bot "${this.username}"]: Can't attack ${entity.name}`)
                             delete this.memory.hurtBy[by]
-                        } else if (mathUtils.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), entity) < 4) {
+                        } else if (Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), entity) < 4) {
                             this.bot.attack(entity)
                             delete this.memory.hurtBy[by]
                         } else if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
@@ -2347,6 +2348,31 @@ module.exports = class BruhBot {
     }
 
     doBoredomTasks() {
+        if (this.loadCrossbowsInterval.done()) {
+            this.tasks.push(this, {
+                task: function*(bot) {
+                    const crossbows =
+                        bot.inventoryItems(null)
+                        .filter(v => v.name === 'crossbow')
+                        .toArray()
+                    // console.log(`[Bot "${bot.username}"] Loading ${crossbows.length} crossbows`)
+                    for (const crossbow of crossbows) {
+                        if (!tasks.attack.isCrossbowCharged(crossbow) &&
+                            bot.searchInventoryItem(null, 'arrow')) {
+                            const weapon = tasks.attack.resolveRangeWeapon(crossbow)
+                            yield* taskUtils.wrap(bot.bot.equip(crossbow, 'hand'))
+                            bot.activateHand('right')
+                            yield* taskUtils.sleepG(Math.max(100, weapon.chargeTime))
+                            bot.deactivateHand()
+                        }
+                    }
+                },
+                id: 'load-crossbow',
+            }, {
+                silent: true
+            }, priorities.low)
+        }
+        
         if (this.memory.mlgJunkBlocks.length > 0) {
             this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
             return
@@ -2762,8 +2788,8 @@ module.exports = class BruhBot {
      * @private
      */
     lookRandomly() {
-        const pitch = mathUtils.randomInt(-40, 30)
-        const yaw = mathUtils.randomInt(-180, 180)
+        const pitch = Math.randomInt(-40, 30)
+        const yaw = Math.randomInt(-180, 180)
         this.bot.look(yaw * Math.deg2rad, pitch * Math.deg2rad)
     }
 
@@ -3044,6 +3070,8 @@ module.exports = class BruhBot {
             }
 
             for (const specialSlotId of specialSlotIds) {
+                if (specialSlotId >= window.inventoryStart &&
+                    specialSlotId < window.inventoryEnd) { continue }
                 const item = window.slots[specialSlotId]
                 if (!item) { continue }
                 yield item

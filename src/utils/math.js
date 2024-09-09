@@ -2,17 +2,13 @@
 
 const { Vec3 } = require('vec3')
 
-/**
- * @param {number} min
- * @param {number} max
- */
-function randomInt(min, max) {
+Math.randomInt = function(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min)
 }
 
 const nonceCharacters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
-function nonce(length = 8) {
+Math.nonce = function(length = 8) {
     let result = ''
     for (let i = 0; i < length; i++) {
         result += nonceCharacters[Math.round(Math.random() * length)]
@@ -20,8 +16,12 @@ function nonce(length = 8) {
     return result
 }
 
+Math.clamp = function(v, min, max) {
+    return Math.max(min, Math.min(max, v))
+}
+
 Math.lerp = function(a, b, t) {
-    return a + ((b - a) * Math.max(0, Math.min(1, t)))
+    return a + ((b - a) * Math.clamp(t, 0, 1))
 }
 
 Math.lerpDeg = function(a, b, t) {
@@ -34,7 +34,7 @@ Math.lerpRad = function(a, b, t) {
 }
 
 Math.lerpColor = function(a, b, t) {
-    t = Math.max(0, Math.min(1, t))
+    t = Math.clamp(t, 0, 1)
     return [
         a[0] + ((b[0] - a[0]) * t),
         a[1] + ((b[1] - a[1]) * t),
@@ -42,7 +42,6 @@ Math.lerpColor = function(a, b, t) {
     ]
 }
 
-const costDepth = 20
 // @ts-ignore
 Math.deg2rad = Math.PI / 180
 // @ts-ignore
@@ -60,120 +59,61 @@ Math.rotationToVector = function(pitchDeg, yawDeg) {
     return Math.rotationToVectorRad(pitchDeg * Math.deg2rad, yawDeg * Math.deg2rad)
 }
 
-/**
- * @param {Readonly<{ x: number; y: number; }>} a
- * @param {Readonly<{ x: number; y: number; }>} b
- */
-function vectorAngle(a, b) {
+Math.vectorAngle = function(a, b) {
     return Math.atan2(b.y * a.x - b.x * a.y, b.x * a.x + b.y * a.y)
 }
 
-/**
- * @param {Readonly<{ x: number; y: number; z: number; }>} point 
- * @param {Readonly<{ min: { x: number; y: number; z: number; }; max: { x: number; y: number; z: number; }; }>} box 
- */
-function boxDistance(point, box) { return Math.sqrt(boxDistanceSquared(point, box)) }
+Math.distance = function(a, b) { return Math.sqrt(Math.distanceSquared(a, b)) }
+Math.distanceSquared = function(a, b) { return Math.pow((b.x - a.x), 2) + Math.pow((b.y - a.y), 2) + Math.pow((b.z - a.z), 2) }
 
-/**
- * @param {Readonly<{ x: number; y: number; z: number; }>} point 
- * @param {Readonly<{ min: { x: number; y: number; z: number; }; max: { x: number; y: number; z: number; }; }>} box 
- */
-function boxDistanceSquared(point, box) {
+Math.boxDistance = function(point, box) { return Math.sqrt(Math.boxDistanceSquared(point, box)) }
+
+Math.boxDistanceSquared = function(point, box) {
     const dx = Math.max(box.min.x - point.x, 0, point.x - box.max.x)
     const dy = Math.max(box.min.y - point.y, 0, point.y - box.max.y)
     const dz = Math.max(box.min.z - point.z, 0, point.z - box.max.z)
     return (dx * dx + dy * dy + dz * dz)
 }
 
-/**
- * @overload
- * @param {Vec3} a
- * @param {Vec3 | import('prismarine-entity').Entity} b
- * @returns {number}
- */
-/**
- * @overload
- * @param {Vec3 | import('prismarine-entity').Entity} a
- * @param {Vec3} b
- * @returns {number}
- */
-/**
- * @param {Vec3 | import('prismarine-entity').Entity} a
- * @param {Vec3 | import('prismarine-entity').Entity} b
- * @returns {number}
- */
-function entityDistance(a, b) {
-    // @ts-ignore
-    return Math.sqrt(entityDistanceSquared(a, b))
+Math.entityDistance = function(a, b) {
+    return Math.sqrt(Math.entityDistanceSquared(a, b))
 }
 
-/**
- * @overload
- * @param {Vec3} a
- * @param {Vec3 | import('prismarine-entity').Entity} b
- * @returns {number}
- */
-/**
- * @overload
- * @param {Vec3 | import('prismarine-entity').Entity} a
- * @param {Vec3} b
- * @returns {number}
- */
-/**
- * @param {Vec3 | import('prismarine-entity').Entity} a
- * @param {Vec3 | import('prismarine-entity').Entity} b
- * @returns {number}
- */
-function entityDistanceSquared(a, b) {
+Math.entityDistanceSquared = function(a, b) {
     if ('isValid' in a) {
         if ('isValid' in b) { throw new Error(`Not implemented`) }
-        return boxDistanceSquared(b, {
+        return Math.boxDistanceSquared(b, {
             min: a.position.offset(a.width * -0.5, 0, a.width * -0.5),
             max: a.position.offset(a.width * 0.5, a.height, a.width * 0.5),
         })
     } else {
         if ('isValid' in b) {
-            return boxDistanceSquared(a, {
+            return Math.boxDistanceSquared(a, {
                 min: b.position.offset(b.width * -0.5, 0, b.width * -0.5),
                 max: b.position.offset(b.width * 0.5, b.height, b.width * 0.5),
             })
         } else {
-            return a.distanceSquared(b)
+            return Math.distanceSquared(a, b)
         }
     }
 }
 
-/**
- * @param {Vec3} point
- * @param {Vec3} a
- * @param {Vec3} b
- */
-function lineDistance(point, a, b) {
-    return Math.sqrt(lineDistanceSquared(point, a, b))
+Math.lineDistance = function(point, a, b) {
+    return Math.sqrt(Math.lineDistanceSquared(point, a, b))
 }
 
-/**
- * @param {Vec3} point
- * @param {Vec3} a
- * @param {Vec3} b
- */
-function lineDistanceSquared(point, a, b) {
-    const line_dist = a.distanceSquared(b)
-    if (line_dist === 0) { return point.distanceSquared(a) }
+Math.lineDistanceSquared = function(point, a, b) {
+    const line_dist = Math.distanceSquared(a, b)
+    if (line_dist === 0) { return Math.distanceSquared(point, a) }
     let t = ((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y) + (point.z - a.z) * (b.z - a.z)) / line_dist
-    t = Math.max(0, Math.min(1, t))
-    return point.distanceSquared(new Vec3(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y), a.z + t * (b.z - a.z)))
+    t = Math.clamp(t, 0, 1)
+    return Math.distanceSquared(
+        point,
+        {
+            x: a.x + t * (b.x - a.x),
+            y: a.y + t * (b.y - a.y),
+            z: a.z + t * (b.z - a.z),
+        })
 }
 
-module.exports = {
-    costDepth,
-    randomInt,
-    vectorAngle,
-    nonce,
-    boxDistance,
-    boxDistanceSquared,
-    entityDistance,
-    entityDistanceSquared,
-    lineDistance,
-    lineDistanceSquared,
-}
+module.exports = null

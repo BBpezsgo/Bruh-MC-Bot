@@ -1,4 +1,3 @@
-const { entityDistance } = require('../utils/math')
 const { basicRouteSearch } = require('../utils/other')
 const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
@@ -118,7 +117,7 @@ module.exports = {
                 })
                 yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[food].id, 'hand'))
                 yield* wrap(bot.bot.activateEntity(animal))
-                const distance = entityDistance(bot.bot.entity.position, animal)
+                const distance = Math.entityDistance(bot.bot.entity.position, animal)
                 if (distance < 4) {
                     bot.env.animalBreedTimes[animal.id] = Date.now()
                     feeded++

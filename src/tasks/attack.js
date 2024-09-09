@@ -7,7 +7,6 @@ const { Vec3 } = require('vec3')
 const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
-const { entityDistance, entityDistanceSquared } = require('../utils/math')
 const Debug = require('../debug')
 
 const distanceToUseRangeWeapons = 12
@@ -513,6 +512,8 @@ function isAlive(entity) {
  *   targets: Record<number, Entity>;
  * }) & PermissionArgs> & {
  *   can: (bot: import('../bruh-bot'), entity: Entity, permissions: PermissionArgs) => boolean;
+ *   isCrossbowCharged: isCrossbowCharged;
+ *   resolveRangeWeapon: resolveRangeWeapon;
  * }}
  */
 module.exports = {
@@ -591,7 +592,7 @@ module.exports = {
          * @param {Entity} entity
          */
         const calculateScore = function(entity) {
-            const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
+            const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
             const hostile = Minecraft.hostiles[entity.name]
 
@@ -862,7 +863,7 @@ module.exports = {
             },
             isEnd: function(node) {
                 for (const entity of this.getEntities()) {
-                    const d = entityDistanceSquared(node, entity)
+                    const d = Math.entityDistanceSquared(node, entity)
                     if (d <= this.rangeSq) { return false }
                 }
                 if (target) {
@@ -1004,7 +1005,7 @@ module.exports = {
                     TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
                 }
 
-                const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
+                const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
                 if (args.useMelee && !noPath.melee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
@@ -1256,7 +1257,7 @@ module.exports = {
 
         if (!isAlive(entity)) { return false }
 
-        const distance = entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
+        const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
         if (permissions.useMelee && (distance <= distanceToUseRangeWeapons || !permissions.useBow)) {
             return distance <= 6
@@ -1277,4 +1278,6 @@ module.exports = {
 
         return true
     },
+    isCrossbowCharged: isCrossbowCharged,
+    resolveRangeWeapon: resolveRangeWeapon,
 }

@@ -1,5 +1,4 @@
 const { Vec3 } = require('vec3')
-const { nonce } = require('./utils/math')
 const Commands = require('./commands')
 const { sleepG } = require('./utils/tasks')
 
@@ -106,7 +105,7 @@ module.exports = class BlockDisplay {
      */
     constructor(commands, options) {
         this._commands = commands
-        this._nonce = options.uuid ?? nonce(8)
+        this._nonce = options.uuid ?? Math.nonce(8)
         this._lastEvent = performance.now()
 
         BlockDisplay._registry[this._nonce] = this
