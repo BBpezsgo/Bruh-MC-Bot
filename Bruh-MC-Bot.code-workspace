@@ -112,7 +112,6 @@
 		"javascript.preferGoToSourceDefinition": true,
 		"javascript.suggest.jsdoc.generateReturns": false,
 		"javascript.suggest.names": false,
-		// "javascript.validate.enable": true.
 	},
 	"launch": {
 		"version": "0.2.0",

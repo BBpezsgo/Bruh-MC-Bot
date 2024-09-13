@@ -1648,9 +1648,9 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
-            match: /give\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
+            match: /give\s+(all|[0-9]*)\s*([a-zA-Z_ ]+)/,
             command: (sender, message, respond) => {
-                const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
+                const count = (message[1] === '') ? 1 : (message[1] === 'all') ? Infinity : Number.parseInt(message[1])
                 const itemName = message[2].toLowerCase().trim()
                 let item = null
 
@@ -1684,7 +1684,7 @@ module.exports = class BruhBot {
                     .then(result => {
                         if (!result[item.name]) {
                             respond(`I don't have ${item.name}`)
-                        } else if (result[item.name] < count) {
+                        } else if (result[item.name] < count && count !== Infinity) {
                             respond(`I had only ${result[item.name]} ${item.name}`)
                         } else {
                             respond(`There it is`)
@@ -2406,12 +2406,12 @@ module.exports = class BruhBot {
             }, {}, priorities.cleanup)
         }
 
-        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 20, minLifetime: 5000 })) {
-            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 20, minLifetime: 5000 }, priorities.unnecessary)
+        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 40, minLifetime: 5000 })) {
+            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 40, minLifetime: 5000 }, priorities.unnecessary)
         }
 
-        if (this.env.getClosestXp(this, { maxDistance: 20 })) {
-            this.tasks.push(this, tasks.pickupXp, { maxDistance: 20 }, priorities.unnecessary)
+        if (this.env.getClosestXp(this, { maxDistance: 40 })) {
+            this.tasks.push(this, tasks.pickupXp, { maxDistance: 40 }, priorities.unnecessary)
         }
 
         if (this.tryAutoHarvestInterval?.done()) {
@@ -2653,6 +2653,7 @@ module.exports = class BruhBot {
     static *breedAnimals(bot) {
         const fencings = yield* bot.env.scanFencings(bot)
         let n = 0
+        let _error = null
         for (const fencing of fencings) {
             try {
                 n += yield* tasks.breed.task(bot, {
@@ -2660,8 +2661,10 @@ module.exports = class BruhBot {
                 })
             } catch (error) {
                 console.error(error)
+                _error ??= error
             }
         }
+        if (!n) { throw _error }
         return n
     }
 
