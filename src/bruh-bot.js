@@ -401,19 +401,43 @@ module.exports = class BruhBot {
         global.bots ??= {}
         global.bots[config.bot.username] = this
 
+        this.env = config.environment ?? new Environment(path.join(config.worldPath, 'environment.json'))
+
         console.log(`[Bot "${config.bot.username}"] Connecting ...`)
         this.bot = MineFlayer.createBot({
             host: config.server.host,
             port: config.server.port,
             username: config.bot.username,
             logErrors: false,
+            shared: this.env.shared,
+            // storageBuilder: (options) => {
+            //     const worldPath = path.join(config.worldPath, options.worldName)
+            //     if (!worldPath.startsWith(config.worldPath)) { throw new Error(`Invalid world name`) }
+            //     if (!fs.existsSync(worldPath)) {
+            //         fs.mkdirSync(worldPath, { recursive: true })
+            //     }
+            //     const Anvil = require('prismarine-provider-anvil').Anvil('1.18')
+            //     return new Anvil(worldPath)
+            //     /** @type {typeof import('prismarine-chunk').CommonChunk} */  // @ts-ignore
+            //     const Chunk = require('prismarine-chunk')(this.bot.registry)
+            //     return {
+            //         load: async (chunkX, chunkY) => {
+            //             const chunkPath = path.join(worldPath, `${chunkX}_${chunkY}.json`)
+            //             if (!fs.existsSync(chunkPath)) { return null }
+            //             return Chunk.fromJson(fs.readFileSync(chunkPath, 'utf8'))
+            //         },
+            //         save: async (chunkX, chunkY, /** @type {import('prismarine-chunk').CommonChunk} */ chunk) => {
+            //             const chunkPath = path.join(worldPath, `${chunkX}_${chunkY}.json`)
+            //             fs.writeFileSync(chunkPath, chunk.toJson(), 'utf8')
+            //         }
+            //     }
+            // }
         })
 
         this.bot.on('injected', (plugin) => {
             console.log(`[Bot "${this.username}"] Plugin loaded: ${plugin.pluginName}`)
         })
 
-        this.env = config.environment ?? new Environment(path.join(config.worldPath, 'environment.json'))
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
         this.tasks = new TaskManager()
 

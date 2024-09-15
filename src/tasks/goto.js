@@ -342,85 +342,18 @@ function setOptions(bot, args) {
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
     const originalMovements = args.movements ?? bot.restrictedMovements
-    const newMovements = new Movements(bot.bot)
+    const newMovements = new Movements(bot.bot, originalMovements)
 
-    newMovements.blocksCanBreakAnyway = originalMovements.blocksCanBreakAnyway
-    newMovements.blocksCantBreak = originalMovements.blocksCantBreak
-    newMovements.blocksToAvoid = originalMovements.blocksToAvoid
-    newMovements.entitiesToAvoid = originalMovements.entitiesToAvoid
-
-    newMovements.carpets = originalMovements.carpets
-    newMovements.climbables = originalMovements.climbables
-    newMovements.emptyBlocks = originalMovements.emptyBlocks
-    newMovements.fences = originalMovements.fences
-    newMovements.gravityBlocks = originalMovements.gravityBlocks
-    newMovements.interactableBlocks = originalMovements.interactableBlocks
-    newMovements.liquids = originalMovements.liquids
-    newMovements.openable = new Set([
-        bot.mc.registry.blocksByName['oak_door'].id,
-        bot.mc.registry.blocksByName['spruce_door'].id,
-        bot.mc.registry.blocksByName['birch_door'].id,
-        bot.mc.registry.blocksByName['jungle_door'].id,
-        bot.mc.registry.blocksByName['acacia_door'].id,
-        bot.mc.registry.blocksByName['dark_oak_door'].id,
-        bot.mc.registry.blocksByName['mangrove_door'].id,
-        bot.mc.registry.blocksByName['cherry_door'].id,
-        bot.mc.registry.blocksByName['bamboo_door'].id,
-        bot.mc.registry.blocksByName['crimson_door'].id,
-        bot.mc.registry.blocksByName['warped_door'].id,
-
-        bot.mc.registry.blocksByName['oak_fence_gate'].id,
-        bot.mc.registry.blocksByName['spruce_fence_gate'].id,
-        bot.mc.registry.blocksByName['birch_fence_gate'].id,
-        bot.mc.registry.blocksByName['jungle_fence_gate'].id,
-        bot.mc.registry.blocksByName['acacia_fence_gate'].id,
-        bot.mc.registry.blocksByName['dark_oak_fence_gate'].id,
-        bot.mc.registry.blocksByName['mangrove_fence_gate'].id,
-        bot.mc.registry.blocksByName['cherry_fence_gate'].id,
-        bot.mc.registry.blocksByName['bamboo_fence_gate'].id,
-        bot.mc.registry.blocksByName['crimson_fence_gate'].id,
-        bot.mc.registry.blocksByName['warped_fence_gate'].id,
-
-        // bot.mc.registry.blocksByName['oak_trapdoor'].id,
-        // bot.mc.registry.blocksByName['spruce_trapdoor'].id,
-        // bot.mc.registry.blocksByName['birch_trapdoor'].id,
-        // bot.mc.registry.blocksByName['jungle_trapdoor'].id,
-        // bot.mc.registry.blocksByName['acacia_trapdoor'].id,
-        // bot.mc.registry.blocksByName['dark_oak_trapdoor'].id,
-        // bot.mc.registry.blocksByName['mangrove_trapdoor'].id,
-        // bot.mc.registry.blocksByName['cherry_trapdoor'].id,
-        // bot.mc.registry.blocksByName['bamboo_trapdoor'].id,
-        // bot.mc.registry.blocksByName['crimson_trapdoor'].id,
-        // bot.mc.registry.blocksByName['warped_trapdoor'].id,
-    ])
-    newMovements.passableEntities = originalMovements.passableEntities
-    newMovements.replaceables = originalMovements.replaceables
-    newMovements.scafoldingBlocks = originalMovements.scafoldingBlocks
-
-    newMovements.digCost = originalMovements.digCost
-    newMovements.entityCost = originalMovements.entityCost
-    newMovements.liquidCost = bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
-    newMovements.placeCost = originalMovements.placeCost
-
-    newMovements.entityIntersections = originalMovements.entityIntersections
-    newMovements.exclusionAreasBreak = originalMovements.exclusionAreasBreak
-    newMovements.exclusionAreasPlace = originalMovements.exclusionAreasPlace
-    newMovements.exclusionAreasStep = originalMovements.exclusionAreasStep
-
-    newMovements.allow1by1towers = originalMovements.allow1by1towers && !bot.quietMode
-    newMovements.allowEntityDetection = originalMovements.allowEntityDetection
-    newMovements.allowFreeMotion = originalMovements.allowFreeMotion
-    newMovements.allowParkour = originalMovements.allowParkour
-    newMovements.allowSprinting = !bot.quietMode && (args.sprint ?? false)
-    newMovements.canDig = originalMovements.canDig && !bot.quietMode
+    newMovements.allow1by1towers &&= !bot.quietMode
+    newMovements.canDig &&= !bot.quietMode
     newMovements.canOpenDoors = true && !bot.quietMode
-    newMovements.dontCreateFlow = originalMovements.dontCreateFlow
-    newMovements.dontMineUnderFallingBlock = originalMovements.dontMineUnderFallingBlock
-    newMovements.infiniteLiquidDropdownDistance = originalMovements.infiniteLiquidDropdownDistance && !bot.quietMode
-    newMovements.maxDropDown = originalMovements.maxDropDown
-    newMovements.sneak = originalMovements.sneak || bot.quietMode
+    newMovements.infiniteLiquidDropdownDistance &&= !bot.quietMode
+    newMovements.sneak ||= bot.quietMode
 
-    if (args.excludeStep && args.excludeStep.length > 0) {
+    newMovements.liquidCost = bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
+    newMovements.allowSprinting = !bot.quietMode && (args.sprint ?? false)
+
+    if (args.excludeStep?.length) {
         newMovements.exclusionAreasStep = [...newMovements.exclusionAreasStep]
         for (const excludeStep of args.excludeStep) {
             newMovements.exclusionAreasStep.push(block => {

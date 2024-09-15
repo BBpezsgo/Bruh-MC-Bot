@@ -125,6 +125,12 @@ module.exports = class Environment {
     bots
 
     /**
+     * @readonly
+     * @type {Partial<import('mineflayer').Shared>}
+     */
+    shared
+
+    /**
      * @private @readonly
      * @type {string}
      */
@@ -213,6 +219,7 @@ module.exports = class Environment {
         this.itemRequests = []
         this.villagers = {}
         this.entityOwners = {}
+        this.shared = {}
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
