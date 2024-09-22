@@ -3,7 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const { wrap, sleepG } = require('./utils/tasks')
-const { filterHostiles, directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require('./utils/other')
+const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require('./utils/other')
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const Minecraft = require('./minecraft')
@@ -1055,29 +1055,6 @@ module.exports = class Environment {
                 entity.name === 'creeper' &&
                 entity.metadata[16] === 1
             )
-        })
-    }
-
-    /**
-     * @param {import('./bruh-bot')} bot
-     * @returns {import('prismarine-entity').Entity | null}
-     */
-    possibleDirectHostileAttack(bot) {
-        return bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
-            if (!filterHostiles(entity, bot.bot.entity.position)) { return false }
-
-            if (!entity.name) {
-                return false
-            }
-
-            const distance = bot.bot.entity.position.distanceTo(entity.position)
-
-            if (entity.name === 'skeleton' ||
-                entity.name === 'stray') {
-                return distance <= 20
-            }
-
-            return distance < 10
         })
     }
 

@@ -2,39 +2,7 @@ const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const NBT = require('prismarine-nbt')
-const { EntityPose } = require('../entity-metadata')
 const CoolIterable = require('../cool-iterable')
-
-/**
- * @param {ReadonlyArray<import('prismarine-item').Item>} before
- * @param {ReadonlyArray<import('prismarine-item').Item>} after
- * @returns {Array<{ name: string; delta: number; }>}
- */
-function itemsDelta(before, after) {
-    /**
-     * @type {Map<string, number>}
-     */
-    const map = new Map()
-
-    for (const item of before) {
-        map.set(item.name, (map.get(item.name) ?? 0) - item.count)
-    }
-
-    for (const item of after) {
-        map.set(item.name, (map.get(item.name) ?? 0) + item.count)
-    }
-
-    /**
-     * @type {Array<{ name: string; delta: number; }>}
-     */
-    const res = []
-
-    map.forEach((value, key) => {
-        res.push({ name: key, delta: value })
-    })
-
-    return res
-}
 
 /**
  * @template {{ x: number; y: number; z: number; }} TPoint
@@ -103,70 +71,6 @@ function basicRouteSearch(start, points, mapper) {
     }
 
     return result
-}
-
-/**
- * @param {Entity} entity
- * @param {Vec3} point
- * @returns {number | null}
- */
-function filterHostiles(entity, point) {
-    if (entity.metadata[2]) { return null }
-    if (entity.metadata[6] === EntityPose.DYING) { return null }
-
-    if (entity.name === 'slime') {
-        if (entity.metadata[16]) { return 1 }
-        return 0
-    }
-
-    if (entity.name === 'ghast') {
-        return 50
-    }
-
-    if (entity.type !== 'hostile') { return null }
-
-    if (entity.name === 'zombified_piglin') {
-        return 0
-    }
-
-    if (entity.name === 'enderman') {
-        return 0
-    }
-
-    const hostileAttackDistance = {
-        'evoker': 12,
-        'creeper': 15,
-        'skeleton': 16,
-        'cave_spider': 16,
-        'endermite': 16,
-        'hoglin': 16,
-        'magma_cube': 16,
-        'slime': 16,
-        'wither_skeleton': 16,
-        'witch': 16,
-        'spider': 16,
-        'stray': 16,
-        'ravager': 32,
-        'husk': 35,
-        'zombie_villager': 35,
-        'zombie': 35,
-
-        'piglin': null,
-        'piglin_brute': null,
-        'pillager': null,
-        'silverfish': null,
-        'zoglin': null,
-        'vindicator': null,
-    }[entity.name ?? '']
-
-    if (hostileAttackDistance) {
-        const distance = point.distanceTo(entity.position)
-        if (distance > hostileAttackDistance) {
-            return 0
-        }
-    }
-
-    return hostileAttackDistance
 }
 
 /**
@@ -438,7 +342,7 @@ function NBT2JSON(nbt) {
             return nbt.value.value.map(v => ({
                 type: nbt.value.type,
                 value: v,
-            // @ts-ignore
+                // @ts-ignore
             })).map(NBT2JSON)
         }
         case NBT.TagType.Long:
@@ -580,11 +484,34 @@ function sequenceEquals(a, b) {
     }
 }
 
+/**
+ * @param {Readonly<{ value: any; modifiers: Array<{ uuid: string; amount: number; operation: number }>; }>} attribute
+ */
+function resolveEntityAttribute(attribute) {
+    if (!attribute) { return null }
+    let res = attribute.value
+    if (typeof res !== 'number') { return null }
+    for (const modifier of attribute.modifiers) {
+        switch (modifier.operation) {
+            case 0:
+                res += modifier.amount
+                break
+            // case 1:
+            //     debugger
+            //     break
+            // case 2:
+            //     debugger
+            //     break
+            default:
+                throw new Error(`Not implemented`)
+        }
+    }
+    return res
+}
+
 module.exports = {
-    itemsDelta,
     backNForthSort,
     basicRouteSearch,
-    filterHostiles,
     trajectoryTime,
     Timeout,
     Interval,
@@ -598,4 +525,5 @@ module.exports = {
     incrementalNeighbors,
     sequenceEquals,
     isItemEquals,
+    resolveEntityAttribute,
 }
