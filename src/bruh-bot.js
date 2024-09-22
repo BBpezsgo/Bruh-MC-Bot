@@ -2150,6 +2150,48 @@ module.exports = class BruhBot {
             }
         }
 
+        const badEffects = this.mc.registry.effectsArray.filter(v => v.type === 'bad').map(v => v.id)
+
+        if (Object.keys(this.bot.entity.effects).length > 0) {
+            for (const badEffect of badEffects) {
+                if (this.bot.entity.effects[badEffect]) {
+                    const milk = this.searchInventoryItem(null, 'milk_bucket')
+                    if (milk) {
+                        this.tasks.push(this, {
+                            task: function*(bot) {
+                                const milk = bot.searchInventoryItem(null, 'milk_bucket')
+                                if (!milk) { throw `I have no milk` }
+                                yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'))
+                                yield* taskUtils.wrap(bot.bot.consume())
+                            },
+                            id: 'consume-milk',
+                        }, priorities.critical)
+                    }
+                }
+            }
+        }
+
+        const badEffects = this.mc.registry.effectsArray.filter(v => v.type === 'bad').map(v => v.id)
+
+        if (Object.keys(this.bot.entity.effects).length > 0) {
+            for (const badEffect of badEffects) {
+                if (this.bot.entity.effects[badEffect]) {
+                    const milk = this.searchInventoryItem(null, 'milk_bucket')
+                    if (milk) {
+                        this.tasks.push(this, {
+                            task: function*(bot) {
+                                const milk = bot.searchInventoryItem(null, 'milk_bucket')
+                                if (!milk) { throw `I have no milk` }
+                                yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'))
+                                yield* taskUtils.wrap(bot.bot.consume())
+                            },
+                            id: 'consume-milk',
+                        }, priorities.critical)
+                    }
+                }
+            }
+        }
+
         if (this._runningTask && this._runningTask.priority >= priorities.critical) {
             return
         }
