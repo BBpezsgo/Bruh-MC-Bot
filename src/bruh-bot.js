@@ -592,31 +592,20 @@ module.exports = class BruhBot {
             }
         })
 
-        this.bot.once('inject_allowed', () => {
-            console.log(`[Bot "${this.username}"] Loading plugins ...`)
-            this.bot.loadPlugin(MineFlayerPathfinder.pathfinder)
-            this.bot.loadPlugin(MineFlayerArmorManager)
-            this.bot.loadPlugin(MineFlayerHawkEye)
-            this.bot.loadPlugin(MineFlayerElytra)
-
-            this.bot.pathfinder.enablePathShortcut = true
-            this.bot.hawkEye.startRadar()
-
-            console.log(`[Bot "${this.username}"] Plugins loaded`)
-        })
-
         this.bot.once('spawn', () => {
             console.log(`[Bot "${this.username}"] Spawned`)
             this.bot.clearControlStates()
 
-            console.log(`[Bot "${this.username}"] Loading ...`)
+            this.bot.pathfinder.enablePathShortcut = true
+            this.bot.hawkEye?.startRadar()
 
+            const mineflayerPathfinder = require('mineflayer-pathfinder')
             // @ts-ignore
-            this.permissiveMovements = new MineFlayerPathfinder.Movements(this.bot)
+            this.permissiveMovements = new mineflayerPathfinder.Movements(this.bot)
             // @ts-ignore
-            this.restrictedMovements = new MineFlayerPathfinder.Movements(this.bot)
+            this.restrictedMovements = new mineflayerPathfinder.Movements(this.bot)
             // @ts-ignore
-            this.cutTreeMovements = new MineFlayerPathfinder.Movements(this.bot)
+            this.cutTreeMovements = new mineflayerPathfinder.Movements(this.bot)
 
             this.mc.setPermissiveMovements(this.permissiveMovements)
             this.mc.setRestrictedMovements(this.restrictedMovements)
@@ -1059,6 +1048,11 @@ module.exports = class BruhBot {
                         if (!elytraItem) {
                             throw `I have no elytra`
                         }
+
+                        if (!bot.bot.elytrafly) {
+                            bot.bot.loadPlugin(require('mineflayer-elytrafly').elytrafly)
+                        }
+
                         bot.bot.equip(elytraItem, 'torso')
                         bot.bot.elytrafly.elytraFlyTo(location.xyz(bot.dimension))
                         let isDone = false
