@@ -20,6 +20,13 @@ module.exports = {
             throw `I have no enderpearl`
         }
 
+        if (!bot.bot.hawkEye) {
+            new Promise(resolve => {
+                bot.bot.loadPlugin(require('minecrafthawkeye').default)
+                resolve()
+            })
+        }
+
         yield* goto.task(bot, { hawkeye: args.destination, weapon: Weapons.ender_pearl })
 
         const grade = bot.bot.hawkEye.getMasterGrade({

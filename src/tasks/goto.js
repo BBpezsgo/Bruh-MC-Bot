@@ -242,6 +242,13 @@ class GoalEntity extends goals.Goal {
  */
 function* getGoal(bot, args) {
     if ('hawkeye' in args) {
+        if (!bot.bot.hawkEye) {
+            new Promise(resolve => {
+                bot.bot.loadPlugin(require('minecrafthawkeye').default)
+                resolve()
+            })
+        }
+
         yield new GoalHawkeye(args.hawkeye, args.weapon, (from, to, weapon) => {
             const savedBotPosition = bot.bot.entity.position
             bot.bot.entity.position = from

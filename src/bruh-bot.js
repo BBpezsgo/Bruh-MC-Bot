@@ -4,12 +4,7 @@
 
 const fs = require('fs')
 const MineFlayer = require('mineflayer')
-const MineFlayerPathfinder = require('mineflayer-pathfinder')
-const MineFlayerElytra = require('mineflayer-elytrafly').elytrafly
-const MineFlayerHawkEye = require('minecrafthawkeye').default
-const MineFlayerArmorManager = require('mineflayer-armor-manager')
 const { Item } = require('prismarine-item')
-const hawkeye = require('minecrafthawkeye')
 const path = require('path')
 const levenshtein = require('damerau-levenshtein')
 
@@ -278,7 +273,7 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: hawkeye.Projectile; }>}
+     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: import('minecrafthawkeye').Projectile; }>}
      */
     incomingProjectiles
 
@@ -381,7 +376,7 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @type {MineFlayerPathfinder.PartiallyComputedPath | null}
+     * @type {import('mineflayer-pathfinder').PartiallyComputedPath | null}
      */
     _currentPath
 
@@ -410,6 +405,29 @@ module.exports = class BruhBot {
             username: config.bot.username,
             logErrors: false,
             shared: this.env.shared,
+            plugins: {
+                'anvil': false,
+                'book': false,
+                'boss_bar': false,
+                'command_block': false,
+                'creative': false,
+                'enchantment_table': false,
+                'experience': false,
+                'explosion': false,
+                'fishing': false,
+                'particle': false,
+                'resource_pack': false,
+                'settings': false,
+                'scoreboard': false,
+                'tablist': false,
+                'team': false,
+                'title': false,
+                'place_entity': false,
+                'pathfinder': require('mineflayer-pathfinder').pathfinder,
+                'armor_manager': require('mineflayer-armor-manager'),
+                // 'hawkeye': require('minecrafthawkeye').default,
+                // 'elytra': require('mineflayer-elytrafly').elytrafly,
+            }
             // storageBuilder: (options) => {
             //     const worldPath = path.join(config.worldPath, options.worldName)
             //     if (!worldPath.startsWith(config.worldPath)) { throw new Error(`Invalid world name`) }

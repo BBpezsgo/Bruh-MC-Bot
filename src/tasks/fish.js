@@ -96,6 +96,13 @@ module.exports = {
             isFishing = false
         }
 
+        if (!bot.bot.hawkEye) {
+            new Promise(resolve => {
+                bot.bot.loadPlugin(require('minecrafthawkeye').default)
+                resolve()
+            })
+        }
+
         while (isFishing) {
             yield
 
@@ -111,7 +118,7 @@ module.exports = {
                 if (n) { return n }
                 throw `There is no water`
             }
-
+    
             if (true) {
                 yield* goto.task(bot, {
                     point: water.offset(0, 0, 0),

@@ -1,6 +1,6 @@
 const { Entity } = require('prismarine-entity')
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
-const { Weapons } = require('minecrafthawkeye')
+const Weapons = require('minecrafthawkeye/dist/types/index').Weapons
 const { Item } = require('prismarine-item')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
@@ -8,6 +8,7 @@ const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
 const Debug = require('../debug')
+const { resolveEntityAttribute } = require('../utils/other')
 
 const distanceToUseRangeWeapons = 12
 
@@ -506,6 +507,15 @@ function isAlive(entity) {
 }
 
 /**
+ * @param {number} damage
+ * @param {number} armor
+ * @param {number} armorToughness
+ */
+function resolveDamage(damage, armor, armorToughness) {
+    return damage * (1 - ((Math.min(20, Math.max((armor / 5), armor - (4 * damage / (armorToughness + 8))))) / 25))
+}
+
+/**
  * @type {import('../task').TaskDef<boolean, ({
  *   target: Entity;
  * } | {
@@ -520,6 +530,13 @@ module.exports = {
     task: function*(bot, args) {
         if (!args.useBow && !args.useMelee) {
             throw `Every possible way of attacking is disabled`
+        }
+
+        if (!bot.bot.hawkEye) {
+            new Promise(resolve => {
+                bot.bot.loadPlugin(require('minecrafthawkeye').default)
+                resolve()
+            })
         }
 
         let lastPunch = 0
@@ -644,13 +661,19 @@ module.exports = {
             if (entity.health) {
                 const healthToConsider = 10
                 healthScore = (healthToConsider - (Math.sqrt(entity.health) * Math.sqrt(healthToConsider))) / healthToConsider
+
+                // const armor = resolveEntityAttribute(entity.attributes['minecraft:generic.armor']) ?? 0
+                // const armorToughness = resolveEntityAttribute(entity.attributes['minecraft:generic.armor_toughness']) ?? 0
+
+                // const resolvedDamage = resolveDamage(meleeWeapon?.damage ?? 1, armor, armorToughness)
             }
 
             /** `0..(hurtAt.length)` */
             let dangerScore = 0
+            const hurtByMemoryTime = 10000
             for (const hurtAt of (bot.memory.hurtBy[entity.id] ?? [])) {
                 const deltaTime = performance.now() - hurtAt
-                const hurtScore = Math.max(0, (10000 - deltaTime) / 10000)
+                const hurtScore = Math.max(0, (hurtByMemoryTime - deltaTime) / hurtByMemoryTime)
                 dangerScore += hurtScore
             }
 
@@ -797,6 +820,7 @@ module.exports = {
         const goalHawkeye = new goto.GoalHawkeye(null, null, (from, to, weapon) => {
             const savedBotPosition = bot.bot.entity.position
             bot.bot.entity.position = from
+            if (!bot.bot.hawkEye) { throw new Error(`Plugin hawekeye not loaded yet`) }
             const masterGrade = bot.bot.hawkEye.getMasterGrade({
                 position: to,
                 isValid: false,
@@ -1077,7 +1101,7 @@ module.exports = {
                     continue
                 }
 
-                if (args.useBow && (distance > distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
+                if (args.useBow && bot.bot.hawkEye && (distance > distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
                     const weapon = searchRangeWeapon(bot)
 
                     const getGrade = () => {
