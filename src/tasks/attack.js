@@ -1272,7 +1272,7 @@ module.exports = {
         if ('target' in args) {
             return `Attack ${args.target.displayName ?? args.target.name ?? 'something'}`
         } else {
-            return `Attack multiple targets`
+            return `Attack multiple targets [${Object.values(args.targets).map(v => `"${v.displayName ?? v.name ?? v.id}"`).join(', ')}]`
         }
     },
     definition: 'attack',

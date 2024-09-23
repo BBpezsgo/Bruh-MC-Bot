@@ -40,7 +40,7 @@ function checkTreasure(bot, waterPosition) {
 function findWater(bot, preferTreasure) {
     const waters = bot.bot.findBlocks({
         matching: bot.mc.registry.blocksByName['water'].id,
-        maxDistance: 32,
+        maxDistance: 128,
         count: 64,
         useExtraInfo: (/** @type {Block} */ water) => {
             if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
@@ -122,7 +122,7 @@ module.exports = {
             if (true) {
                 yield* goto.task(bot, {
                     point: water.offset(0, 0, 0),
-                    distance: 4,
+                    distance: 16,
                 })
                 yield* goto.task(bot, {
                     hawkeye: water.offset(0.5, 0.5, 0.5),

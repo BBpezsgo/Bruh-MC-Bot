@@ -633,13 +633,13 @@ module.exports = class BruhBot {
                 case 'dig_error':
                 case 'place_error':
                 case 'stuck':
-                    console.error(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    console.error(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
                 case 'no_scaffolding_blocks':
-                    console.warn(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    console.warn(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
                 default:
-                    // console.log(`[Bot "${this.username}"] [Pathfinder] Reset ${reason}`)
+                    // console.log(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
             }
             this._currentPath = null
@@ -2224,6 +2224,15 @@ module.exports = class BruhBot {
 
             if (distance > _hostile.rangeOfSight) {
                 // console.log(`${distance.toFixed(2)} > ${_hostile.rangeOfSight.toFixed(2)}`)
+                return false
+            }
+
+            const raycast = this.bot.world.raycast(
+                this.bot.entity.position.offset(0, 1.6, 0),
+                v.position.clone().subtract(this.bot.entity.position.offset(0, 1.6, 0)).normalize(),
+                distance + 2,
+                block => { return !block.transparent })
+            if (raycast) {
                 return false
             }
 
