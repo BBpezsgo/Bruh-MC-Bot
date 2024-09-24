@@ -53,7 +53,7 @@ module.exports = {
             const distance = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
 
             if (distance <= args.range) {
-                yield* sleepG(1000)
+                yield* sleepG(300)
             }
 
             try {
