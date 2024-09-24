@@ -1102,6 +1102,7 @@ module.exports = class BruhBot {
                     canUseChests: true,
                     canUseInventory: false,
                     canRequestFromPlayers: false,
+                    canHarvestMobs: true,
                 }, priorities.user, true)
                     ?.wait()
                     .then(result => result.count <= 0 ? respond(`I couldn't gather the item(s)`) : respond(`I gathered ${result.count} ${result.item}`))
@@ -1178,6 +1179,7 @@ module.exports = class BruhBot {
                     canUseInventory: false,
                     canRequestFromPlayers: false,
                     canTrade: true,
+                    canHarvestMobs: true,
                 }, priorities.user, true)
                     ?.wait()
                     .then(() => { })
@@ -2626,6 +2628,7 @@ module.exports = class BruhBot {
                             canUseChests: true,
                             canUseInventory: true,
                             canRequestFromPlayers: false && item.priority === 'must',
+                            canHarvestMobs: true,
                         })
                     } catch (error) {
                         console.error(error)
@@ -2645,6 +2648,7 @@ module.exports = class BruhBot {
                             canUseInventory: true,
                             canRequestFromPlayers: false && item.priority === 'must',
                             canTrade: true,
+                            canHarvestMobs: true,
                         })
                     } catch (error) {
                         console.error(error)
@@ -2664,6 +2668,7 @@ module.exports = class BruhBot {
                             canUseInventory: true,
                             canRequestFromPlayers: false && item.priority === 'must',
                             canTrade: true,
+                            canHarvestMobs: true,
                         })
                     } catch (error) {
                         console.error(error)

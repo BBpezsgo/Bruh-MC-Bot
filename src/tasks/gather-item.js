@@ -1,4 +1,4 @@
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const goto = require('./goto')
 const { Recipe } = require('prismarine-recipe')
@@ -34,6 +34,7 @@ const smelt = require('./smelt')
 *   canRequestFromPlayers?: boolean;
 *   canRequestFromBots?: boolean;
 *   canTrade?: boolean;
+*   canHarvestMobs?: boolean;
 * }} PermissionArgs
 */
 
@@ -44,6 +45,18 @@ const smelt = require('./smelt')
  *     item: string;
  *     count: number;
  *     chest: Vec3Dimension;
+ *   };
+ *   'harvest-mob': {
+ *     type: 'harvest-mob';
+ *     item: string;
+ *     count: number;
+ *     entity: {
+ *       id: number;
+ *       expectedType: string;
+ *     };
+ *     tool: string;
+ *     willToolDisappear: boolean;
+ *     isDroppingItem: boolean;
  *   };
  *   'craft': {
  *     type: 'craft';
@@ -129,6 +142,11 @@ class PredictedEnvironment {
      * @type {Record<import('../environment').PositionHash, { location: Vec3Dimension; delta: Record<string, number>; }>}
      */
     chests
+    /**
+     * @readonly
+     * @type {Array<number>}
+     */
+    harvestedMobs
 
     /**
      * @param {ReadonlyArray<PlanStep>} steps
@@ -137,6 +155,8 @@ class PredictedEnvironment {
     constructor(steps, registry) {
         this.inventory = {}
         this.chests = {}
+        this.harvestedMobs = []
+
         for (const step of steps) {
             switch (step.type) {
                 case 'goto': {
@@ -155,6 +175,14 @@ class PredictedEnvironment {
                     this.chests[hash].delta[step.item] -= step.count
                     // this.inventory[step.item] ??= 0
                     // this.inventory[step.item] += step.count
+                    continue
+                }
+                case 'harvest-mob': {
+                    this.harvestedMobs.push(step.entity.id)
+                    if (!step.willToolDisappear) {
+                        this.inventory[step.tool] ??= 0
+                        this.inventory[step.tool]++
+                    }
                     continue
                 }
                 case 'inventory': {
@@ -224,6 +252,9 @@ function planCost(plan) {
                     break
                 case 'dig':
                     cost += 0.1
+                    break
+                case 'harvest-mob':
+                    cost += 1
                     break
                 case 'craft': {
                     if (step.recipe.requiresTable) {
@@ -297,6 +328,12 @@ function planResult(plan, item) {
             if (step.type === 'trade') {
                 if (step.trade.outputItem.name === item) {
                     count += step.count * step.trade.outputItem.count
+                }
+                continue
+            }
+            if (step.type === 'harvest-mob') {
+                if (step.item === item) {
+                    count += step.count
                 }
                 continue
             }
@@ -857,6 +894,99 @@ const planners = [
             retryCount: 5,
         }
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        if (!permissions.canHarvestMobs) { return null }
+
+        switch (item) {
+            case 'milk_bucket': {
+                const bucketPlan = yield* plan(bot, "bucket", 1, {
+                    ...permissions,
+                    force: false,
+                    canUseInventory: true,
+                }, {
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                    ],
+                }, [...planSoFar])
+                if (planResult(bucketPlan, 'bucket') <= 0) {
+                    // throw `Can't milk cow: aint have a bucket`
+                    return null
+                }
+                const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
+                const entity = bot.bot.nearestEntity(e => {
+                    if (e.name !== 'cow') { return false }
+                    if (e.metadata[16]) { return false } // Baby
+                    if (future.harvestedMobs.includes(e.id)) { return false }
+                    return true
+                })
+                if (!entity) {
+                    // throw `Can't milk any cow because there is aint any`
+                    return null
+                }
+                return [
+                    ...bucketPlan,
+                    {
+                        type: 'harvest-mob',
+                        count: 1,
+                        item: 'milk_bucket',
+                        entity: {
+                            expectedType: entity.name,
+                            id: entity.id,
+                        },
+                        tool: 'bucket',
+                        willToolDisappear: true,
+                        isDroppingItem: false,
+                    }
+                ]
+            }
+            case 'mushroom_stew': {
+                const bowlPlan = yield* plan(bot, "bowl", 1, {
+                    ...permissions,
+                    force: false,
+                    canUseInventory: true,
+                }, {
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                    ],
+                }, [...planSoFar])
+                if (planResult(bowlPlan, 'bowl') <= 0) {
+                    // throw `Can't milk mooshroom: aint have a bowl`
+                    return null
+                }
+                const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
+                const entity = bot.bot.nearestEntity(e => {
+                    if (e.name !== 'moshroom') { return false }
+                    if (e.metadata[16]) { return false } // Baby
+                    if (future.harvestedMobs.includes(e.id)) { return false }
+                    return true
+                })
+                if (!entity) {
+                    // throw `Can't milk any mooshroom because there is aint any`
+                    return null
+                }
+                return [
+                    ...bowlPlan,
+                    {
+                        type: 'harvest-mob',
+                        count: 1,
+                        item: 'mushroom_stew',
+                        entity: {
+                            expectedType: entity.name,
+                            id: entity.id,
+                        },
+                        tool: 'bowl',
+                        willToolDisappear: true,
+                        isDroppingItem: false,
+                    }
+                ]
+            }
+            default: return null
+        }
+    },
 ]
 
 /**
@@ -1082,6 +1212,44 @@ function* evaluatePlan(bot, plan) {
                     const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), { name: step.item }, step.count)
                     if (took < step.count) {
                         throw `Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`
+                    }
+                    continue
+                }
+                case 'harvest-mob': {
+                    const entity = bot.bot.nearestEntity(e => e.id === step.entity.id)
+                    if (!entity) {
+                        throw `The ${step.entity.expectedType} disappeared`
+                    }
+                    if (!entity.isValid) {
+                        throw `The ${step.entity.expectedType} is invalid`
+                    }
+                    if (entity.name !== step.entity.expectedType) {
+                        throw `The ${step.entity.expectedType} disappeared`
+                    }
+                    yield* goto.task(bot, {
+                        entity: entity,
+                        distance: 3,
+                    })
+                    if (!entity.isValid) {
+                        throw `The ${step.entity.expectedType} is invalid`
+                    }
+                    const toolItem = bot.searchInventoryItem(null, step.tool)
+                    if (!toolItem) {
+                        throw `I have no ${step.tool}`
+                    }
+                    yield* wrap(bot.bot.equip(toolItem, 'hand'))
+                    yield* sleepTicks()
+                    yield* wrap(bot.bot.activateEntity(entity))
+                    yield* sleepTicks()
+                    if (step.isDroppingItem) {
+                        yield* pickupItem.task(bot, {
+                            items: [ step.item ],
+                            inAir: true,
+                            maxDistance: 8,
+                            minLifetime: 0,
+                            silent: true,
+                            point: entity.position.clone(),
+                        })
                     }
                     continue
                 }
@@ -1377,6 +1545,10 @@ function stringifyPlan(bot, plan) {
             }
             case 'chest': {
                 builder += `I found ${step.count} ${step.item} in a chest (${step.chest})\n`
+                break
+            }
+            case 'harvest-mob': {
+                builder += `Harvest mob ${step.entity.expectedType} for ${step.count} ${step.item}\n`
                 break
             }
             case 'craft': {
