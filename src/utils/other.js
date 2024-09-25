@@ -2,7 +2,7 @@ const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const NBT = require('prismarine-nbt')
-const CoolIterable = require('../cool-iterable')
+const Iterable = require('../iterable')
 
 /**
  * @template {{ x: number; y: number; z: number; }} TPoint
@@ -446,10 +446,10 @@ function isNBTEquals(a, b) {
 /**
  * @param {number} origin
  * @param {number} d
- * @returns {CoolIterable<number>}
+ * @returns {Iterable<number>}
  */
 function incrementalNeighbors(origin, d) {
-    return new CoolIterable(function*() {
+    return new Iterable(function*() {
         for (let i = 0; i < d; i++) {
             yield origin + i
             yield origin - i

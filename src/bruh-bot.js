@@ -28,7 +28,7 @@ const BlockDisplay = require('./block-display')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
 const Vec3Dimension = require('./vec3-dimension')
 const { Vec3 } = require('vec3')
-const CoolIterable = require('./cool-iterable')
+const Iterable = require('./iterable')
 
 //#endregion
 
@@ -3121,7 +3121,7 @@ module.exports = class BruhBot {
 
     /**
      * @param {import('prismarine-windows').Window} [window]
-     * @returns {CoolIterable<Item>}
+     * @returns {Iterable<Item>}
      */
     inventoryItems(window) {
         const hasWindow = !!window
@@ -3136,7 +3136,7 @@ module.exports = class BruhBot {
             this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
-        return new CoolIterable(function*() {
+        return new Iterable(function*() {
             for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
                 const item = window.slots[i]
                 if (!item) { continue }
@@ -3155,10 +3155,10 @@ module.exports = class BruhBot {
 
     /**
      * @param {import('prismarine-windows').Window} window
-     * @returns {CoolIterable<Item>}
+     * @returns {Iterable<Item>}
      */
     containerItems(window) {
-        return new CoolIterable(function*() {
+        return new Iterable(function*() {
             for (let i = 0; i < window.inventoryStart; ++i) {
                 const item = window.slots[i]
                 if (!item) { continue }
@@ -3782,7 +3782,7 @@ module.exports = class BruhBot {
      *   maxDistance?: number
      *   count?: number
      * }} options
-     * @returns {CoolIterable<import('prismarine-block').Block>}
+     * @returns {Iterable<import('prismarine-block').Block>}
      */
     findBlocks(options) {
         const Block = require('prismarine-block')(this.bot.registry)
@@ -3809,7 +3809,7 @@ module.exports = class BruhBot {
 
         const bot = this.bot
 
-        return new CoolIterable(function*() {
+        return new Iterable(function*() {
             const point = (options.point || bot.entity.position).floored()
             const maxDistance = options.maxDistance || 16
             const count = options.count || 1

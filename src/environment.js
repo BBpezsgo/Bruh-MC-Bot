@@ -12,7 +12,7 @@ const { Chest } = require('mineflayer')
 const { goals } = require('mineflayer-pathfinder')
 const Vec3Dimension = require('./vec3-dimension')
 const { EntityPose } = require('./entity-metadata')
-const CoolIterable = require('./cool-iterable')
+const Iterable = require('./iterable')
 
 /**
  * @typedef {{
@@ -935,7 +935,7 @@ module.exports = class Environment {
      * @param {boolean} grown
      * @param {number} [count]
      * @param {number} [maxDistance]
-     * @returns {CoolIterable<Block>}
+     * @returns {Iterable<Block>}
      */
     getCrops(bot, farmPosition, grown, count = 1, maxDistance = undefined) {
         /**

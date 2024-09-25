@@ -2,31 +2,31 @@
  * @template T
  * @implements {Iterable<T>}
  */
-module.exports = class CoolIterable {
+module.exports = class Iterable {
     /**
      * @private @readonly
-     * @type {() => Generator<T>}
+     * @type {() => Iterator<T>}
      */
-    generator
+    iterator
 
     /**
-     * @param {() => Generator<T>} generator
+     * @param {() => Iterator<T>} iterator
      */
-    constructor(generator) {
-        this.generator = generator
+    constructor(iterator) {
+        this.iterator = iterator
     }
 
-    [Symbol.iterator]() { return this.generator() }
+    [Symbol.iterator]() { return this.iterator() }
 
     /**
      * @returns {Array<T>}
      */
     toArray() {
         const result = []
-        const gen = this.generator()
+        const iterator = this.iterator()
 
         while (true) {
-            const v = gen.next()
+            const v = iterator.next()
             if (v.done === true) { break }
             result.push(v.value)
         }
@@ -38,8 +38,8 @@ module.exports = class CoolIterable {
      * @returns {boolean}
      */
     isEmpty() {
-        const gen = this.generator()
-        const v = gen.next()
+        const iterator = this.iterator()
+        const v = iterator.next()
         return !!v.done
     }
 
@@ -47,8 +47,9 @@ module.exports = class CoolIterable {
      * @returns {T | undefined}
      */
     first() {
-        const gen = this.generator()
-        const result = gen.next()
+        const iterator = this.iterator()
+        const result = iterator.next()
+        if (result.done === true) { return undefined }
         return result.value
     }
 
@@ -56,11 +57,11 @@ module.exports = class CoolIterable {
      * @param {(value: T, index: number) => void} callbackfn 
      */
     forEach(callbackfn) {
-        const gen = this.generator()
+        const iterator = this.iterator()
         let i = 0
 
         while (true) {
-            const v = gen.next()
+            const v = iterator.next()
             if (v.done === true) { break }
             callbackfn(v.value, i++)
         }
@@ -68,15 +69,15 @@ module.exports = class CoolIterable {
 
     /**
      * @param {(value: T, index: number) => boolean} predicate 
-     * @returns {CoolIterable<T>}
+     * @returns {Iterable<T>}
      */
     filter(predicate) {
-        const gen = this.generator()
-        return new CoolIterable(function*() {
+        const iterator = this.iterator()
+        return new Iterable(function*() {
             let i = 0
-    
+
             while (true) {
-                const v = gen.next()
+                const v = iterator.next()
                 if (v.done === true) { break }
                 if (predicate(v.value, i++)) {
                     yield v.value
@@ -88,15 +89,15 @@ module.exports = class CoolIterable {
     /**
      * @template U
      * @param {(value: T, index: number) => U} callbackfn
-     * @returns {CoolIterable<U>}
+     * @returns {Iterable<U>}
      */
     map(callbackfn) {
-        const gen = this.generator()
-        return new CoolIterable(function*() {
+        const iterator = this.iterator()
+        return new Iterable(function*() {
             let i = 0
-    
+
             while (true) {
-                const v = gen.next()
+                const v = iterator.next()
                 if (v.done === true) { break }
                 yield callbackfn(v.value, i++)
             }
