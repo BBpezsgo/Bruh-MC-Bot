@@ -11,7 +11,6 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 module.exports = {
     task: function* (bot, args) {
-        let failStreak = 0
         let isFollowing = true
 
         args.cancel = function*() {
@@ -70,20 +69,9 @@ module.exports = {
                         sprint: true,
                     })
                 }
-                failStreak = 0
             } catch (error) {
-                if (failStreak > 5) {
-                    if (error instanceof Error) {
-                        if (error.name === 'NoPath') {
-                            throw `I can't find a path to you`
-                        } else if (error.name === 'Timeout') {
-                            yield* sleepG(5000)
-                            continue
-                        }
-                    }
-                    throw error
-                }
-                failStreak++
+                console.error(error)
+                yield* sleepG(5000)
             }
         }
     },
