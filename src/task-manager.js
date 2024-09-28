@@ -79,6 +79,16 @@ module.exports = class TaskManager {
         return newTask
     }
 
+    death() {
+        for (let i = this._tasks.length - 1; i >= 0; i--) {
+            const task = this._tasks[i]
+            if (task.priority < 100) {
+                console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
+                this._tasks.splice(i)
+            }
+        }
+    }
+
     /**
      * @private
      * @param {ReadonlyArray<ManagedTask>} tasks

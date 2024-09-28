@@ -199,7 +199,7 @@ function getCorrectBlock(itemName) {
 
 /**
  * @type {import('../task').TaskDef<void, ({
- *   item: string;
+ *   item: string | import('prismarine-item').Item;
  * } | {
  *   block: string;
  * }) & {
@@ -219,8 +219,8 @@ module.exports = {
             throw `Can't place block in quiet mode`
         }
 
-        const item = ('item' in args) ? args.item : getCorrectItem(args.block)
-        const block = ('block' in args) ? args.block : getCorrectBlock(args.item)[0]
+        const item = ('item' in args) ? ((typeof args.item === 'string') ? args.item : args.item.name) : getCorrectItem(args.block)
+        const block = ('block' in args) ? args.block : getCorrectBlock((typeof args.item === 'string') ? args.item : args.item.name)[0]
 
         if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
 

@@ -417,7 +417,7 @@ module.exports = class BruhBot {
                 'fishing': false,
                 'particle': false,
                 'resource_pack': false,
-                'settings': false,
+                // 'settings': false,
                 'scoreboard': false,
                 'tablist': false,
                 'team': false,
@@ -639,7 +639,7 @@ module.exports = class BruhBot {
                     console.warn(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
                 default:
-                    // console.log(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
+                    console.log(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
             }
             this._currentPath = null
@@ -685,8 +685,10 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('death', () => {
-            this.bot.clearControlStates()
             console.log(`[Bot "${this.username}"] Died`)
+            this.bot.clearControlStates()
+            this.bot.pathfinder.stop()
+            this.tasks.death()
         })
 
         this.bot.on('kicked', (/** @type {any} */ reason) => {
@@ -2421,8 +2423,8 @@ module.exports = class BruhBot {
                 task: function*(bot) {
                     const crossbows =
                         bot.inventoryItems(null)
-                        .filter(v => v.name === 'crossbow')
-                        .toArray()
+                            .filter(v => v.name === 'crossbow')
+                            .toArray()
                     // console.log(`[Bot "${bot.username}"] Loading ${crossbows.length} crossbows`)
                     for (const crossbow of crossbows) {
                         if (!tasks.attack.isCrossbowCharged(crossbow) &&
@@ -2440,7 +2442,7 @@ module.exports = class BruhBot {
                 silent: true
             }, priorities.low)
         }
-        
+
         if (this.memory.mlgJunkBlocks.length > 0) {
             this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
             return
@@ -2520,7 +2522,7 @@ module.exports = class BruhBot {
                 id: 'ensure-equipment',
             }, {}, priorities.unnecessary)
         }
-    
+
         this.doNothing()
     }
 

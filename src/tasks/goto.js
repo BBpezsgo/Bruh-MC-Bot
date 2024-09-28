@@ -357,7 +357,7 @@ function setOptions(bot, args) {
     newMovements.infiniteLiquidDropdownDistance &&= !bot.quietMode
     newMovements.sneak ||= bot.quietMode
 
-    newMovements.liquidCost = bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
+    newMovements.liquidCost = 100 // bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
     newMovements.allowSprinting = !bot.quietMode && (args.sprint ?? false)
 
     if (args.excludeStep?.length) {
