@@ -54,9 +54,11 @@ module.exports = {
             })
         } catch (error) {
             if (isCollected) { return }
+            bot.bot.off('playerCollect', listener)
             throw error
         }
         if (!isCollected) {
+            bot.bot.off('playerCollect', listener)
             throw `Couldn't pick up the item`
         }
     },

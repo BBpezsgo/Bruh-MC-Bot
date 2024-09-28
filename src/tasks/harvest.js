@@ -111,6 +111,7 @@ module.exports = {
                         yield* dig.task(bot, {
                             block: cropBlock,
                             alsoTheNeighbors: true,
+                            pickUpItems: true,
                         })
                         break
                     }
@@ -118,6 +119,7 @@ module.exports = {
                         yield* dig.task(bot, {
                             block: cropBlock,
                             alsoTheNeighbors: false,
+                            pickUpItems: true,
                         })
                         break
                     }

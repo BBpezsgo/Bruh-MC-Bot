@@ -143,6 +143,12 @@ module.exports = class Environment {
     playerPositions
 
     /**
+     * @readonly
+     * @type {Array<Vec3Dimension>}
+     */
+    minePositions
+
+    /**
      * @private @readonly
      * @type {Array<SavedChest>}
      */
@@ -220,6 +226,7 @@ module.exports = class Environment {
         this.villagers = {}
         this.entityOwners = {}
         this.shared = {}
+        this.minePositions = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
@@ -231,6 +238,7 @@ module.exports = class Environment {
         this.chests = data.chests ?? this.chests
         this.villagers = data.villagers ?? this.villagers
         this.animalBreedTimes = data.animalBreedTimes ?? this.animalBreedTimes
+        this.minePositions = data.minePositions ?? this.minePositions
         console.log(`[Environment] Loaded`)
     }
 
@@ -728,6 +736,7 @@ module.exports = class Environment {
             chests: this.chests,
             villagers: this.villagers,
             animalBreedTimes: this.animalBreedTimes,
+            minePositions: this.minePositions,
         }, replacer, ' '))
     }
 

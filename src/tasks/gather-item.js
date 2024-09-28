@@ -101,8 +101,10 @@ const smelt = require('./smelt')
  *   'dig': {
  *     type: 'dig';
  *     block: { position: Vec3; name: string; };
- *     willGet: { item: string; count: number; };
+ *     loot: { item: string; count: number; }
+ *     count: number
  *     retryCount: number;
+ *     isGenerator: boolean;
  *   };
  * }} PlanSteps
  */
@@ -251,7 +253,7 @@ function planCost(plan) {
                     cost += 0
                     break
                 case 'dig':
-                    cost += 0.1
+                    cost += 0.1 * step.count
                     break
                 case 'harvest-mob':
                     cost += 1
@@ -338,8 +340,8 @@ function planResult(plan, item) {
                 continue
             }
             if (step.type === 'dig') {
-                if (step.willGet.item === item) {
-                    count += step.willGet.count
+                if (step.loot.item === item) {
+                    count += step.count * step.loot.count
                 }
                 continue
             }
@@ -890,8 +892,10 @@ const planners = [
         return {
             type: 'dig',
             block: bot.bot.blockAt(found),
-            willGet: { item: 'cobblestone', count: 1 },
-            retryCount: 5,
+            loot: { item: 'cobblestone', count: 1 },
+            count: count,
+            isGenerator: true,
+            retryCount: 30,
         }
     },
     function*(bot, item, count, permissions, context, planSoFar) {
@@ -1465,47 +1469,52 @@ function* evaluatePlan(bot, plan) {
                 }
 
                 case 'dig': {
-                    for (let i = step.retryCount - 1; i >= 0; i--) {
-                        try {
-                            let block = bot.bot.blockAt(step.block.position)
-                            while (!block || block.name !== step.block.name) {
-                                yield* sleepG(100)
-                                if (!block) {
-                                    yield* goto.task(bot, {
-                                        block: step.block.position,
-                                    })
-                                    block = bot.bot.blockAt(step.block.position)
-                                }
-
-                                if (!block) { break }
-
-                                const timeout = new Timeout(5000)
-                                while (!timeout.done() && block && block.name !== step.block.name) {
+                    for (let i = 0; i < step.count; i++) {
+                        let remainingRetries = step.retryCount
+                        while (remainingRetries--) {
+                            try {
+                                let block = bot.bot.blockAt(step.block.position)
+                                while (!block || block.name !== step.block.name) {
                                     yield* sleepG(100)
-                                    block = bot.bot.blockAt(step.block.position)
+                                    if (!block) {
+                                        yield* goto.task(bot, {
+                                            block: step.block.position,
+                                        })
+                                        block = bot.bot.blockAt(step.block.position)
+                                    }
+    
+                                    if (!block) { break }
+    
+                                    const timeout = new Timeout(5000)
+                                    while (!timeout.done() && block && block.name !== step.block.name) {
+                                        yield* sleepG(100)
+                                        block = bot.bot.blockAt(step.block.position)
+                                    }
                                 }
+    
+                                if (!block) {
+                                    throw `Chunk where I like to dig aint loaded`
+                                }
+    
+                                if (block.name !== step.block.name) {
+                                    throw `Unexpected block at ${step.block.position}: expected ${step.block.name}, found ${block.name}`
+                                }
+    
+                                const digResult = yield* dig.task(bot, {
+                                    block: block,
+                                    alsoTheNeighbors: false,
+                                    pickUpItems: true,
+                                })
+    
+                                if (digResult.itemsDelta[step.loot.item] < step.loot.count) {
+                                    if (step.isGenerator) { continue }
+                                    throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta[step.loot.item]}`
+                                }
+                                break
+                            } catch (error) {
+                                if (remainingRetries === 0) { throw error }
+                                console.warn(`[Bot "${bot.username}"]: ${error} (remaining retries: ${remainingRetries})`)
                             }
-
-                            if (!block) {
-                                throw `Chunk where I like to dig aint loaded`
-                            }
-
-                            if (block.name !== step.block.name) {
-                                throw `Unexpected block at ${step.block.position}: expected ${step.block.name}, found ${block.name}`
-                            }
-
-                            const digResult = yield* dig.task(bot, {
-                                block: block,
-                                alsoTheNeighbors: false,
-                            })
-
-                            if (digResult.itemsDelta[step.willGet.item] < step.willGet.count) {
-                                throw `Couldn't dig ${step.willGet.count} ${step.willGet.item}: got ${digResult.itemsDelta[step.willGet.item]}`
-                            }
-                            break
-                        } catch (error) {
-                            if (i === 0) { throw error }
-                            console.warn(`[Bot "${bot.username}"]: ${error} (remaining retries: ${i})`)
                         }
                     }
                     continue
@@ -1584,7 +1593,7 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'dig': {
-                builder += `Dig ${step.block.name} at ${step.block.position}\n`
+                builder += `Dig ${step.block.name} at ${step.block.position}${(step.count > 1 ?  ` ${step.count} times` : '')}\n`
                 break
             }
             default: {
