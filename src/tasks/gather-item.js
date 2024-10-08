@@ -1549,7 +1549,7 @@ function stringifyPlan(bot, plan) {
         }
         switch (step.type) {
             case 'inventory': {
-                builder += `I have ${step.count} ${step.item} in my inventory\n`
+                builder += `I have ${step.count} ${step.item}\n`
                 break
             }
             case 'chest': {
@@ -1561,7 +1561,10 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'craft': {
-                builder += `Craft ${step.recipe.result.count} ${step.item}, ${step.count} times\n`
+                builder += `Craft ${step.recipe.result.count} ${step.item}\n`
+                if (step.count > 1) {
+                    builder += `, ${step.count} times`
+                }
                 break
             }
             case 'smelt': {

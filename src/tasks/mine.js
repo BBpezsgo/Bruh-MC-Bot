@@ -3,7 +3,6 @@ const { incrementalNeighbors } = require('../utils/other')
 const { Vec3 } = require('vec3')
 const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
-const { sleepG } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 
 /**

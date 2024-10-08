@@ -1361,6 +1361,13 @@ module.exports = class Environment {
                 }
             }
             if (isAdded) { continue }
+            for (const fencing of fencings) {
+                if (fencing.positions.some(v => v.equals(farmAnimal.position.floored()))) {
+                    fencing.mobs[farmAnimal.id] = farmAnimal
+                    isAdded = true
+                    break
+                }
+            }
             const fencing = yield* bot.env.scanFencing(farmAnimal.position)
             if (!fencing) { continue }
             fencings.push(fencing)

@@ -1,6 +1,6 @@
 const { Block } = require('prismarine-block')
 const getMcData = require('minecraft-data')
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')

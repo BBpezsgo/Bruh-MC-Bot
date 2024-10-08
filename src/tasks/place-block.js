@@ -367,7 +367,7 @@ module.exports = {
 
                         const current = bot.bot.entity.position.floored().offset(x, y, z)
                         const above = bot.bot.blockAt(current)
-                        const _placeInfo = findBestReferenceBlock(position)
+                        const _placeInfo = findBestReferenceBlock(current)
                         if (!_placeInfo) { continue }
 
                         if (Minecraft.replaceableBlocks[above.name]) {

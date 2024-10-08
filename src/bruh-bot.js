@@ -1102,9 +1102,10 @@ module.exports = class BruhBot {
                     canDig: true,
                     canKill: false,
                     canUseChests: true,
-                    canUseInventory: false,
+                    canUseInventory: true,
                     canRequestFromPlayers: false,
                     canHarvestMobs: true,
+                    force: false,
                 }, priorities.user, true)
                     ?.wait()
                     .then(result => result.count <= 0 ? respond(`I couldn't gather the item(s)`) : respond(`I gathered ${result.count} ${result.item}`))
@@ -1135,9 +1136,11 @@ module.exports = class BruhBot {
                         const planResult = tasks.gatherItem.planResult(organizedPlan, args.item)
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
                         respond(`There is a plan for ${planResult} ${args.item} with a cost of ${planCost}:`)
+                        yield
                         respond(tasks.gatherItem.stringifyPlan(bot, organizedPlan))
 
                         {
+                            yield
                             respond(`Delta:`)
                             let builder = ''
                             const future = new tasks.gatherItem.PredictedEnvironment(organizedPlan, bot.mc.registry)
@@ -1149,6 +1152,10 @@ module.exports = class BruhBot {
                                     builder += `  ${delta} ${name}\n`
                                 }
                             }
+                            yield
+                            if (builder) { respond(builder) }
+                            builder = ''
+
                             builder += 'Chests:\n'
                             for (const position in future.chests) {
                                 /** @type {Record<string, number>} */ // @ts-ignore
@@ -1161,7 +1168,9 @@ module.exports = class BruhBot {
                                     }
                                 }
                             }
-                            respond(builder)
+                            yield
+                            if (builder) { respond(builder) }
+                            builder = ''
                         }
                     },
                     id: function(args) {
@@ -1178,10 +1187,11 @@ module.exports = class BruhBot {
                     canDig: true,
                     canKill: false,
                     canUseChests: true,
-                    canUseInventory: false,
+                    canUseInventory: true,
                     canRequestFromPlayers: false,
                     canTrade: true,
                     canHarvestMobs: true,
+                    force: false,
                 }, priorities.user, true)
                     ?.wait()
                     .then(() => { })
@@ -2737,7 +2747,7 @@ module.exports = class BruhBot {
                 _error ??= error
             }
         }
-        if (!n) { throw _error }
+        if (!n && _error) { throw _error }
         return n
     }
 
