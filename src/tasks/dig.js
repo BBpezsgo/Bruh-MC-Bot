@@ -142,9 +142,6 @@ module.exports = {
                         try {
                             yield* pickupItem.task(bot, {
                                 item: nearestEntity,
-                                inAir: true,
-                                maxDistance: 16,
-                                minLifetime: 0,
                                 silent: true,
                             })
                         } catch (error) {

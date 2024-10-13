@@ -39,15 +39,11 @@ function backNForthSort(blocks) {
  * @param {Vec3} start
  * @param {ReadonlyArray<T>} points
  * @param {(element: T) => Vec3} [mapper]
- * @returns {Array<T>}
+ * @returns {Generator<T>}
  */
-function basicRouteSearch(start, points, mapper) {
+function* basicRouteSearch(start, points, mapper) {
     // @ts-ignore
     mapper ??= v => v
-    /**
-     * @type {Array<T>}
-     */
-    const result = []
     /**
      * @type {Array<T>}
      */
@@ -66,11 +62,9 @@ function basicRouteSearch(start, points, mapper) {
         }
         if (nearestIndex < 0) { throw new Error(`No point found`) }
         lastPoint = mapper(heap[nearestIndex])
-        result.push(heap[nearestIndex])
+        yield heap[nearestIndex]
         heap.splice(nearestIndex, 1)
     }
-
-    return result
 }
 
 /**

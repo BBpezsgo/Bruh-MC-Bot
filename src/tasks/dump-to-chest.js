@@ -116,9 +116,9 @@ module.exports = {
                             shouldBreak = !deposited
                         } catch (error) {
                             if (error instanceof Error) {
-                                throw `Can't dump ${itemToDeposit.name}: ${error.message}`
+                                console.warn(`Can't dump ${itemToDeposit.name}: ${error.message}`)
                             } else {
-                                throw `Can't dump ${itemToDeposit.name}: ${error}`
+                                console.warn(`Can't dump ${itemToDeposit.name}: ${error}`)
                             }
                         }
                     }

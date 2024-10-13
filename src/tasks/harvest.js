@@ -37,10 +37,9 @@ module.exports = {
             let cropPositions = bot.env.getCrops(bot, farmPosition, true, 128, config.harvest.cropSearchradius).map(v => v.position).toArray()
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
-            cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)
 
             // console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
-            for (const cropPosition of cropPositions) {
+            for (const cropPosition of basicRouteSearch(bot.bot.entity.position, cropPositions)) {
                 // yield
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
@@ -239,9 +238,7 @@ module.exports = {
         console.log(`[Bot ${bot.username}] Picking up ${items.length} items`)
 
         for (let i = 0; i < 2 && items.length > 0; i++) {
-            const sortedItems = basicRouteSearch(bot.bot.entity.position, items, v => v.position)
-    
-            for (const item of sortedItems) {
+            for (const item of basicRouteSearch(bot.bot.entity.position, items, v => v.position)) {
                 if (!item?.isValid) { continue }
                 try {
                     yield* pickupItem.task(bot, { item: item })

@@ -1133,7 +1133,7 @@ module.exports = class BruhBot {
                             depth: 0,
                             recursiveItems: [],
                         }, [])
-                        const organizedPlan = tasks.gatherItem.organizePlan(plan)
+                        const organizedPlan = plan.flat() // tasks.gatherItem.organizePlan(plan)
                         const planResult = tasks.gatherItem.planResult(organizedPlan, args.item)
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
                         respond(`There is a plan for ${planResult} ${args.item} with a cost of ${planCost}:`)
@@ -2717,7 +2717,7 @@ module.exports = class BruhBot {
      * @type {import('./task').SimpleTaskDef<number>}
      */
     static *tryHarvestCrops(bot) {
-        const harvested = yield* tasks.harvest.task(bot, {})
+        const harvested = yield* tasks.harvest.task(bot, { })
 
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
             const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))

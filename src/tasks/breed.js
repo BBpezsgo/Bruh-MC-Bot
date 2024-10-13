@@ -63,7 +63,7 @@ module.exports = {
                 groupedAnimals.splice(0, 1)
             }
 
-            const animals = basicRouteSearch(bot.bot.entity.position, groupedAnimals, v => v.position)
+            const animals = basicRouteSearch(bot.bot.entity.position, groupedAnimals, v => v.position).toArray()
 
             const foods = animalFoods[animalType]
             if (!foods) {

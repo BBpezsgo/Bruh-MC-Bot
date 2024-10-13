@@ -47,11 +47,10 @@ module.exports = {
 
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
-            const sortedCropPositions = basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))
 
             /** @type {Record<string, number>} */
             const seedsNeed = {}
-            for (const savedCrop of sortedCropPositions) {
+            for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
@@ -63,7 +62,7 @@ module.exports = {
             //     yield* bot.ensureItem(seedName, seedsNeed[seedName])
             // }
 
-            for (const savedCrop of sortedCropPositions) {
+            for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
                 // yield
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
