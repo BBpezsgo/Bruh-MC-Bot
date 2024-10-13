@@ -5,6 +5,7 @@ const Minecraft = require('../minecraft')
 const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
 const pickupItem = require('./pickup-item')
+const config = require('../config')
 
 /**
  * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension; }>}
@@ -33,7 +34,7 @@ module.exports = {
 
         while (true) {
             yield
-            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 80, 20).map(v => v.position).toArray()
+            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 128, config.harvest.cropSearchradius).map(v => v.position).toArray()
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
             cropPositions = basicRouteSearch(bot.bot.entity.position, cropPositions)

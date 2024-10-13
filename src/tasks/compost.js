@@ -5,6 +5,7 @@ const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
 const Minecraft = require('../minecraft')
+const config = require('../config')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -79,7 +80,7 @@ module.exports = {
 
         let composter = bot.bot.findBlock({
             matching: bot.mc.registry.blocksByName['composter'].id,
-            maxDistance: 32,
+            maxDistance: config.compost.composterSearchRadius,
         })
 
         if (!composter) {

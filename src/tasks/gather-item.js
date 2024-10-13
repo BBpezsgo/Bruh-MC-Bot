@@ -12,6 +12,7 @@ const giveTo = require('./give-to')
 const { Vec3 } = require('vec3')
 const dig = require('./dig')
 const smelt = require('./smelt')
+const config = require('../config')
 
 /**
  * @typedef {PermissionArgs & {
@@ -586,7 +587,7 @@ const planners = [
             yield
             const tableInWorld = bot.bot.findBlock({
                 matching: bot.mc.registry.blocksByName['crafting_table'].id,
-                maxDistance: 32,
+                maxDistance: config.gatherItem.craftingTableSearchRadius,
             })
             if (!tableInWorld) {
                 const tablePlan = yield* plan(bot, 'crafting_table', 1, {
@@ -859,7 +860,7 @@ const planners = [
         bot.bot.findBlock({
             matching: bot.mc.registry.blocksByName['lava'].id,
             count: 1,
-            maxDistance: 32,
+            maxDistance: config.gatherItem.cobblestoneGeneratorSearchRadius,
             useExtraInfo: (block) => {
                 for (const lavaNeighborPosition of directBlockNeighbors(block.position, 'side')) {
                     const lavaNeighbor = bot.bot.blockAt(lavaNeighborPosition)
@@ -1268,7 +1269,7 @@ function* evaluatePlan(bot, plan) {
                     if (step.recipe.requiresTable) {
                         let tableBlock = bot.bot.findBlock({
                             matching: bot.mc.registry.blocksByName['crafting_table'].id,
-                            maxDistance: 64,
+                            maxDistance: config.gatherItem.craftingTableSearchRadius,
                         })
                         if (!tableBlock) {
                             const tableItem = bot.searchInventoryItem(null, 'crafting_table')
@@ -1281,7 +1282,7 @@ function* evaluatePlan(bot, plan) {
                             })
                             tableBlock = bot.bot.findBlock({
                                 matching: bot.mc.registry.blocksByName['crafting_table'].id,
-                                maxDistance: 64,
+                                maxDistance: config.gatherItem.craftingTableSearchRadius,
                             })
                             if (!tableBlock) {
                                 throw `Failed to place down the crafting table`

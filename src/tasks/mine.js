@@ -4,6 +4,7 @@ const { Vec3 } = require('vec3')
 const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
 const placeBlock = require('./place-block')
+const config = require('../config')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -62,9 +63,9 @@ module.exports = {
                 break
             }
             if (minePosition) { break searchMinePosition }
-            for (const x of incrementalNeighbors(botPosition.x, 16)) {
-                for (const z of incrementalNeighbors(botPosition.z, 16)) {
-                    for (const y of incrementalNeighbors(botPosition.y, 16)) {
+            for (const x of incrementalNeighbors(botPosition.x, config.mine.placeSearchRadius)) {
+                for (const z of incrementalNeighbors(botPosition.z, config.mine.placeSearchRadius)) {
+                    for (const y of incrementalNeighbors(botPosition.y, config.mine.placeSearchRadius)) {
                         yield
                         const point = new Vec3(x, y, z)
                         if (!checkMinePosition(bot, point)) {

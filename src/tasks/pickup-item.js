@@ -1,7 +1,7 @@
 const goto = require('./goto')
 
 /**
- * @typedef {{ inAir?: boolean; maxDistance?: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; } | { item: import('prismarine-entity').Entity }} Args
+ * @typedef {{ inAir?: boolean; maxDistance: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; } | { item: import('prismarine-entity').Entity }} Args
  */
 
 /**

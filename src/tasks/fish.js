@@ -4,6 +4,7 @@ const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const { Weapons } = require('minecrafthawkeye')
 const { Interval, directBlockNeighbors } = require('../utils/other')
+const config = require('../config')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -40,7 +41,7 @@ function checkTreasure(bot, waterPosition) {
 function findWater(bot, preferTreasure) {
     const waters = bot.bot.findBlocks({
         matching: bot.mc.registry.blocksByName['water'].id,
-        maxDistance: 128,
+        maxDistance: config.fishing.waterSearchRadius,
         count: 64,
         useExtraInfo: (/** @type {Block} */ water) => {
             if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {

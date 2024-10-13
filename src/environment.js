@@ -13,6 +13,7 @@ const { goals } = require('mineflayer-pathfinder')
 const Vec3Dimension = require('./vec3-dimension')
 const { EntityPose } = require('./entity-metadata')
 const Iterable = require('./iterable')
+const config = require('./config')
 
 /**
  * @typedef {{
@@ -500,7 +501,7 @@ module.exports = class Environment {
         console.log(`[Bot "${bot.username}"] Scanning chests ...`)
         const chestPositions = bot.bot.findBlocks({
             point: bot.bot.entity.position.clone(),
-            maxDistance: 30,
+            maxDistance: config.scanChests.radius,
             matching: (block) => {
                 if (bot.mc.registry.blocksByName['chest'].id === block.type) {
                     return true
@@ -517,7 +518,7 @@ module.exports = class Environment {
                 }
                 return true
             },
-            count: 69,
+            count: 128,
         })
         console.log(`[Bot "${bot.username}"] Found ${chestPositions.length} chests`)
         for (const chestPosition of chestPositions) {
@@ -769,7 +770,7 @@ module.exports = class Environment {
         const bestBlock = bot.bot.findBlock({
             matching: growsOnBlock,
             point: plantPosition,
-            maxDistance: exactPosition ? 1 : 10,
+            maxDistance: exactPosition ? 1 : config.getPlantableBlock.searchRadius,
             useExtraInfo: (/** @type {Block} */ block) => {
                 if (plant.type === 'spread' && (
                     plant.seed === 'brown_mushroom' ||
@@ -942,11 +943,11 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} farmPosition
      * @param {boolean} grown
-     * @param {number} [count]
-     * @param {number} [maxDistance]
+     * @param {number} count
+     * @param {number} maxDistance
      * @returns {Iterable<Block>}
      */
-    getCrops(bot, farmPosition, grown, count = 1, maxDistance = undefined) {
+    getCrops(bot, farmPosition, grown, count, maxDistance) {
         /**
          * @type {Array<Vec3>}
          */
@@ -973,10 +974,10 @@ module.exports = class Environment {
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} farmPosition
      * @param {boolean} grown
-     * @param {number} [maxDistance]
+     * @param {number} maxDistance
      * @returns {Block | null}
      */
-    getCrop(bot, farmPosition, grown, maxDistance = undefined) {
+    getCrop(bot, farmPosition, grown, maxDistance) {
         /**
          * @type {Array<Vec3>}
          */
@@ -996,17 +997,16 @@ module.exports = class Environment {
      * @param {((item: Item) => boolean) | null} filter
      * @param {{
      *   inAir?: boolean;
-     *   maxDistance?: number;
+     *   maxDistance: number;
      *   point?: Vec3;
      *   evenIfFull?: boolean;
      *   minLifetime?: number;
      * }} args
      * @returns {import("prismarine-entity").Entity | null}
      */
-    getClosestItem(bot, filter, args = {}) {
-        if (!args) { args = {} }
+    getClosestItem(bot, filter, args) {
         if (!args.inAir) { args.inAir = false }
-        if (!args.maxDistance) { args.maxDistance = 10 }
+        if (!args.maxDistance) { args.maxDistance = 64 }
         if (!args.point) { args.point = bot.bot.entity.position.clone() }
         if (!args.evenIfFull) { args.evenIfFull = false }
 
@@ -1036,19 +1036,19 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {{
-     *   maxDistance?: number;
+     *   maxDistance: number;
      *   point?: Vec3;
      * }} args
      * @returns {import('prismarine-entity').Entity | null}
      */
-    getClosestXp(bot, args = {}) {
+    getClosestXp(bot, args) {
         const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
             entity.name === 'experience_orb')
         )
         if (!nearestEntity) { return null }
 
         const distance = nearestEntity.position.distanceTo(args.point ?? bot.bot.entity.position)
-        if (distance > (args.maxDistance || 10)) { return null }
+        if (distance > args.maxDistance) { return null }
 
         return nearestEntity
     }
@@ -1386,7 +1386,7 @@ module.exports = class Environment {
         const visited = []
         /** @type {Array<Vec3>} */
         const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).floored()]
-        const maxSize = 128
+        const maxSize = config.fencing.maxSize
 
         const isEmpty = (/** @type {import("prismarine-block").Block} */ block) => {
             return (

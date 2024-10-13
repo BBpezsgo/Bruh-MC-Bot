@@ -3,6 +3,7 @@ const { wrap, sleepG } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
+const config = require('../config')
 
 class GoalBlockSimple extends goals.Goal {
     /**
@@ -437,7 +438,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
@@ -457,7 +458,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)
@@ -487,7 +488,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
@@ -507,7 +508,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)
@@ -531,7 +532,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['nether_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
                                         const movements = new Movements(bot.bot)
@@ -554,7 +555,7 @@ module.exports = {
                                         const portal = bot.bot.findBlock({
                                             matching: bot.mc.registry.blocksByName['end_portal'].id,
                                             count: 1,
-                                            maxDistance: 128,
+                                            maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
                                         const movements = new Movements(bot.bot)

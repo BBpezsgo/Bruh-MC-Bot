@@ -9,8 +9,7 @@ const { EntityPose } = require('../entity-metadata')
 const TextDisplay = require('../text-display')
 const Debug = require('../debug')
 const { resolveEntityAttribute } = require('../utils/other')
-
-const distanceToUseRangeWeapons = 12
+const config = require('../config')
 
 /**
  * @typedef {{
@@ -1031,7 +1030,7 @@ module.exports = {
 
                 const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
 
-                if (args.useMelee && !noPath.melee && (distance <= distanceToUseRangeWeapons || !args.useBow)) {
+                if (args.useMelee && !noPath.melee && (distance <= config.attack.distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                         // yield* goto.task(bot, {
@@ -1101,7 +1100,7 @@ module.exports = {
                     continue
                 }
 
-                if (args.useBow && bot.bot.hawkEye && (distance > distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
+                if (args.useBow && bot.bot.hawkEye && (distance > config.attack.distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
                     const weapon = searchRangeWeapon(bot)
 
                     const getGrade = () => {
@@ -1220,7 +1219,7 @@ module.exports = {
                     }
                 }
 
-                // if (distance > distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
+                // if (distance > config.distanceToUseRangeWeapons && !searchRangeWeapon(bot)) {
                 //     console.warn(`[Bot "${bot.username}"] Target too far away, stop attacking it`)
                 //     if ('target' in args) {
                 //         return false
@@ -1283,11 +1282,11 @@ module.exports = {
 
         const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
-        if (permissions.useMelee && (distance <= distanceToUseRangeWeapons || !permissions.useBow)) {
+        if (permissions.useMelee && (distance <= config.attack.distanceToUseRangeWeapons || !permissions.useBow)) {
             return distance <= 6
         }
 
-        if (permissions.useBow && (distance > distanceToUseRangeWeapons || !permissions.useMelee) && entity.name !== 'enderman') {
+        if (permissions.useBow && (distance > config.attack.distanceToUseRangeWeapons || !permissions.useMelee) && entity.name !== 'enderman') {
             const weapon = searchRangeWeapon(bot)
 
             if (!weapon || weapon.ammo <= 0) { return false }

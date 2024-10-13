@@ -3,6 +3,7 @@ const { wrap } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
 const { incrementalNeighbors } = require('../utils/other')
+const config = require('../config')
 
 /**
  * @typedef {{
@@ -161,10 +162,10 @@ function* findPosition(bot, blocks, confirmationCallback) {
         }
     }
 
-    for (const x of incrementalNeighbors(botPosition.x, 20)) {
-        for (const z of incrementalNeighbors(botPosition.z, 20)) {
+    for (const x of incrementalNeighbors(botPosition.x, config.build.positionSearchRadiusH)) {
+        for (const z of incrementalNeighbors(botPosition.z, config.build.positionSearchRadiusH)) {
             yield
-            for (const y of incrementalNeighbors(botPosition.y, 5)) {
+            for (const y of incrementalNeighbors(botPosition.y, config.build.positionSearchRadiusV)) {
                 let isOnGround = true
                 for (const floorBlock of floorBlocks) {
                     const belowBlock = bot.bot.blockAt(floorBlock.offset(x, y - 1, z))

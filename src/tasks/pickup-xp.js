@@ -3,7 +3,7 @@ const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<void, { maxDistance?: number; point?: Vec3; }>}
+ * @type {import('../task').TaskDef<void, { maxDistance: number; point?: Vec3; }>}
  */
 module.exports = {
     task: function*(bot, args) {

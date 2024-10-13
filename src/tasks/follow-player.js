@@ -1,6 +1,7 @@
 const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
+const config = require('../config')
 
 /**
  * @type {import('../task').TaskDef<void, {
@@ -20,7 +21,7 @@ module.exports = {
         while (isFollowing) {
             yield
 
-            let target = bot.env.getPlayerPosition(args.player, 10000)
+            let target = bot.env.getPlayerPosition(args.player, config.followPlayer.playerPositionMaxAge)
 
             if (!target) {
                 if (!args.onNoPlayer) {

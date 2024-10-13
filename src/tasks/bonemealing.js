@@ -2,6 +2,7 @@ const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
+const config = require('../config')
 
 /**
  * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension }>}
@@ -24,7 +25,7 @@ module.exports = {
 
             const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
-            let crops = bot.env.getCrops(bot, farmPosition, false).map(v => v.position).toArray()
+            let crops = bot.env.getCrops(bot, farmPosition, false, 1, config.bonemealing.cropSearchRadius).map(v => v.position).toArray()
 
             if (crops.length === 0) { break }
 

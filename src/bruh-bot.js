@@ -29,6 +29,7 @@ const { filterOutEquipment, filterOutItems } = require('./utils/items')
 const Vec3Dimension = require('./vec3-dimension')
 const { Vec3 } = require('vec3')
 const Iterable = require('./iterable')
+const config = require('./config')
 
 //#endregion
 
@@ -1279,7 +1280,7 @@ module.exports = class BruhBot {
                         const blocks = bot.findBlocks({
                             matching: cropNames,
                             count: Infinity,
-                            maxDistance: 64,
+                            maxDistance: config.scanCrops.radius,
                         })
                         let n = 0
                         for (const block of blocks) {
@@ -2149,7 +2150,7 @@ module.exports = class BruhBot {
             const water = this.bot.findBlock({
                 matching: this.mc.registry.blocksByName['water'].id,
                 count: 1,
-                maxDistance: 32,
+                maxDistance: config.criticalSurviving.waterSearchRadius,
             })
             if (water) {
                 this.tasks.push(this, {
@@ -2320,7 +2321,7 @@ module.exports = class BruhBot {
             for (const by in this.memory.hurtBy) {
                 for (let i = 0; i < this.memory.hurtBy[by].length; i++) {
                     const at = this.memory.hurtBy[by][i]
-                    if (now - at > 10000) {
+                    if (now - at > config.hurtByMemory) {
                         this.memory.hurtBy[by].splice(i, 1)
                     }
                 }
@@ -2486,16 +2487,16 @@ module.exports = class BruhBot {
             }, {}, priorities.cleanup)
         }
 
-        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: 40, minLifetime: 5000 })) {
-            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: 40, minLifetime: 5000 }, priorities.unnecessary)
+        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: config.boredom.pickupItemRadius, minLifetime: config.boredom.pickupItemMinAge })) {
+            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: config.boredom.pickupItemRadius, minLifetime: config.boredom.pickupItemMinAge }, priorities.unnecessary)
         }
 
-        if (this.env.getClosestXp(this, { maxDistance: 40 })) {
-            this.tasks.push(this, tasks.pickupXp, { maxDistance: 40 }, priorities.unnecessary)
+        if (this.env.getClosestXp(this, { maxDistance: config.boredom.pickupXpRadius })) {
+            this.tasks.push(this, tasks.pickupXp, { maxDistance: config.boredom.pickupXpRadius }, priorities.unnecessary)
         }
 
         if (this.tryAutoHarvestInterval?.done()) {
-            if (this.env.getCrop(this, this.bot.entity.position.clone(), true)) {
+            if (this.env.getCrop(this, this.bot.entity.position.clone(), true, config.harvest.cropSearchradius)) {
                 this.tasks.push(this, {
                     task: BruhBot.tryHarvestCrops,
                     id: `harvest-crops`,

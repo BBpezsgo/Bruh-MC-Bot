@@ -2,6 +2,7 @@ const { Block } = require('prismarine-block')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
+const config = require('../config')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -42,7 +43,7 @@ module.exports = {
             !bot.bot.isABed(bed) ||
             bot.bot.parseBedMetadata(bed)?.occupied) {
             bed = bot.bot.findBlock({
-                maxDistance: 32,
+                maxDistance: config.sleep.bedSearchRadius,
                 matching: (/** @type {Block} */ block) => {
                     if (!bot.bot.isABed(block)) {
                         return false

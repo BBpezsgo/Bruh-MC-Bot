@@ -3,6 +3,7 @@ const { wrap } = require('../utils/tasks')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
+const config = require('../config')
 
 const interactableBlocks = [
     'acacia_door',
@@ -357,12 +358,9 @@ module.exports = {
             position = args.position
             placeInfo = findBestReferenceBlock(position)
         } else {
-            const searchRadius = 5
-            const searchHeight = 1
-
-            for (let x = -searchRadius; x <= searchRadius; x++) {
-                for (let y = -searchHeight; y <= searchHeight; y++) {
-                    for (let z = -searchRadius; z <= searchRadius; z++) {
+            for (let x = -config.placeAnywhere.placeSearchRadiusH; x <= config.placeAnywhere.placeSearchRadiusH; x++) {
+                for (let y = -config.placeAnywhere.placeSearchRadiusV; y <= config.placeAnywhere.placeSearchRadiusV; y++) {
+                    for (let z = -config.placeAnywhere.placeSearchRadiusH; z <= config.placeAnywhere.placeSearchRadiusH; z++) {
                         if (x === 0 && z === 0) { continue }
 
                         const current = bot.bot.entity.position.floored().offset(x, y, z)

@@ -5,6 +5,7 @@ const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
+const config = require('../config')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -65,7 +66,7 @@ function findBestFurnace(bot, recipes, noFuel) {
                     }
                     return true
                 },
-                maxDistance: 32,
+                maxDistance: config.smelt.furnaceSearchRadius,
             })
             if (furnaceBlock) {
                 bestFurnace = furnaceBlock
