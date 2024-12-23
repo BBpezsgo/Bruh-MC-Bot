@@ -1,3 +1,5 @@
+'use strict'
+
 const attack = require('./attack')
 
 /**

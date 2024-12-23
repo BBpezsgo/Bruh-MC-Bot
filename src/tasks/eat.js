@@ -1,3 +1,5 @@
+'use strict'
+
 const { wrap, sleepTicks } = require('../utils/tasks')
 
 /**

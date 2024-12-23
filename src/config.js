@@ -1,3 +1,5 @@
+'use strict'
+
 module.exports = Object.freeze({
     attack: {
         distanceToUseRangeWeapons: 12

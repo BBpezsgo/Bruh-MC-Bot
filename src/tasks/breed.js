@@ -1,3 +1,5 @@
+'use strict'
+
 const { basicRouteSearch } = require('../utils/other')
 const { wrap } = require('../utils/tasks')
 const goto = require('./goto')

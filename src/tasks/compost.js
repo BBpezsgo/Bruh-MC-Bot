@@ -1,3 +1,5 @@
+'use strict'
+
 const { Item } = require('prismarine-item')
 const { wrap, sleepTicks } = require('../utils/tasks')
 const { Timeout } = require('../utils/other')

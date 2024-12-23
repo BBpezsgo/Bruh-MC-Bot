@@ -1,3 +1,5 @@
+'use strict'
+
 const ManagedTask = require('./managed-task')
 const { replacer, reviver } = require('./serializing')
 

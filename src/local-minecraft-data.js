@@ -1,3 +1,5 @@
+'use strict'
+
 const StreamZip = require('node-stream-zip')
 const Path = require('path')
 

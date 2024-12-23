@@ -1,3 +1,5 @@
+'use strict'
+
 const { goals, Movements } = require('mineflayer-pathfinder')
 const { wrap, sleepG } = require('../utils/tasks')
 const { Vec3 } = require('vec3')

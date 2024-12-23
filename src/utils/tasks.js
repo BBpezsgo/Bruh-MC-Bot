@@ -1,3 +1,5 @@
+'use strict'
+
 /**
  * @param {number} ms
  * @returns {import('../task').Task<void>}

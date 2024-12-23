@@ -1,3 +1,5 @@
+'use strict'
+
 const { goto } = require('../tasks')
 const { incrementalNeighbors } = require('../utils/other')
 const { Vec3 } = require('vec3')

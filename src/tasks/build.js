@@ -1,3 +1,5 @@
+'use strict'
+
 const { Block } = require('prismarine-block')
 const { wrap } = require('../utils/tasks')
 const placeBlock = require('./place-block')

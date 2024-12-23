@@ -1,3 +1,5 @@
+'use strict'
+
 const { Vec3 } = require('vec3')
 const path = require('path')
 const fs = require('fs')

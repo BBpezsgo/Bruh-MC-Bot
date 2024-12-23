@@ -1,3 +1,5 @@
+'use strict'
+
 const { Vec3 } = require('vec3')
 const Commands = require('./commands')
 const { sleepG } = require('./utils/tasks')

@@ -1,3 +1,5 @@
+'use strict'
+
 /// <reference types="./math-extension.d.ts" />
 
 const { Vec3 } = require('vec3')

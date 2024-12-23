@@ -1,3 +1,5 @@
+'use strict'
+
 const goto = require('./goto')
 
 /**

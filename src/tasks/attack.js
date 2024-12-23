@@ -1,3 +1,5 @@
+'use strict'
+
 const { Entity } = require('prismarine-entity')
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const Weapons = require('minecrafthawkeye/dist/types/index').Weapons

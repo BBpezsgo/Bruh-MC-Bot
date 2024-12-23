@@ -1,3 +1,5 @@
+'use strict'
+
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')

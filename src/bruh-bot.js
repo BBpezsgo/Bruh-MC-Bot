@@ -1,3 +1,5 @@
+'use strict'
+
 /// <reference types="./global.d.ts" />
 
 //#region Packages

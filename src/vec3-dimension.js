@@ -1,3 +1,5 @@
+'use strict'
+
 const { Vec3 } = require('vec3')
 
 module.exports = class Vec3Dimension {

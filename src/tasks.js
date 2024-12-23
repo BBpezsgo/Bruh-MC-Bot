@@ -1,3 +1,5 @@
+'use strict'
+
 /**
  * @typedef {Exclude<keyof typeof this, 'prototype' | 'preloadAll'>} TaskId
  */

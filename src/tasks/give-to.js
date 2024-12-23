@@ -1,3 +1,5 @@
+'use strict'
+
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 

@@ -1,3 +1,5 @@
+'use strict'
+
 const { Item } = require('prismarine-item')
 const { NBT2JSON } = require('./other')
 

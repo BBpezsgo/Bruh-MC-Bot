@@ -1,3 +1,5 @@
+'use strict'
+
 /**
  * @typedef {{
  *   priority: 'must' | 'maybe';

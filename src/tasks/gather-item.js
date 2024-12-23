@@ -1,3 +1,5 @@
+'use strict'
+
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const goto = require('./goto')

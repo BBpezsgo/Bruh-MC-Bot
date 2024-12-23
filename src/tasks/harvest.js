@@ -1,3 +1,5 @@
+'use strict'
+
 const { basicRouteSearch, directBlockNeighbors } = require('../utils/other')
 const goto = require('./goto')
 const plantSeed = require('./plant-seed')

@@ -1,3 +1,5 @@
+'use strict'
+
 const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
 const attack = require('./attack')

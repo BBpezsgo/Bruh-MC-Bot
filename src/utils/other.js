@@ -1,3 +1,5 @@
+'use strict'
+
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')

@@ -1,3 +1,5 @@
+'use strict'
+
 const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')

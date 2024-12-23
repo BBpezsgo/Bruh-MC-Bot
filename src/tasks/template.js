@@ -1,3 +1,5 @@
+'use strict'
+
 // @ts-ignore
 const { sleepG, wrap } = require('../utils/tasks')
 

@@ -1,3 +1,5 @@
+'use strict'
+
 const { Block } = require('prismarine-block')
 const getMcData = require('minecraft-data')
 const { wrap } = require('../utils/tasks')

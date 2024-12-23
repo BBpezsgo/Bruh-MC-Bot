@@ -1,3 +1,5 @@
+'use strict'
+
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')

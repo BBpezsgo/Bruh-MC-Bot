@@ -1,3 +1,5 @@
+'use strict'
+
 /**
  * @template T
  * @implements {Iterable<T>}
