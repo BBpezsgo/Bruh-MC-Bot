@@ -26,7 +26,7 @@ const Minecraft = require('../minecraft')
 module.exports = {
     task: function*(bot) {
         let didMLG = false
-    
+
         const neighbor = bot.bot.nearestEntity()
         if (neighbor &&
             Minecraft.mlg.vehicles.includes(neighbor.name) &&
@@ -38,20 +38,20 @@ module.exports = {
             bot.bot.dismount()
             return 'ok'
         }
-    
+
         while (!didMLG) {
             try {
                 let haveMlgItem = 0
                 for (const item of bot.bot.inventory.slots) {
                     if (!item) { continue }
-    
+
                     if (Minecraft.mlg.boats.includes(item.name) &&
                         haveMlgItem < 1) {
                         yield* wrap(bot.bot.equip(item.type, 'hand'))
                         haveMlgItem = 1
                         continue
                     }
-    
+
                     if (Minecraft.mlg.mlgBlocks.includes(item.name) &&
                         haveMlgItem < 2) {
                         yield* wrap(bot.bot.equip(item.type, 'hand'))
@@ -59,14 +59,14 @@ module.exports = {
                         break
                     }
                 }
-    
+
                 if (!haveMlgItem) {
                     console.warn(`[Bot "${bot.username}"] [MLG] No suitable item found`)
                     return 'failed'
                 }
-    
+
                 console.log(`[Bot "${bot.username}"] [MLG] Will use ${bot.bot.heldItem?.name ?? 'null'} ...`)
-    
+
                 yield* wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
 
                 yield
@@ -85,28 +85,37 @@ module.exports = {
                     console.warn(`[Bot "${bot.username}"] [MLG] Not holding anything`)
                     return 'failed'
                 }
-                
+
                 if (bot.bot.heldItem.name === 'bucket') {
                     console.warn(`[Bot "${bot.username}"] [MLG] This is a bucket`)
                     return 'failed'
                 }
-    
+
                 console.log(`[Bot "${bot.username}"] [MLG] Using "${bot.bot.heldItem.name ?? 'null'}" ...`)
-    
+
                 if (bot.bot.heldItem.name === 'water_bucket') {
                     console.log(`[Bot "${bot.username}"] [MLG] Placing water ...`)
                     bot.bot.activateItem(false)
                     didMLG = true
-    
+
                     yield* sleepTicks(2)
-                    
+
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
                     if (junkBlock) {
-                        console.log(`[Bot "${bot.username}"] [MLG] Junk water saved`)
-                        bot.memory.mlgJunkBlocks.push({
-                            type: 'water',
-                            position: new Vec3Dimension(junkBlock.position, bot.dimension),
-                        })
+                        console.log(`[Bot "${bot.username}"] Equip bucket ...`)
+                        const bucket = bot.searchInventoryItem(null, 'bucket')
+                        if (bucket) {
+                            yield* bot.equip(bucket, 'hand')
+                            yield* wrap(bot.bot.lookAt(junkBlock.position, true))
+                            bot.bot.activateItem(false)
+                        } else {
+                            console.warn(`[Bot "${bot.username}"] No bucket found`)
+                            console.log(`[Bot "${bot.username}"] [MLG] Junk water saved`)
+                            bot.memory.mlgJunkBlocks.push({
+                                type: 'water',
+                                position: new Vec3Dimension(junkBlock.position, bot.dimension),
+                            })
+                        }
                     } else {
                         console.log(`[Bot "${bot.username}"] [MLG] Possible junk water saved`)
                         bot.memory.mlgJunkBlocks.push({
@@ -117,9 +126,9 @@ module.exports = {
                 } else if (Minecraft.mlg.boats.includes(bot.bot.heldItem.name)) {
                     console.log(`[Bot "${bot.username}"] [MLG] Activating item ...`)
                     bot.bot.activateItem()
-    
+
                     yield* sleepTicks(2)
-    
+
                     const junkBoat = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.name === 'boat')
                     if (junkBoat) {
                         console.log(`[Bot "${bot.username}"] [MLG] Junk boat saved`)
@@ -133,9 +142,9 @@ module.exports = {
                     console.log(`[Bot "${bot.username}"] [MLG] Placing block ...`)
                     yield* wrap(bot.bot.placeBlock(reference, new Vec3(0, 1, 0)))
                     didMLG = true
-    
+
                     yield* sleepTicks(2)
-                    
+
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
                     if (junkBlock) {
                         console.log(`[Bot "${bot.username}"] [MLG] Junk block saved`)

@@ -42,7 +42,7 @@ function timeout(task, ms) {
             reject('Time Limit Exceeded')
         }, ms)
     })
-    return Promise.race([task, timeoutPromise]);
+    return Promise.race([task, timeoutPromise])
 }
 
 /**
@@ -58,10 +58,11 @@ function* wrap(promise) {
     let error = undefined
     /** @type {T | undefined} */
     let resolvedValue = undefined
-    promise.then(v => resolvedValue = v)
-    .catch(v => error = v)
-    .finally(() => isDone = true)
-
+    promise
+        .then(v => resolvedValue = v)
+        .catch(v => error = v)
+        .finally(() => isDone = true)
+        
     while (!isDone) {
         yield
     }
@@ -114,6 +115,7 @@ function* parallelAll(...tasks) {
      */
     const context = tasks.map(v => ({
         task: v,
+        /** @type {any} */
         value: null,
     }))
     while (true) {
@@ -152,6 +154,7 @@ function* parallel(tasks) {
     const context = tasks.map(v => ({
         task: v.task,
         callback: v.callback,
+        /** @type {any} */
         value: null,
     }))
     while (true) {

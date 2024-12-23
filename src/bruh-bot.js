@@ -618,14 +618,14 @@ module.exports = class BruhBot {
             console.log(`[Bot "${this.username}"] Ready`)
         })
 
-        this.bot.on('move', () => {
-            if (!this.mc) { return }
-            if (this.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
-                this.tasks.tick()
-                this.tasks.push(this, tasks.mlg, {}, priorities.critical)
-                return
-            }
-        })
+        // this.bot.on('move', () => {
+        //     if (!this.mc) { return }
+        //     if (this.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
+        //         this.tasks.tick()
+        //         this.tasks.push(this, tasks.mlg, {}, priorities.critical)
+        //         return
+        //     }
+        // })
 
         this.bot.on('path_update', path => {
             // console.log(`[Bot "${this.username}"] [Pathfinder] Update`)
@@ -669,7 +669,7 @@ module.exports = class BruhBot {
         })
 
         /**
-         * @type {null | NodeJS.Timeout | Timer}
+         * @type {null | NodeJS.Timeout}
          */
         let tickInterval = null
 
@@ -1979,6 +1979,12 @@ module.exports = class BruhBot {
             this._lastImportantTaskTime = performance.now()
         }
 
+        if (this.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
+            this.tasks.tick()
+            this.tasks.push(this, tasks.mlg, {}, priorities.critical)
+            return
+        }
+
         {
             const explodingCreeper = this.env.getExplodingCreeper(this)
 
@@ -2148,22 +2154,63 @@ module.exports = class BruhBot {
             })
         }
 
-        if (this.bot.entity.metadata[0] & 0x01) {
-            const water = this.bot.findBlock({
-                matching: this.mc.registry.blocksByName['water'].id,
-                count: 1,
-                maxDistance: config.criticalSurviving.waterSearchRadius,
-            })
-            if (water) {
+        const blockAt = this.bot.blockAt(this.bot.entity.position)
+
+        if (this.bot.entity.metadata[0] & 0x01 &&
+            blockAt.name !== 'lava') {
+            this.tasks.push(this, {
+                task: function*(bot, args) {
+                    const waterBucketItem = bot.searchInventoryItem(null, 'water_bucket')
+                    if (waterBucketItem) {
+                        let refBlock = bot.bot.blockAt(bot.bot.entity.position)
+                        if (refBlock.name === 'fire') {
+                            yield* bot.dig(refBlock, 'ignore', false)
+                            yield
+                        }
+                        refBlock = bot.bot.blockAt(bot.bot.entity.position)
+                        if (refBlock.name === 'air') {
+                            yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
+                            yield
+                            yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
+                            bot.bot.activateItem(false)
+                            while (bot.bot.entity.metadata[0] & 0x01) {
+                                yield
+                            }
+                            const bucketItem = bot.searchInventoryItem(null, 'bucket')
+                            if (bucketItem) {
+                                yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
+                                yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
+                                bot.bot.activateItem(false)
+                            }
+                            return
+                        }
+                    }
+
+                    const water = bot.bot.findBlock({
+                        matching: bot.mc.registry.blocksByName['water'].id,
+                        count: 1,
+                        maxDistance: config.criticalSurviving.waterSearchRadius,
+                    })
+                    if (water) {
+                        yield* tasks.goto.task(bot, {
+                            point: water.position,
+                            distance: 0,
+                            sprint: true,
+                        })
+                    }
+                },
+                id: `extinguish-myself`,
+                humanReadableId: `Extinguish myself`,
+            }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
+        } else {
+            if (blockAt.name === 'fire') {
                 this.tasks.push(this, {
-                    task: tasks.goto.task,
-                    id: `goto-water`,
-                    humanReadableId: `Goto water`,
-                }, {
-                    point: water.position,
-                    distance: 0,
-                    sprint: true,
-                }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
+                    task: function*(bot, args) {
+                        yield* bot.dig(blockAt, 'ignore', false)
+                    },
+                    id: `extinguish-myself`,
+                    humanReadableId: `Extinguish myself`,
+                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
             }
         }
 
@@ -2260,10 +2307,9 @@ module.exports = class BruhBot {
             this.defendAgainst(hostile)
         }
 
-        if (!this.bot.pathfinder.path?.length && this.bot.oxygenLevel < 18) {
-            /*
-            if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
-                this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
+        if (!this.bot.pathfinder.path?.length) {
+            if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'lava' ||
+                this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'lava') {
                 this.tasks.push(this, {
                     task: function(bot, args) {
                         return tasks.goto.task(bot, {
@@ -2278,9 +2324,10 @@ module.exports = class BruhBot {
                                     const blockGround = bot.bot.blockAt(node.offset(0, -1, 0))
                                     const blockFoot = bot.bot.blockAt(node)
                                     const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
-                                    if (blockFoot.name !== 'water' &&
-                                        blockHead.name !== 'water' &&
-                                        blockGround.name !== 'air') {
+                                    if (blockFoot.name !== 'lava' &&
+                                        blockHead.name !== 'lava' &&
+                                        blockGround.name !== 'air' &&
+                                        blockGround.name !== 'lava') {
                                         return true
                                     }
                                     return false
@@ -2294,16 +2341,98 @@ module.exports = class BruhBot {
                             },
                         })
                     },
-                    id: `get-out-water`,
-                    humanReadableId: `Getting out of water`,
-                }, {}, priorities.surviving + 1)
-            }
-            */
+                    id: `get-out-lava`,
+                    humanReadableId: `Getting out of lava`,
+                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 2)
+            } else if (this.bot.oxygenLevel < 18) {
+                if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
+                    this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water') {
+                    this.tasks.push(this, {
+                        task: function(bot, args) {
+                            return tasks.goto.task(bot, {
+                                goal: {
+                                    heuristic: (node) => {
+                                        const dx = bot.bot.entity.position.x - node.x
+                                        const dy = bot.bot.entity.position.y - node.y
+                                        const dz = bot.bot.entity.position.z - node.z
+                                        return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+                                    },
+                                    isEnd: (node) => {
+                                        const blockGround = bot.bot.blockAt(node.offset(0, -1, 0))
+                                        const blockFoot = bot.bot.blockAt(node)
+                                        const blockHead = bot.bot.blockAt(node.offset(0, 1, 0))
+                                        if (blockFoot.name !== 'water' &&
+                                            blockHead.name !== 'water' &&
+                                            blockGround.name !== 'air' &&
+                                            blockGround.name !== 'water') {
+                                            return true
+                                        }
+                                        return false
+                                    },
+                                    hasChanged: () => false,
+                                    isValid: () => true,
+                                },
+                                options: {
+                                    searchRadius: 20,
+                                    timeout: 1000,
+                                },
+                            })
+                        },
+                        id: `get-out-water`,
+                        humanReadableId: `Getting out of water`,
+                    }, {}, priorities.surviving + 1)
+                }
 
-            if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
-                this.bot.setControlState('jump', true)
-            } else if (this.bot.controlState['jump']) {
-                this.bot.setControlState('jump', false)
+                if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
+                    this.bot.setControlState('jump', true)
+                } else if (this.bot.controlState['jump']) {
+                    this.bot.setControlState('jump', false)
+                }
+            } else {
+                /**
+                 * @param {Vec3} point
+                 */
+                const danger = (point) => {
+                    let res = 0
+                    if (this.bot.blockAt(point.offset(0, 0, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, 0, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 0, 1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 0, -1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, 0, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, 1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, 1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, -1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, 1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, -1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, 1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, -1)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, -1, 0)).name === 'lava') res++
+                    return res
+                }
+                if (danger(this.bot.entity.position.floored())) {
+                    this.tasks.push(this, {
+                        task: tasks.goto.task,
+                        id: 'get-away-from-lava',
+                        humanReadableId: 'Getting away from lava',
+                    }, {
+                        goal: {
+                            heuristic: (node) => {
+                                return 16 - danger(node)
+                            },
+                            isEnd: (node) => {
+                                return danger(node) === 0
+                            },
+                            hasChanged: () => false,
+                            isValid: () => true,
+                        },
+                        options: {
+                            searchRadius: 20,
+                            timeout: 1000,
+                        },
+                    }, priorities.surviving - 50)
+                }
             }
         }
 
@@ -2423,11 +2552,11 @@ module.exports = class BruhBot {
             this.tasks.push(this, tasks.sleep, {}, priorities.low)
         }
 
-        if (performance.now() - this._lastImportantTaskTime < 10000) {
-            return
+        if (performance.now() - this._lastImportantTaskTime > 10000) {
+            this.doBoredomTasks()
         }
 
-        this.doBoredomTasks()
+        this.doNothing()
     }
 
     doBoredomTasks() {
@@ -2535,59 +2664,60 @@ module.exports = class BruhBot {
                 id: 'ensure-equipment',
             }, {}, priorities.unnecessary)
         }
-
-        this.doNothing()
     }
 
     doNothing() {
-        if (this.tasks.isIdle) {
-            if (this.goBackInterval?.done() &&
-                this.memory.idlePosition &&
-                this.dimension === this.memory.idlePosition.dimension && (
-                    this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)
-                    )) > 10) {
-                this.tasks.push(this, {
-                    task: tasks.goto.task,
-                    id: `goto-idle-position`,
-                    humanReadableId: `Goto idle position`,
-                }, {
-                    point: this.memory.idlePosition,
-                    distance: 4,
-                    sprint: false,
-                }, -999)
+        const idleTime = performance.now() - this._lastImportantTaskTime
+
+        if (idleTime > 10000) {
+            if (this.tasks.isIdle) {
+                if (this.goBackInterval?.done() &&
+                    this.memory.idlePosition &&
+                    this.dimension === this.memory.idlePosition.dimension && (
+                        this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)
+                        )) > 10) {
+                    this.tasks.push(this, {
+                        task: tasks.goto.task,
+                        id: `goto-idle-position`,
+                        humanReadableId: `Goto idle position`,
+                    }, {
+                        point: this.memory.idlePosition,
+                        distance: 4,
+                        sprint: false,
+                    }, -999)
+                }
+            } else {
+                this.goBackInterval?.restart()
             }
-        } else {
-            this.goBackInterval?.restart()
         }
 
         if (this.tasks.isIdle || (
             this._runningTask &&
             this._runningTask.id.startsWith('follow') &&
             !this.bot.pathfinder.goal
-        )
-        ) {
+        )) {
             if (this.moveAwayInterval?.done()) {
-                const roundedSelfPosition = this.bot.entity.position.rounded()
+                const roundedSelfPosition = this.bot.entity.position.floored()
                 for (const playerName in this.bot.players) {
                     if (playerName === this.username) { continue }
                     const playerEntity = this.bot.players[playerName].entity
                     if (!playerEntity) { continue }
-                    if (roundedSelfPosition.equals(playerEntity.position.rounded())) {
+                    if (roundedSelfPosition.equals(playerEntity.position.floored())) {
                         this.tasks.push(this, tasks.goto, {
                             flee: playerEntity,
-                            distance: 2,
+                            distance: 1,
                         }, priorities.unnecessary)
                         return
                     }
                 }
             }
 
-            if (this.lookAtNearestPlayer()) {
+            if (idleTime > 1000 && this.lookAtNearestPlayer()) {
                 this.randomLookInterval?.restart()
                 return
             }
 
-            if (this.randomLookInterval?.done()) {
+            if (idleTime > 10000 && this.randomLookInterval?.done()) {
                 this.lookRandomly()
                 return
             }
@@ -2719,7 +2849,7 @@ module.exports = class BruhBot {
      * @type {import('./task').SimpleTaskDef<number>}
      */
     static *tryHarvestCrops(bot) {
-        const harvested = yield* tasks.harvest.task(bot, { })
+        const harvested = yield* tasks.harvest.task(bot, {})
 
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
             const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
@@ -3087,6 +3217,29 @@ module.exports = class BruhBot {
     //#endregion
 
     //#region Items & Inventory
+
+    /**
+     * @param {number | Item} item
+     * @param {MineFlayer.EquipmentDestination} destination
+     */
+    *equip(item, destination = 'hand') {
+        if (typeof item === 'number') {
+            item = this.bot.inventory.findInventoryItem(item, null, false)
+        }
+
+        if (item == null || typeof item !== 'object') {
+            throw new Error('Invalid item object in equip (item is null or typeof item is not object)')
+        }
+
+        const sourceSlot = item.slot
+        const destSlot = this.bot.getEquipmentDestSlot(destination)
+
+        if (sourceSlot === destSlot) {
+            return
+        }
+
+        yield* taskUtils.wrap(this.bot.equip(item, destination))
+    }
 
     /**
      * @returns {Array<{ name: string; count: number; nbt?: NBT; }>}
@@ -3791,7 +3944,7 @@ module.exports = class BruhBot {
 
     /**
      * @param {{
-     *   matching: ReadonlySetLike<number>;
+     *   matching: number | string | Iterable<string | number> | ReadonlySet<number>;
      *   filter?: (block: import('prismarine-block').Block) => boolean;
      *   point?: Vec3
      *   maxDistance?: number
@@ -3801,6 +3954,25 @@ module.exports = class BruhBot {
      */
     findBlocks(options) {
         const Block = require('prismarine-block')(this.bot.registry)
+
+        let matching = null
+
+        if (typeof options.matching === 'number') {
+            matching = new Set([options.matching])
+        } else if (typeof options.matching === 'string') {
+            matching = new Set([this.bot.registry.blocksByName[options.matching].id])
+        } else if ('has' in options.matching) {
+            matching = options.matching
+        } else {
+            matching = new Set()
+            for (const item of options.matching) {
+                if (typeof item === 'string') {
+                    matching.add(this.bot.registry.blocksByName[item].id)
+                } else {
+                    matching.add(item)
+                }
+            }
+        }
 
         /**
          * @param {import('prismarine-chunk').PCChunk['sections'][0]} section
@@ -3813,7 +3985,7 @@ module.exports = class BruhBot {
             // match in the palette, we can skip this section.
             if (section.palette) {
                 for (const stateId of section.palette) {
-                    if (options.matching.has(Block.fromStateId(stateId, 0).type)) {
+                    if (matching.has(Block.fromStateId(stateId, 0).type)) {
                         return true // the block is in the palette
                     }
                 }
@@ -3856,7 +4028,7 @@ module.exports = class BruhBot {
                             for (cursor.y = begin.y; cursor.y < end.y; cursor.y++) {
                                 for (cursor.z = begin.z; cursor.z < end.z; cursor.z++) {
                                     const block = bot.blockAt(cursor)
-                                    if (options.matching.has(block.type) && (!options.filter || options.filter(block)) && cursor.distanceTo(point) <= maxDistance) {
+                                    if (matching.has(block.type) && (!options.filter || options.filter(block)) && cursor.distanceTo(point) <= maxDistance) {
                                         yield block
                                         n++
                                     }
