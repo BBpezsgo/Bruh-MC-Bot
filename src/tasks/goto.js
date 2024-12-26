@@ -164,6 +164,12 @@ class GoalEntity extends goals.Goal {
 
     /** @override */
     isValid() { return this.entity && this.entity.isValid }
+
+    refresh() {
+        this.x = this.entity.position.x
+        this.y = this.entity.position.y
+        this.z = this.entity.position.z
+    }
 }
 
 /**

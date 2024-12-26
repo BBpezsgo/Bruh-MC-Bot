@@ -2394,21 +2394,21 @@ module.exports = class BruhBot {
                  */
                 const danger = (point) => {
                     let res = 0
-                    if (this.bot.blockAt(point.offset(0, 0, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(1, 0, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, 0, 1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, 0, -1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(-1, 0, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, 1, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(1, 1, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, 1, 1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, 1, -1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(-1, 1, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, -1, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(1, -1, 0)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, -1, 1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(0, -1, -1)).name === 'lava') res++
-                    if (this.bot.blockAt(point.offset(-1, -1, 0)).name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 0, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, 0, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 0, 1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 0, -1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, 0, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, 1, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, 1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, 1, -1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, 1, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(1, -1, 0))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, 1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(0, -1, -1))?.name === 'lava') res++
+                    if (this.bot.blockAt(point.offset(-1, -1, 0))?.name === 'lava') res++
                     return res
                 }
                 if (danger(this.bot.entity.position.floored())) {

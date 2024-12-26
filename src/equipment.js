@@ -52,7 +52,7 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'must',
         item: [
             'wooden_pickaxe',
             'stone_pickaxe',
@@ -90,8 +90,60 @@ const equipment = [
         prefer: 'wooden_hoe',
     },
     {
+        type: 'any',
+        priority: 'maybe',
+        item: [
+            'leather_helmet',
+            'iron_helmet',
+            // 'chainmail_helmet',
+            // 'golden_helmet',
+            'diamond_helmet',
+            'netherite_helmet',
+        ],
+        prefer: 'iron_helmet',
+    },
+    {
+        type: 'any',
+        priority: 'maybe',
+        item: [
+            'leather_chestplate',
+            'iron_chestplate',
+            // 'chainmail_chestplate',
+            // 'golden_chestplate',
+            'diamond_chestplate',
+            'netherite_chestplate',
+        ],
+        prefer: 'iron_chestplate',
+    },
+    {
+        type: 'any',
+        priority: 'maybe',
+        item: [
+            'leather_leggings',
+            'iron_leggings',
+            // 'chainmail_leggings',
+            // 'golden_leggings',
+            'diamond_leggings',
+            'netherite_leggings',
+        ],
+        prefer: 'iron_leggings',
+    },
+    {
+        type: 'any',
+        priority: 'maybe',
+        item: [
+            'leather_boots',
+            'iron_boots',
+            // 'chainmail_boots',
+            // 'golden_boots',
+            'diamond_boots',
+            'netherite_boots',
+        ],
+        prefer: 'iron_boots',
+    },
+    {
         type: 'single',
-        priority: 'must',
+        priority: 'maybe',
         item: 'shield',
     },
     {

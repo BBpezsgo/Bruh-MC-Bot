@@ -90,7 +90,7 @@ module.exports = {
                         throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
                     }
 
-                    const loot = bot.mc.registry.blockLoot[current.name].drops
+                    const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
 
                     // console.log(`[Bot "${bot.username}"] Digging ...`)
                     yield* wrap(bot.bot.dig(current))

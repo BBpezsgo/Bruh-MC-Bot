@@ -839,8 +839,7 @@ module.exports = class Environment {
         switch (cropInfo.type) {
             case 'seeded':
             case 'simple': {
-                const age = block.getProperties()?.['age']
-                if (typeof age !== 'number') { return false }
+                const age = Number(block.getProperties()?.['age'])
                 isGrown = age >= cropInfo.grownAge
                 break
             }
@@ -860,13 +859,11 @@ module.exports = class Environment {
                 switch (block.name) {
                     case 'cave_vines':
                     case 'cave_vines_plant':
-                        const berries = block.getProperties()?.['berries']
-                        if (typeof berries !== 'boolean') { return false }
+                        const berries = Boolean(block.getProperties()?.['berries'])
                         isGrown = berries
                         break
                     case 'sweet_berry_bush':
-                        const age = block.getProperties()?.['age']
-                        if (typeof age !== 'number') { return false }
+                        const age = Number(block.getProperties()?.['age'])
                         isGrown = age >= 3
                         break
                     default:
@@ -961,6 +958,7 @@ module.exports = class Environment {
             point: farmPosition,
             count: count,
             maxDistance: maxDistance,
+            force: true,
         }).filter(v => !!v)
 
         // return bot.bot.findBlocks({
@@ -991,6 +989,7 @@ module.exports = class Environment {
             point: farmPosition,
             count: 1,
             maxDistance: maxDistance,
+            force: true,
         }).filter(v => !!v).first() ?? null
     }
 
@@ -1317,11 +1316,12 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {Vec3} position
+     * @param {Vec3 | Vec3Dimension} position
      */
     blockAt(position) {
         for (const bot of this.bots) {
-            const block = bot.bot.blockAt(position)
+            if ('dimension' in position && position.dimension !== bot.dimension) { continue }
+            const block = bot.bot.blockAt('dimension' in position ? position.xyz(bot.dimension) : position)
             if (block) { return block }
         }
         return null

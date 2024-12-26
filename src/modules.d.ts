@@ -38,8 +38,8 @@ declare module 'mineflayer' {
 		) => void;
 		path_stop: () => void;
 
-		// auto_shot_stopped: (target: Entity | OptionsMasterGrade) => void;
-		// incoming_projectile: (projectile: Projectile, trajectory: Array<Vec3>) => void;
-		// target_aiming_at_you: (entity: Entity, trajectory: Array<Vec3>) => void;
+		auto_shot_stopped: (target: Entity | OptionsMasterGrade) => void;
+		incoming_projectile: (projectile: Projectile, trajectory: Array<Vec3>) => void;
+		target_aiming_at_you: (entity: Entity, trajectory: Array<Vec3>) => void;
 	}
 }

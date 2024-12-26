@@ -68,15 +68,16 @@ module.exports = {
                     tryCount++
 
                     chestBlock = getChest(bot, fullChests)
-                    if (!chestBlock && tryCount > 5) { throw `There is no chest` }
-                    const chestPosition = chestBlock.position
-
-                    if (chestBlock) {
-                        yield* goto.task(bot, {
-                            block: chestPosition,
-                        })
-                        chestBlock = bot.bot.blockAt(chestPosition.clone())
+                    if (!chestBlock) {
+                        if (tryCount > 5) { throw `There is no chest` }
+                        continue
                     }
+
+                    const chestPosition = chestBlock.position
+                    yield* goto.task(bot, {
+                        block: chestPosition,
+                    })
+                    chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
             }
 
