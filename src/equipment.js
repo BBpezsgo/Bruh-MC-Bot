@@ -2,7 +2,7 @@
 
 /**
  * @typedef {{
- *   priority: 'must' | 'maybe';
+ *   priority: 'must' | 'good';
  * }} EquipmentItemBase
  */
 
@@ -11,6 +11,7 @@
  *   type: 'any';
  *   item: ReadonlyArray<string>;
  *   prefer: string;
+ *   count: 'any' | number
  * }} AnyEquipmentItem
  */
 
@@ -25,6 +26,7 @@
  * @typedef {EquipmentItemBase & {
  *   type: 'single';
  *   item: string;
+ *   count: 'any' | number
  * }} SingleEquipmentItem
  */
 
@@ -43,7 +45,7 @@
 
 /**
  * @type {ReadonlyArray<EquipmentItem>}
- */ 
+ */
 const equipment = [
     {
         type: 'food',
@@ -53,6 +55,7 @@ const equipment = [
     {
         type: 'any',
         priority: 'must',
+        count: 1,
         item: [
             'wooden_pickaxe',
             'stone_pickaxe',
@@ -66,6 +69,7 @@ const equipment = [
     {
         type: 'any',
         priority: 'must',
+        count: 1,
         item: [
             'wooden_sword',
             'stone_sword',
@@ -78,7 +82,8 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'good',
+        count: 1,
         item: [
             'wooden_hoe',
             'stone_hoe',
@@ -91,7 +96,8 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'good',
+        count: 1,
         item: [
             'leather_helmet',
             'iron_helmet',
@@ -104,7 +110,8 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'good',
+        count: 1,
         item: [
             'leather_chestplate',
             'iron_chestplate',
@@ -117,7 +124,8 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'good',
+        count: 1,
         item: [
             'leather_leggings',
             'iron_leggings',
@@ -130,7 +138,8 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'maybe',
+        priority: 'good',
+        count: 1,
         item: [
             'leather_boots',
             'iron_boots',
@@ -143,28 +152,34 @@ const equipment = [
     },
     {
         type: 'single',
-        priority: 'maybe',
+        priority: 'good',
         item: 'shield',
+        count: 1,
     },
     {
         type: 'single',
-        priority: 'maybe',
+        priority: 'good',
         item: 'fishing_rod',
+        count: 1,
     },
     {
         type: 'single',
-        priority: 'maybe',
+        priority: 'good',
         item: 'water_bucket',
+        count: 1,
+    },
+    {
+        type: 'any',
+        priority: 'good',
+        item: ['bow', 'crossbow'],
+        prefer: 'crossbow',
+        count: 1,
     },
     {
         type: 'single',
-        priority: 'maybe',
-        item: 'bow',
-    },
-    {
-        type: 'single',
-        priority: 'maybe',
+        priority: 'good',
         item: 'arrow',
+        count: 'any',
     },
 ]
 

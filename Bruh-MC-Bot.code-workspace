@@ -57,18 +57,6 @@
 				"skipFiles": [
 					"<node_internals>/**"
 				]
-			},
-			{
-				"name": "Bun",
-				"program": "./src/index.js",
-				"type": "bun",
-				"request": "launch",
-				"args": [
-					"run"
-				],
-				"stopOnEntry": false,
-				"internalConsoleOptions": "openOnSessionStart",
-				"runtime": "bun",
 			}
 		]
 	},

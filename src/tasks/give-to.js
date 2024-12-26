@@ -40,7 +40,7 @@ module.exports = {
             distance: 2,
         })
 
-        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0)))
+        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), true))
 
         /** @type {Record<string, number>} */
         const tossedMap = {}

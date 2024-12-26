@@ -53,21 +53,30 @@ module.exports = {
                     continue
                 }
 
-                // console.log(`[Bot "${bot.username}"] Goto block ...`)
-
-                try {
-                    yield* goto.task(bot, {
-                        block: cropPosition,
-                    })
-                } catch (error) {
-                    if (error instanceof Error && error.name === 'NoPath') {
-                        console.error(`[Bot "${bot.username}"] No path`)
-                    } else if (error instanceof Error && error.name === 'GoalChanged') {
-                        console.error(`[Bot "${bot.username}"] Goal changed`)
-                    } else {
-                        console.error(error)
-                    }
+                if (cropInfo.type !== 'spread' && !bot.env.cropFilter(bot, true, cropBlock, [])) {
+                    console.warn(`[Bot "${bot.username}"] This crop aint good`)
                     continue
+                }
+
+                const p = new Vec3Dimension(cropPosition, bot.dimension)
+
+                const gotoCrop = function*() {
+                    // console.log(`[Bot "${bot.username}"] Goto block ...`)
+                    try {
+                        yield* goto.task(bot, {
+                            block: cropPosition,
+                        })
+                        return true
+                    } catch (error) {
+                        if (error instanceof Error && error.name === 'NoPath') {
+                            console.error(`[Bot "${bot.username}"] No path`)
+                        } else if (error instanceof Error && error.name === 'GoalChanged') {
+                            console.error(`[Bot "${bot.username}"] Goal changed`)
+                        } else {
+                            console.error(error)
+                        }
+                        return farmPosition
+                    }
                 }
 
                 // console.log(`[Bot "${bot.username}"] Actually harvesting ...`)
@@ -75,10 +84,12 @@ module.exports = {
                 switch (cropInfo.type) {
                     case 'seeded':
                     case 'simple': {
+                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* bot.dig(cropBlock)
                         break
                     }
                     case 'grows_fruit': {
+                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* bot.activate(cropBlock)
                         break
                     }
@@ -95,6 +106,7 @@ module.exports = {
                             console.warn(`[Bot "${bot.username}"] This block isn't grown`)
                             continue
                         }
+                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* goto.task(bot, {
                             block: fruitBlock.position,
                         })
@@ -118,6 +130,7 @@ module.exports = {
                         break
                     }
                     case 'spread': {
+                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* dig.task(bot, {
                             block: cropBlock,
                             alsoTheNeighbors: false,
@@ -237,7 +250,7 @@ module.exports = {
             items.push(item)
         }
 
-        console.log(`[Bot ${bot.username}] Picking up ${items.length} items`)
+        console.log(`[Bot \"${bot.username}\"] Picking up ${items.length} items`)
 
         for (let i = 0; i < 2 && items.length > 0; i++) {
             for (const item of basicRouteSearch(bot.bot.entity.position, items, v => v.position)) {

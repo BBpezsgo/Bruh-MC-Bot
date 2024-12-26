@@ -113,11 +113,15 @@ module.exports = {
             }
 
             for (const animal of animals) {
+                let foodItem = bot.searchInventoryItem(null, food)
+                if (!foodItem) { continue }
                 yield* goto.task(bot, {
                     entity: animal,
                     distance: 4,
                 })
-                yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[food].id, 'hand'))
+                foodItem = bot.searchInventoryItem(null, food)
+                if (!foodItem) { continue }
+                yield* wrap(bot.bot.equip(foodItem, 'hand'))
                 yield* wrap(bot.bot.activateEntity(animal))
                 const distance = Math.entityDistance(bot.bot.entity.position, animal)
                 if (distance < 4) {

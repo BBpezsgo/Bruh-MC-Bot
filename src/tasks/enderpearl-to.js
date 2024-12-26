@@ -24,6 +24,7 @@ module.exports = {
 
         if (!bot.bot.hawkEye) {
             new Promise(resolve => {
+                // @ts-ignore
                 bot.bot.loadPlugin(require('minecrafthawkeye').default)
                 resolve()
             })

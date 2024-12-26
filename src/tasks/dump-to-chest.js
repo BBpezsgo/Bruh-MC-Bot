@@ -13,6 +13,7 @@ const Vec3Dimension = require('../vec3-dimension')
 function getChest(bot, fullChests) {
     for (const myChest of bot.memory.myChests) {
         if (myChest.dimension !== bot.dimension) { continue }
+        if (fullChests.some(v => v.equals(myChest.xyz(bot.dimension)))) { continue }
         const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.dimension), true)
         if (myChestBlock && myChestBlock.type === bot.mc.registry.blocksByName['chest'].id) {
             return myChestBlock
@@ -21,11 +22,7 @@ function getChest(bot, fullChests) {
     return bot.bot.findBlock({
         matching: bot.mc.registry.blocksByName['chest'].id,
         useExtraInfo: (block) => {
-            for (const fullChest of fullChests) {
-                if (fullChest.equals(block.position)) {
-                    return false
-                }
-            }
+            if (fullChests.some(v => v.equals(block.position))) { return false }
             return true
         }
     })
@@ -119,9 +116,9 @@ module.exports = {
                             shouldBreak = !deposited
                         } catch (error) {
                             if (error instanceof Error) {
-                                console.warn(`Can't dump ${itemToDeposit.name}: ${error.message}`)
+                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${itemToDeposit.name}: ${error.message}`)
                             } else {
-                                console.warn(`Can't dump ${itemToDeposit.name}: ${error}`)
+                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${itemToDeposit.name}: ${error}`)
                             }
                         }
                     }
@@ -129,9 +126,9 @@ module.exports = {
                     if (shouldBreak) { break }
                 }
             } finally {
-                yield* sleepG(100)
+                yield* sleepG(20)
                 chest.close()
-                yield* sleepG(100)
+                yield* sleepG(20)
             }
         }
 

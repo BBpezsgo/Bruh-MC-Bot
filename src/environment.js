@@ -268,11 +268,24 @@ module.exports = class Environment {
         const isBreak = (!newBlock || newBlock.name === 'air')
         if (isPlace && isBreak) { return }
 
-        /**
-         * @type {PositionHash}
-         */
-        const hash = `${newBlock.position.x}-${newBlock.position.y}-${newBlock.position.z}-${dimension}`
-        delete this.allocatedBlocks[hash]
+        const allocated = this.getAllocatedBlock(new Vec3Dimension(newBlock.position, dimension))
+
+        if (allocated) {
+            switch (allocated.type) {
+                case 'activate':
+                    this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
+                    break
+                case 'dig':
+                    if (isBreak) this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
+                    break
+                case 'hoe':
+                    if (newBlock?.name === 'farmland') this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
+                    break
+                case 'place':
+                    if (isPlace) this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
+                    break
+            }
+        }
 
         if (isPlace && newBlock) {
             if (newBlock.name in Minecraft.cropsByBlockName) {
@@ -587,6 +600,17 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {Vec3Dimension} position
+     */
+    deleteChest(position) {
+        for (let i = this.chests.length - 1; i >= 0; i--) {
+            if (!this.chests[i].position.equals(position)) continue
+            this.chests.splice(i, 1)
+        }
+        this.save()
+    }
+
+    /**
      * @param {import('./bruh-bot')} bot
      * @returns {import('./task').Task<number>}
      */
@@ -821,7 +845,6 @@ module.exports = class Environment {
     }
 
     /**
-     * @private
      * @param {import('./bruh-bot')} bot
      * @param {boolean} grown
      * @param {Block} block
@@ -1171,6 +1194,7 @@ module.exports = class Environment {
             type: type,
             ...args,
         }
+        console.log(`ALLOC ${position} ${type} by ${bot}`)
         return true
     }
 
@@ -1185,10 +1209,12 @@ module.exports = class Environment {
          */
         const hash = `${position.x}-${position.y}-${position.z}-${position.dimension}`
         if (this.allocatedBlocks[hash] &&
+            bot &&
             this.allocatedBlocks[hash].bot !== bot) {
             return false
         }
         delete this.allocatedBlocks[hash]
+        console.log(`DEALLOC ${position} by ${bot}`)
         return true
     }
 

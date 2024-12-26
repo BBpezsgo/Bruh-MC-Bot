@@ -105,4 +105,24 @@ module.exports = class Iterable {
             }
         })
     }
+
+    /**
+     * @param {number} length
+     * @param {number} interval
+     * @param {(index: number) => void} callback
+     */
+    static interval(length, interval, callback) {
+        return new Promise((resolve) => {
+            let i = 0
+            const _interval = setInterval(() => {
+                if (i < length) {
+                    callback(i)
+                } else {
+                    clearInterval(_interval)
+                    resolve()
+                }
+                i++
+            }, interval);
+        })
+    }
 }

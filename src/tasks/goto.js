@@ -6,6 +6,7 @@ const { Vec3 } = require('vec3')
 const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
+const { GoalPlaceBlock, GoalInvert, GoalNear } = require('mineflayer-pathfinder/lib/goals')
 
 class GoalBlockSimple extends goals.Goal {
     /**
@@ -247,12 +248,13 @@ class GoalEntity extends goals.Goal {
 /**
  * @param {import('../bruh-bot')} bot
  * @param {(GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs) & GeneralArgs} args
- * @returns {Generator<import('mineflayer-pathfinder/lib/goals').GoalBase | GotoDimensionArgs, void, void>}
+ * @returns {Generator<GoalHawkeye | GoalPlaceBlock | GoalInvert | GoalNear | GoalEntity | GoalBlockSimple | GotoDimensionArgs, void, void>}
  */
 function* getGoal(bot, args) {
     if ('hawkeye' in args) {
         if (!bot.bot.hawkEye) {
             new Promise(resolve => {
+                // @ts-ignore
                 bot.bot.loadPlugin(require('minecrafthawkeye').default)
                 resolve()
             })
@@ -367,7 +369,7 @@ function setOptions(bot, args) {
     newMovements.sneak ||= bot.quietMode
 
     newMovements.liquidCost = 100 // bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
-    newMovements.allowSprinting = !bot.quietMode && (args.sprint ?? false)
+    newMovements.allowSprinting = !bot.quietMode && Boolean(args.sprint)
 
     if (args.excludeStep?.length) {
         newMovements.exclusionAreasStep = [...newMovements.exclusionAreasStep]

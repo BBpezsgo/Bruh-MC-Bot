@@ -13,8 +13,9 @@ const config = require('../config')
  * @param {import('../bruh-bot')} bot
  * @param {ReadonlyArray<(import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe)> | null} recipes
  * @param {boolean} noFuel
+ * @returns {import('../task').Task<{furnaceBlock: Block; recipes: Array<import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe>; } | null>}
  */
-function findBestFurnace(bot, recipes, noFuel) {
+function* findBestFurnace(bot, recipes, noFuel) {
     let bestFurnaceId = -1
     /**
      * @type {Array<(import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe | import('../local-minecraft-data').CampfireRecipe)>}
@@ -60,20 +61,23 @@ function findBestFurnace(bot, recipes, noFuel) {
         if (furnaceId === bestFurnaceId) {
             _recipes.push(recipe)
         } else {
-            const furnaceBlock = bot.bot.findBlock({
-                matching: (/** @type {Block} */ block) => {
-                    if (block.type !== furnaceId) { return false }
+            for (const furnaceBlock of bot.findBlocks({
+                matching: furnaceId,
+                filter: (block) => {
                     if (goodFurnace === 'campfire') {
-                        if (!block.getProperties()['lit']) { return false }
+                        if (!block.getProperties()['lit']) return false
                     }
                     return true
                 },
                 maxDistance: config.smelt.furnaceSearchRadius,
-            })
-            if (furnaceBlock) {
+                count: 1,
+            })) {
+                yield
+                if (!furnaceBlock) { continue }
                 bestFurnace = furnaceBlock
                 bestFurnaceId = furnaceId
                 _recipes = [recipe]
+                break
             }
         }
     }
@@ -207,7 +211,7 @@ module.exports = {
     task: function*(bot, args) {
         const fuels = Minecraft.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
 
-        const best = findBestFurnace(bot, args.recipes, args.noFuel)
+        const best = yield* findBestFurnace(bot, args.recipes, args.noFuel)
 
         if (!best) { throw `No furnaces found` }
 

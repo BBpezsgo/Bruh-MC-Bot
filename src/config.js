@@ -44,7 +44,7 @@ module.exports = Object.freeze({
         bedSearchRadius: 128,
     },
     smelt: {
-        furnaceSearchRadius: 128,
+        furnaceSearchRadius: 32,
     },
     scanChests: {
         radius: 64,

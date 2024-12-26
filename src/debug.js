@@ -8,7 +8,7 @@ module.exports = class Debug {
     /**
      * @readonly
      */
-    static enabled = true
+    static enabled = false
 
     /**
      * @typedef {[number, number, number]} Color

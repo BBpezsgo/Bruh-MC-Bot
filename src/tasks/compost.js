@@ -123,7 +123,7 @@ module.exports = {
                     maxDistance: 4,
                 })
             } catch (error) {
-                console.error(error)
+                console.error(`[Bot \"${bot.username}\"]`, error)
             }
         }
 

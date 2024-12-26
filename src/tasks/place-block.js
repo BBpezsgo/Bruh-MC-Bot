@@ -397,12 +397,17 @@ module.exports = {
         }
 
         const referencePosition = position.offset(-placeInfo.faceVector.x, -placeInfo.faceVector.y, -placeInfo.faceVector.z)
+        const blockPosition = new Vec3Dimension(position, bot.dimension)
 
         let blockHere = bot.bot.blockAt(position)
         while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
-            if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(position, bot.dimension), 'dig')) {
+            yield* goto.task(bot, {
+                block: position,
+            })
+
+            if (!bot.env.allocateBlock(bot.username, blockPosition, 'dig')) {
                 console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
-                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(position, bot.dimension), 'dig')
+                yield* bot.env.waitUntilBlockIs(blockPosition, 'dig')
                 blockHere = bot.bot.blockAt(position)
                 continue
             }
@@ -418,57 +423,66 @@ module.exports = {
             yield* wrap(bot.bot.dig(blockHere))
         }
 
-        for (let i = 3; i >= 0; i--) {
-            yield* goto.task(bot, {
-                block: position,
-            })
+        if (!bot.env.allocateBlock(bot.username, blockPosition, 'place', { item: bot.bot.registry.itemsByName[item].id })) {
+            console.log(`Block will be placed by someone else`)
+            return
+        }
 
-            let imInTheWay = false
-
-            if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.6) {
-                imInTheWay = true
-            }
-
-            if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.6) {
-                imInTheWay = true
-            }
-
-            if (imInTheWay) {
+        try {
+            for (let i = 3; i >= 0; i--) {
                 yield* goto.task(bot, {
-                    flee: position,
-                    distance: 1.9,
+                    block: position,
                 })
-            }
 
-            if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
-                throw `There is already a block here: ${blockHere.name}`
-            }
+                let imInTheWay = false
 
-            const referenceBlock = bot.bot.blockAt(referencePosition)
-            if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
-                throw `Invalid reference block ${referenceBlock.name}`
-            }
-
-            if (args.cheat) {
-                yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
-            } else {
-                if (!bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
-            }
-
-            try {
-                yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'))
-                if (botFacing) {
-                    const yaw = Math.atan2(-botFacing.x, -botFacing.z)
-                    const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
-                    const pitch = Math.atan2(botFacing.y, groundDistance)
-                    yield* wrap(bot.bot.look(yaw, pitch, true))
+                if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.6) {
+                    imInTheWay = true
                 }
-                yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
-                break
-            } catch (error) {
-                if (i === 0) { throw error }
-                // console.warn(`[Bot "${bot.username}"] Failed to place ${item}, retrying ... (${i})`)
+
+                if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.6) {
+                    imInTheWay = true
+                }
+
+                if (imInTheWay) {
+                    yield* goto.task(bot, {
+                        flee: position,
+                        distance: 1.9,
+                    })
+                }
+
+                if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
+                    throw `There is already a block here: ${blockHere.name}`
+                }
+
+                const referenceBlock = bot.bot.blockAt(referencePosition)
+                if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
+                    throw `Invalid reference block ${referenceBlock.name}`
+                }
+
+                if (args.cheat) {
+                    yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
+                } else {
+                    if (!bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
+                }
+
+                try {
+                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'))
+                    if (botFacing) {
+                        const yaw = Math.atan2(-botFacing.x, -botFacing.z)
+                        const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
+                        const pitch = Math.atan2(botFacing.y, groundDistance)
+                        yield* wrap(bot.bot.look(yaw, pitch, true))
+                    }
+                    yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
+                    break
+                } catch (error) {
+                    if (i === 0) { throw error }
+                    // console.warn(`[Bot "${bot.username}"] Failed to place ${item}, retrying ... (${i})`)
+                }
             }
+        } finally {
+            bot.env.deallocateBlock(bot.username, blockPosition)
         }
     },
     id: function(args) {

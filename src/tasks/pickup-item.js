@@ -49,14 +49,14 @@ module.exports = {
 
         try {
             yield* goto.task(bot, {
-                goal: this.getGoal( nearest),
+                goal: this.getGoal(nearest),
                 options: {
                     // savePathError: true,
                 }
             })
         } catch (error) {
-            if (isCollected) { return }
             bot.bot.off('playerCollect', listener)
+            if (isCollected) { return }
             throw error
         }
         if (!isCollected) {
@@ -109,7 +109,7 @@ module.exports = {
             isValid: () => item.isValid,
             hasChanged: () => false,
             heuristic: node => Math.sqrt(Math.pow(node.x - item.position.x, 2) + Math.pow(node.z - item.position.z, 2)) + Math.abs((node.y - item.position.y)),
-            isEnd: node => node.distanceTo(item.position) <= 1,
+            isEnd: node => node.distanceTo(item.position.floored()) <= 1,
         }
     },
 }

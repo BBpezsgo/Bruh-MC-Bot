@@ -18,41 +18,46 @@ function filterOutEquipment(items, registry) {
         ...v,
         satisfied: false,
     }))
+
+    /**
+     * @param {{ name: string; count: number; }} item
+     * @param {'any' | number} count
+     */
+    function consumeItem(item, count) {
+        if (count === 'any') {
+            item.count = 0
+            count = 0
+        } else {
+            const remove = Math.min(item.count, count)
+            item.count -= remove
+            count -= remove
+        }
+        return count
+    }
+
     for (const _equipmentItem of _equipment) {
         if (_equipmentItem.satisfied) { continue }
         switch (_equipmentItem.type) {
             case 'single': {
-                const goodItem = result.find(v =>
-                    (v.name === _equipmentItem.item) &&
-                    (v.count > 0)
-                )
-                if (goodItem) {
-                    goodItem.count--
-                    _equipmentItem.satisfied = true
-                    break
+                let goodItem = null
+                while ((goodItem = result.find(v => v.name === _equipmentItem.item && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
+
                 }
+                _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
                 break
             }
             case 'any': {
-                const preferredItem = result.find(v =>
-                    (v.name === _equipmentItem.prefer) &&
-                    (v.count > 0)
-                )
-                if (preferredItem) {
-                    preferredItem.count--
-                    _equipmentItem.satisfied = true
-                    break
-                }
+                let goodItem = null
+                while ((goodItem = result.find(v => v.name === _equipmentItem.prefer && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
 
-                const goodItem = result.find(v =>
-                    (_equipmentItem.item.includes(v.name)) &&
-                    (v.count > 0)
-                )
-                if (goodItem) {
-                    goodItem.count--
-                    _equipmentItem.satisfied = true
-                    break
                 }
+                _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
+                if (_equipmentItem.satisfied) break
+
+                while ((goodItem = result.find(v => _equipmentItem.item.includes(v.name) && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
+
+                }
+                _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
                 break
             }
             case 'food': {
@@ -73,9 +78,7 @@ function filterOutEquipment(items, registry) {
                 _equipmentItem.satisfied = (soFar >= _equipmentItem.food)
                 break
             }
-            default: {
-                break
-            }
+            default: break
         }
     }
 
