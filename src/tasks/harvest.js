@@ -232,6 +232,7 @@ module.exports = {
 
         yield* plantSeed.task(bot, {
             harvestedCrops: harvestedCrops,
+            locks: [],
         })
 
         /**

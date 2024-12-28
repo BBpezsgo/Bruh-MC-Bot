@@ -2,7 +2,7 @@
 
 const { Item } = require('prismarine-item')
 const { wrap, sleepTicks } = require('../utils/tasks')
-const { Timeout } = require('../utils/other')
+const { Timeout, isItemEquals } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
 const goto = require('./goto')
@@ -38,7 +38,7 @@ const waitCompost = function*(bot, composter) {
 const getItem = function(bot, includeNono) {
     const trashItems = bot.getTrashItems()
     for (const trashItem of trashItems) {
-        const compostable = Minecraft.compost[trashItem.name]
+        const compostable = Minecraft.compost[typeof trashItem.item === 'string' ? trashItem.item : trashItem.item.name]
         if (!compostable) { continue }
         if (compostable.no && !includeNono) { continue }
         let isSeed = false
@@ -51,18 +51,18 @@ const getItem = function(bot, includeNono) {
                 case 'spread':
                 case 'grows_fruit':
                 case 'grows_block': {
-                    isSeed = crop.seed === trashItem.name
+                    isSeed = isItemEquals(crop.seed, trashItem.item)
                     break
                 }
                 case 'tree': {
-                    isSeed = crop.sapling === trashItem.name
+                    isSeed = isItemEquals(crop.sapling, trashItem.item)
                     break
                 }
                 default: break
             }
         }
         if (isSeed && trashItem.count <= 4) { continue }
-        const has = bot.searchInventoryItem(null, trashItem.name)
+        const has = bot.searchInventoryItem(null, trashItem.item)
         if (!has) { continue }
         return has
     }

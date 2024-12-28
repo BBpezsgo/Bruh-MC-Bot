@@ -4,6 +4,7 @@ const { Vec3 } = require('vec3')
 const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
+const { stringifyItem } = require('../utils/other')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -29,11 +30,7 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @typedef {{ name: string; nbt?: import('../bruh-bot').NBT; count: number; }} CountedItem
- */
-
-/**
- * @type {import('../task').TaskDef<boolean, { items: ReadonlyArray<CountedItem> }>}
+ * @type {import('../task').TaskDef<boolean, { items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -41,20 +38,12 @@ module.exports = {
 
         if (args.items.length === 0) { return false }
 
-        /**
-         * @type {Record<string, number>}
-         */
-        const originalCount = {}
-        for (const item of args.items) {
-            originalCount[item.name] ??= 0
-            originalCount[item.name] += item.count
-        }
         const fullChests = []
 
         while (true) {
             yield
 
-            if (!args.items.some(v => bot.inventoryItemCount(null, v))) { break }
+            if (!args.items.some(v => bot.inventoryItemCount(null, v.item))) { break }
 
             let chestBlock = null
 
@@ -101,7 +90,7 @@ module.exports = {
                     let shouldBreak = true
                     for (const itemToDeposit of args.items) {
                         yield
-                        if (bot.firstFreeContainerSlot(chest, itemToDeposit) === null) {
+                        if (bot.firstFreeContainerSlot(chest, itemToDeposit.item) === null) {
                             fullChests.push(chestBlock.position.clone())
                             shouldBreak = true
                             break
@@ -111,14 +100,14 @@ module.exports = {
                             const deposited = yield* bot.chestDeposit(
                                 chest,
                                 chestBlock.position,
-                                itemToDeposit,
+                                itemToDeposit.item,
                                 itemToDeposit.count)
                             shouldBreak = !deposited
                         } catch (error) {
                             if (error instanceof Error) {
-                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${itemToDeposit.name}: ${error.message}`)
+                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
                             } else {
-                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${itemToDeposit.name}: ${error}`)
+                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
                             }
                         }
                     }

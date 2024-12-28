@@ -9,6 +9,7 @@ module.exports = class {
     /** @readonly */ static get bonemealing() { return require('./tasks/bonemealing') }
     /** @readonly */ static get build() { return require('./tasks/build') }
     /** @readonly */ static get breed() { return require('./tasks/breed') }
+    /** @readonly */ static get brew() { return require('./tasks/brew') }
     /** @readonly */ static get clearMlgJunk() { return require('./tasks/clear-mlg-junk') }
     /** @readonly */ static get compost() { return require('./tasks/compost') }
     /** @readonly */ static get dig() { return require('./tasks/dig') }

@@ -1,7 +1,8 @@
 'use strict'
 
 const { Item } = require('prismarine-item')
-const { NBT2JSON } = require('./other')
+const { NBT2JSON, isItemEquals } = require('./other')
+const Freq = require('./freq')
 
 const INVALID_ITEMS = [
     'shulker_box',
@@ -62,23 +63,23 @@ module.exports = {
 
         const bundleItemsAfter = this.content(bundleItem.nbt)
 
-        /**
-         * @type {Record<string, number>}
-         */
-        const delta = {}
+        const delta = new Freq(isItemEquals)
 
         for (const _item of bundleItemsAfter) {
-            delta[_item.name] = (bundleItemsBefore.find(v => v.name === _item.name)?.count ?? 0) - _item.count
+            delta.set(_item.name, (bundleItemsBefore.find(v => v.name === _item.name)?.count ?? 0) - _item.count)
         }
 
-        for (const key of Object.keys(delta)) {
-            if (!delta[key]) { delete delta[key] }
+
+        for (const key of delta.keys) {
+            if (!delta.get(key)) {
+                delta.remove(key)
+            }
         }
 
         if (Object.keys(delta).length === 1 &&
             Object.keys(delta)[0] === item.name) {
-            if (delta[item.name] !== -canPutIn) {
-                throw new Error(`Couldn't put ${canPutIn} ${item.name} into the bundle, only ${-delta[item.name]}`)
+            if (delta.get(item.name) !== -canPutIn) {
+                throw new Error(`Couldn't put ${canPutIn} ${item.name} into the bundle, only ${-delta.get(item.name)}`)
             }
             return
         }

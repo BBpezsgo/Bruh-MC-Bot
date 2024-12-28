@@ -7,17 +7,20 @@ const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
 const { GoalPlaceBlock, GoalInvert, GoalNear } = require('mineflayer-pathfinder/lib/goals')
+const BruhBot = require('../bruh-bot')
 
 class GoalBlockSimple extends goals.Goal {
     /**
      * @param {Vec3} pos
-     * @param {{ reach?: number; entityHeight?: number; }} [options={}]
+     * @param {{ reach?: number; entityHeight?: number; raycast?: boolean; bot: BruhBot; }} [options={}]
      */
-    constructor(pos, options = {}) {
+    constructor(pos, options) {
         super()
         this.pos = pos
         this.reach = options.reach || 4.5
         this.entityHeight = options.entityHeight || 1.6
+        this.raycast = options.raycast || false
+        this.bot = options.bot
     }
 
     /**
@@ -38,6 +41,7 @@ class GoalBlockSimple extends goals.Goal {
      */
     isEnd(node) {
         if (node.floored().offset(0, this.entityHeight, 0).distanceTo(this.pos) > this.reach) return false
+        if (this.raycast && !this.bot.blockInView(this.bot.bot.blockAt(this.pos), node.offset(0, 1.6, 0))) return false
         return true
     }
 }
@@ -211,6 +215,7 @@ class GoalEntity extends goals.Goal {
  * @exports @typedef {{
  *   block: Readonly<Vec3Dimension> | Readonly<Vec3>;
  *   reach?: number;
+ *   raycast?: boolean;
  * }} LookAtArgs
  */
 
@@ -311,6 +316,8 @@ function* getGoal(bot, args) {
         // yield new goals.GoalNear(args.block.x, args.block.y, args.block.z, 2)
         yield new GoalBlockSimple(new Vec3(args.block.x, args.block.y, args.block.z), {
             reach: args.reach,
+            raycast: args.raycast,
+            bot: bot,
         })
         // yield new goals.GoalLookAtBlock(args.block.clone(), bot.bot.world, {
         //     reach: args.reach ? args.reach : 3,

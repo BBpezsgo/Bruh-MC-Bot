@@ -1,26 +1,24 @@
 'use strict'
 
 const Minecraft = require('../minecraft')
+const { isItemEquals } = require('./other')
 
 /**
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} items
+ * @param {ReadonlyArray<Readonly<{ item: import('./other').ItemId; count: number; }>>} items
  * @param {import('../minecraft')['registry']} registry
- * @returns {Array<{ name: string; count: number; nbt: import('../bruh-bot').NBT; }>}
+ * @returns {Array<{ item: import('./other').ItemId; count: number; }>}
  */
 function filterOutEquipment(items, registry) {
     const equipment = require('../equipment')
 
-    const result = items.map(v => ({ name: v.name, count: v.count, nbt: v.nbt, originalCount: v.count }))
-    /**
-     * @type {ReadonlyArray<import('../equipment').SatisfiedEquipmentItem>}
-     */
+    const result = items.map(v => ({ item: v.item, count: v.count, originalCount: v.count }))
     const _equipment = equipment.map(v => ({
         ...v,
         satisfied: false,
     }))
 
     /**
-     * @param {{ name: string; count: number; }} item
+     * @param {{ count: number; }} item
      * @param {'any' | number} count
      */
     function consumeItem(item, count) {
@@ -40,7 +38,7 @@ function filterOutEquipment(items, registry) {
         switch (_equipmentItem.type) {
             case 'single': {
                 let goodItem = null
-                while ((goodItem = result.find(v => v.name === _equipmentItem.item && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
+                while ((goodItem = result.find(v => isItemEquals(v.item, _equipmentItem.item) && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
 
                 }
                 _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
@@ -48,13 +46,13 @@ function filterOutEquipment(items, registry) {
             }
             case 'any': {
                 let goodItem = null
-                while ((goodItem = result.find(v => v.name === _equipmentItem.prefer && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
+                while ((goodItem = result.find(v => isItemEquals(v.item, _equipmentItem.prefer) && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
 
                 }
                 _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
                 if (_equipmentItem.satisfied) break
 
-                while ((goodItem = result.find(v => _equipmentItem.item.includes(v.name) && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
+                while ((goodItem = result.find(v => _equipmentItem.item.some(v2 => isItemEquals(v2, v.item)) && v.count > 0)) && consumeItem(goodItem, _equipmentItem.count)) {
 
                 }
                 _equipmentItem.satisfied = _equipmentItem.count === 'any' ? true : _equipmentItem.count <= 0
@@ -62,16 +60,16 @@ function filterOutEquipment(items, registry) {
             }
             case 'food': {
                 const foods = result
-                    .map(v => ({ food: registry.foods[registry.itemsByName[v.name].id], item: v }))
+                    .map(v => ({ food: registry.foods[registry.itemsByName[typeof v.item === 'string' ? v.item : v.item.name].id], ...v }))
                     .filter(v =>
                         v.food &&
-                        !Minecraft.badFoods.includes(v.item.name) &&
-                        (v.item.count > 0)
+                        !Minecraft.badFoods.some(v2 => isItemEquals(v2, v.item)) &&
+                        (v.count > 0)
                     )
                 let soFar = 0
                 for (const food of foods) {
-                    while (food.item.count > 0 && soFar < _equipmentItem.food) {
-                        food.item.count--
+                    while (food.count > 0 && soFar < _equipmentItem.food) {
+                        food.count--
                         soFar += food.food.foodPoints
                     }
                 }
@@ -88,17 +86,17 @@ function filterOutEquipment(items, registry) {
 
 
 /**
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} items
- * @param {ReadonlyArray<Readonly<{ name: string; count: number; nbt?: import('../bruh-bot').NBT; }>>} exclude
- * @returns {Array<{ name: string; count: number; nbt: import('../bruh-bot').NBT; }>}
+ * @param {ReadonlyArray<Readonly<{ item: import('./other').ItemId; count: number; }>>} items
+ * @param {ReadonlyArray<Readonly<{ item: import('./other').ItemId; count: number; }>>} exclude
+ * @returns {Array<{ item: import('./other').ItemId; count: number; }>}
  */
 function filterOutItems(items, exclude) {
-    const result = items.map(v => ({ name: v.name, count: v.count, nbt: v.nbt }))
+    const result = items.map(v => ({ ...v }))
    
     for (const _exclude of exclude.map(v => ({ ...v }))) {
         if (_exclude.count <= 0) { continue }
         const goodItem = result.find(v =>
-            (v.name === _exclude.name) &&
+            (isItemEquals(v.item, _exclude.item)) &&
             (v.count > 0)
         )
         if (!goodItem) { continue }

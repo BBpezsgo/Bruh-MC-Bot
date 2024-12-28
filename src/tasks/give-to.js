@@ -1,10 +1,12 @@
 'use strict'
 
+const Freq = require('../utils/freq')
+const { stringifyItem, isItemEquals } = require('../utils/other')
 const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<Record<string, number>, { player: string; items: ReadonlyArray<{ count: number; name: string; nbt?: import('../bruh-bot').NBT; }> }>}
+ * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, { player: string; items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -15,7 +17,7 @@ module.exports = {
         let canGiveSomething = false
 
         for (const itemToGive of args.items) {
-            const has = bot.inventoryItemCount(null, itemToGive)
+            const has = bot.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }
             canGiveSomething = true
             break
@@ -23,7 +25,7 @@ module.exports = {
 
         if (!canGiveSomething) {
             if (args.items.length === 1) {
-                throw `Don't have ${args.items[0].name}`
+                throw `Don't have ${stringifyItem(args.items[0].item)}`
             } else {
                 throw `Don't have anything`
             }
@@ -41,23 +43,22 @@ module.exports = {
         })
 
         yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), true))
+        yield* sleepG(100)
 
-        /** @type {Record<string, number>} */
-        const tossedMap = {}
+        const tossedMap = new Freq(isItemEquals)
 
         for (const itemToGive of args.items) {
-            const has = bot.inventoryItemCount(null, itemToGive)
+            const has = bot.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }
             const countCanGive = Math.min(has, itemToGive.count)
-            yield* bot.toss(itemToGive.name, countCanGive)
-            tossedMap[itemToGive.name] ??= 0
-            tossedMap[itemToGive.name] += countCanGive
+            const tossed = yield* bot.toss(itemToGive.item, countCanGive)
+            tossedMap.add(itemToGive.item, tossed)
             yield* sleepG(100)
         }
 
-        if (Object.keys(tossedMap).length === 0) {
+        if (tossedMap.isEmpty) {
             if (args.items.length === 1) {
-                throw `Don't have ${args.items[0].name}`
+                throw `Don't have ${stringifyItem(args.items[0].item)}`
             } else {
                 throw `Don't have anything`
             }

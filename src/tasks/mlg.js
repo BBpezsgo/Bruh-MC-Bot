@@ -103,9 +103,9 @@ module.exports = {
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
                     if (junkBlock) {
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = bot.searchInventoryItem(null, 'bucket')
+                        const bucket = bot.searchInventoryItem(null, null, 'bucket')
                         if (bucket) {
-                            yield* bot.equip(bucket, 'hand')
+                            yield* bot.equip(bucket, null, 'hand')
                             yield* wrap(bot.bot.lookAt(junkBlock.position, true))
                             bot.bot.activateItem(false)
                         } else {

@@ -76,7 +76,7 @@ module.exports = {
             let foodCount = 0
 
             for (const _food of foods) {
-                let _foodCount = bot.inventoryItemCount(null, { name: _food })
+                let _foodCount = bot.inventoryItemCount(null, _food)
 
                 if (_foodCount >= animals.length) {
                     foodCount = _foodCount
@@ -86,7 +86,7 @@ module.exports = {
 
                 yield* bot.ensureItem(_food, animals.length)
 
-                _foodCount = bot.inventoryItemCount(null, { name: _food })
+                _foodCount = bot.inventoryItemCount(null, _food)
 
                 if (_foodCount >= animals.length) {
                     foodCount = _foodCount

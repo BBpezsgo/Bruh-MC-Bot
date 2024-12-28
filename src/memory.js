@@ -4,6 +4,8 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const Vec3Dimension = require('./vec3-dimension')
+const Dict = require('./utils/dict')
+const { isItemEquals } = require('./utils/other')
 
 module.exports = class Memory {
     /**
@@ -51,7 +53,7 @@ module.exports = class Memory {
 
     /**
      * @readonly
-     * @type {Record<string, { lastTime: number; successCount: number; }>}
+     * @type {Dict<import('./utils/other').ItemId, { lastTime: number; successCount: number; }>}
      */
     successfulGatherings
 
@@ -72,7 +74,7 @@ module.exports = class Memory {
         this.mlgJunkBlocks = []
         this.myArrows = []
         this.hurtBy = {}
-        this.successfulGatherings = {}
+        this.successfulGatherings = new Dict(isItemEquals)
         this._unreachableGoals = []
         this.idlePosition = null
 
@@ -86,7 +88,7 @@ module.exports = class Memory {
         this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
-        this.successfulGatherings = data.successfulGatherings ?? this.successfulGatherings
+        this.successfulGatherings = data.successfulGatherings ? Dict.fromJSON(data.successfulGatherings, isItemEquals) : this.successfulGatherings
         this.idlePosition = data.idlePosition ?? this.idlePosition
 
         console.log(`[Memory] Loaded`)
@@ -101,7 +103,7 @@ module.exports = class Memory {
             myChests: this.myChests,
             mlgJunkBlocks: this.mlgJunkBlocks,
             myArrows: this.myArrows,
-            successfulGatherings: this.successfulGatherings,
+            successfulGatherings: this.successfulGatherings.toJSON(),
             idlePosition: this.idlePosition,
         }, replacer, ' '))
     }
@@ -120,11 +122,15 @@ module.exports = class Memory {
      * @param {import('mineflayer-pathfinder/lib/goals').GoalBase} goal
      */
     isGoalUnreachable(goal) {
+        goal = { ...goal }
+
         for (let i = this._unreachableGoals.length - 1; i > 0; i--) {
             if ((performance.now() - this._unreachableGoals[i].time) > 30000) {
                 this._unreachableGoals.splice(i, 1)
             }
         }
+
+        if ('bot' in goal) { delete goal.bot }
 
         const jsonA = JSON.stringify(goal)
         for (const unreachableGoal of this._unreachableGoals) {

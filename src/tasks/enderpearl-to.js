@@ -7,7 +7,10 @@ const { Weapons } = require('minecrafthawkeye')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<'here' | 'ok', { destination: Vec3; }>}
+ * @type {import('../task').TaskDef<'here' | 'ok', {
+ *   destination: Vec3;
+ *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+* }>}
  */
 module.exports = {
     task: function*(bot, args) {

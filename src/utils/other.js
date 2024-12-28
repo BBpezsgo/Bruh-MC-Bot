@@ -5,6 +5,7 @@ const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const NBT = require('prismarine-nbt')
 const Iterable = require('../iterable')
+const { Item } = require('prismarine-item')
 
 /**
  * @template {{ x: number; y: number; z: number; }} TPoint
@@ -361,15 +362,58 @@ function NBT2JSON(nbt) {
 }
 
 /**
- * @param {{ name: string; nbt?: NBT.Tags[NBT.TagType] | null | undefined; }} a 
- * @param {{ name: string; nbt?: NBT.Tags[NBT.TagType] | null | undefined; }} b 
+ * @typedef {Readonly<{ name: string; nbt: NBT.Tags[NBT.TagType] | null; }> | string | Readonly<Item>} ItemId
+ */
+
+/**
+ * @param {ItemId} item
+ */
+function stringifyItem(item) {
+    if (typeof item === 'string') {
+        return item
+    } else {
+        let result = 'displayName' in item ? item.displayName : item.name
+        
+        if (item.name === 'bundle') {
+            const content = require('./bundle').content(item.nbt)
+            if (content.length) {
+                result += ` (...)`
+            }
+        } else if (item.nbt) {
+            const nbt = NBT2JSON(item.nbt)
+            if (nbt['Potion']) {
+                result += ` (${nbt['Potion'].replace('minecraft:', '')})`
+            } else {
+                result += ` (+NBT)`
+            }
+        }
+
+        return result
+    }
+}
+
+/**
+ * @param {ItemId} a 
+ * @param {ItemId} b 
  * @returns {boolean}
  */
 function isItemEquals(a, b) {
-    if (a.name !== b.name) { return false }
-    if (a.nbt === undefined) { return true }
-    if (b.nbt === undefined) { return true }
-    return isNBTEquals(a.nbt, b.nbt)
+    if (typeof a === 'string') {
+        if (typeof b === 'string') {
+            return a === b
+        } else {
+            return a === b.name
+        }
+    } else {
+        if (typeof b === 'string') {
+            return a.name === b
+        } else {
+            if (a.name !== b.name) { return false }
+            if (a.nbt === undefined) { return true }
+            if (b.nbt === undefined) { return true }
+            return isNBTEquals(a.nbt, b.nbt)
+        }
+    }
 }
 
 /**
@@ -505,6 +549,22 @@ function resolveEntityAttribute(attribute) {
     return res
 }
 
+/**
+ * @typedef {'splice' | 'push' | 'pop' | 'shift' |  'unshift'} ArrayLengthMutationKeys
+ */
+
+/**
+ * @template T
+ * @template {number} L
+ * @template [TObj=[T, ...Array<T>]]
+ * @typedef {Pick<TObj, Exclude<keyof TObj, ArrayLengthMutationKeys>>
+ *  & {
+ *    readonly length: L
+ *    [I: number]: T
+ *    [Symbol.iterator]: () => IterableIterator<T>
+ *  }} FixedLengthArray
+ */
+
 module.exports = {
     backNForthSort,
     basicRouteSearch,
@@ -520,6 +580,7 @@ module.exports = {
     isNBTEquals,
     incrementalNeighbors,
     sequenceEquals,
+    stringifyItem,
     isItemEquals,
     resolveEntityAttribute,
 }

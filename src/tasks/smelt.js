@@ -2,7 +2,7 @@
 
 const { Item } = require('prismarine-item')
 const { sleepG, wrap } = require('../utils/tasks')
-const { Timeout } = require('../utils/other')
+const { Timeout, isItemEquals } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const { Block } = require('prismarine-block')
@@ -96,9 +96,10 @@ function* findBestFurnace(bot, recipes, noFuel) {
  * @param {Block} campfire
  * @param {import('../local-minecraft-data').CampfireRecipe} recipe
  * @param {number} count
+ * @param {ReadonlyArray<import('../bruh-bot').ItemLock>} locks
  * @returns {import('../task').Task<Item>}
  */
-function* doCampfire(bot, campfire, recipe, count) {
+function* doCampfire(bot, campfire, recipe, count, locks) {
     const result = bot.mc.registry.itemsByName[recipe.result]
     if (!result) { throw `What?` }
 
@@ -203,6 +204,7 @@ function* doCampfire(bot, campfire, recipe, count) {
  *   noFuel: boolean;
  *   count: number;
  *   onNeedYesNo?: (question: string, timeout: number) => import('../task').Task<boolean | null>;
+ *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
  * }> & {
  *   findBestFurnace: findBestFurnace;
  * }}
@@ -230,7 +232,7 @@ module.exports = {
 
         for (const recipe of bestRecipes) {
             if (recipe.type === 'campfire') {
-                return yield* doCampfire(bot, furnaceBlock, recipe, args.count)
+                return yield* doCampfire(bot, furnaceBlock, recipe, args.count, args.locks)
             }
 
             const furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
@@ -276,8 +278,11 @@ module.exports = {
             if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                 for (const fuel of fuels) {
                     const have = bot.searchInventoryItem(furnace, fuel.item)
-                    if (have) {
-                        yield* wrap(furnace.putFuel(have.type, null, 1))
+                    if (!have) continue
+                    const canPut = have.count - bot.isItemLocked(have)
+                    if (canPut > 0) {
+                        yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)))
+                        yield* sleepG(80)
                         break
                     }
                 }
@@ -309,8 +314,10 @@ module.exports = {
                 if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                     for (const fuel of fuels) {
                         const have = bot.searchInventoryItem(furnace, fuel.item)
-                        if (have) {
-                            yield* wrap(furnace.putFuel(have.type, null, 1))
+                        if (!have) continue
+                        const canPut = have.count - bot.isItemLocked(have)
+                        if (canPut > 0) {
+                            yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)))
                             break
                         }
                     }

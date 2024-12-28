@@ -1,9 +1,10 @@
 'use strict'
 
+const { isItemEquals } = require('../utils/other')
 const goto = require('./goto')
 
 /**
- * @typedef {{ inAir?: boolean; maxDistance: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<string>; } | { item: import('prismarine-entity').Entity }} Args
+ * @typedef {{ inAir?: boolean; maxDistance: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<import('../utils/other').ItemId>; } | { item: import('prismarine-entity').Entity }} Args
  */
 
 /**
@@ -16,7 +17,7 @@ module.exports = {
     task: function*(bot, args) {
         const nearest = (() => {
             if ('item' in args) { return args.item }
-            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
+            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
 
         if (!nearest) {
@@ -82,7 +83,7 @@ module.exports = {
     can: function(bot, args) {
         const nearest = (() => {
             if ('item' in args) { return args.item }
-            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.includes(item.name) : null, args)
+            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
         if (!nearest) { return false }
 
@@ -109,7 +110,7 @@ module.exports = {
             isValid: () => item.isValid,
             hasChanged: () => false,
             heuristic: node => Math.sqrt(Math.pow(node.x - item.position.x, 2) + Math.pow(node.z - item.position.z, 2)) + Math.abs((node.y - item.position.y)),
-            isEnd: node => node.distanceTo(item.position.floored()) <= 1,
+            isEnd: node => node.distanceTo(item.position.floored()) <= 0,
         }
     },
 }

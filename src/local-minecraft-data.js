@@ -129,7 +129,7 @@ module.exports = class LocalMinecraftData {
 
     /**
      * @readonly
-     * @type {any}
+     * @type {Record<string, ReadonlyArray<string>>}
      */
     tags
 
@@ -187,14 +187,14 @@ module.exports = class LocalMinecraftData {
                     return
                 }
             }
-            this.tags[tag] = newValues
+            this.tags[tag] = Object.freeze(newValues)
         }
     }
 
     /**
      * @private
      * @param {any} ingredient
-     * @returns {Array<string>}
+     * @returns {ReadonlyArray<string>}
      */
     parseIngredients(ingredient) {
         if (Array.isArray(ingredient)) {
@@ -312,7 +312,7 @@ module.exports = class LocalMinecraftData {
 
     /**
      * @param {string} tag
-     * @returns {Array<string>}
+     * @returns {ReadonlyArray<string>}
      */
     resolveItemTag(tag) {
         tag = tag.replace('minecraft:', '')

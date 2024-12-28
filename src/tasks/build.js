@@ -6,6 +6,7 @@ const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
 const { incrementalNeighbors } = require('../utils/other')
 const config = require('../config')
+const Freq = require('../utils/freq')
 
 /**
  * @typedef {{
@@ -252,12 +253,11 @@ module.exports = {
             return true
         })
 
-        /** @type {Record<string, number>} */
-        const itemsToGive = {}
+        /** @type {Freq<string>} */
+        const itemsToGive = new Freq((a, b) => a === b)
         for (const block of blocks) {
             const itemToGive = placeBlock.getCorrectItem(block.name)
-            itemsToGive[itemToGive] ??= 0
-            itemsToGive[itemToGive]++
+            itemsToGive.add(itemToGive, 1)
         }
 
         // yield* wrap(bot.commands.sendAsync(`/clear @p`))

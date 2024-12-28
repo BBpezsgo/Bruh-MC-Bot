@@ -9,30 +9,25 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
-const { parseLocationH, Interval, directBlockNeighbors, Timeout } = require('../utils/other')
+const { parseLocationH, Interval, directBlockNeighbors, Timeout, isItemEquals, stringifyItem } = require('../utils/other')
 const giveTo = require('./give-to')
-const { Vec3 } = require('vec3')
 const dig = require('./dig')
 const smelt = require('./smelt')
 const config = require('../config')
 const { ItemLock } = require('../bruh-bot')
 const BruhBot = require('../bruh-bot')
+const Freq = require('../utils/freq')
+const brew = require('./brew')
 
-const planningLogs = false
+const planningLogs = true
 
 /**
  * @typedef {PermissionArgs & {
  *   count: number;
- *   item: string | ReadonlyArray<string>;
- *   baseItems?: ReadonlyArray<number>;
- *   originalCount?: number;
- *   depth?: number;
+ *   item: import('../utils/other').ItemId | ReadonlyArray<import('../utils/other').ItemId>;
  *   force?: boolean;
  * } | {
  *   plan: Plan;
- *   baseItems?: ReadonlyArray<number>;
- *   originalCount?: number;
- *   depth?: number;
  *   force?: boolean;
  * }} Args
  */
@@ -40,7 +35,8 @@ const planningLogs = false
 /**
  * @typedef {{
 *   canUseInventory?: boolean;
-*   canDig?: boolean;
+*   canDigGenerators?: boolean;
+*   canDigEnvironment?: boolean;
 *   canSmelt?: boolean;
 *   canKill?: boolean;
 *   canCraft?: boolean;
@@ -49,14 +45,25 @@ const planningLogs = false
 *   canRequestFromBots?: boolean;
 *   canTrade?: boolean;
 *   canHarvestMobs?: boolean;
+*   canBrew?: boolean;
 * }} PermissionArgs
 */
 
 /**
  * @typedef {{
+ *   'brew': {
+ *     type: 'brew';
+ *     recipe: import('./brew')['recipes'][0]
+ *     count: 1 | 2 | 3;
+ *     brewingStand: Vec3Dimension;
+ *   };
+ *   'fill_bottle': {
+ *     type: 'fill_bottle';
+ *     block: { block: import('prismarine-block').Block; position: Vec3Dimension; };
+ *   };
  *   'chest': {
  *     type: 'chest';
- *     item: string;
+ *     item: import('../utils/other').ItemId;
  *     count: number;
  *     chest: Vec3Dimension;
  *   };
@@ -85,7 +92,7 @@ const planningLogs = false
  *   };
  *   'inventory': {
  *     type: 'inventory';
- *     item: string;
+ *     item: import('../utils/other').ItemId;
  *     count: number;
  *   };
  *   'goto': {
@@ -114,7 +121,7 @@ const planningLogs = false
  *   };
  *   'dig': {
  *     type: 'dig';
- *     block: { position: Vec3; name: string; };
+ *     block: { position: Vec3Dimension; block: import('prismarine-block').Block; };
  *     loot: { item: string; count: number; }
  *     count: number
  *     retryCount: number;
@@ -143,7 +150,7 @@ const planningLogs = false
 /**
  * @typedef {{
  *   depth: number;
- *   recursiveItems: Array<string>;
+ *   recursiveItems: Array<import('../utils/other').ItemId>;
  * }} PlanningContext
  */
 
@@ -153,12 +160,12 @@ const planningLogs = false
 class PredictedEnvironment {
     /**
      * @readonly
-     * @type {Record<string, number>}
+     * @type {Freq<import('../utils/other').ItemId>}
      */
     inventory
     /**
      * @readonly
-     * @type {Record<import('../environment').PositionHash, { location: Vec3Dimension; delta: Record<string, number>; }>}
+     * @type {Record<import('../environment').PositionHash, { location: Vec3Dimension; delta: Freq<import('../utils/other').ItemId>; }>}
      */
     chests
     /**
@@ -166,19 +173,41 @@ class PredictedEnvironment {
      * @type {Array<number>}
      */
     harvestedMobs
+    /**
+     * @readonly
+     * @type {Array<Vec3Dimension>}
+     */
+    harvestedBlocks
 
     /**
-     * @param {ReadonlyArray<PlanStep>} steps
+     * @param {Plan} steps
      * @param {import('../minecraft')['registry']} registry
      */
     constructor(steps, registry) {
-        this.inventory = {}
+        this.inventory = new Freq(isItemEquals)
         this.chests = {}
         this.harvestedMobs = []
+        this.harvestedBlocks = []
 
-        for (const step of steps) {
+        for (const step of steps.flat(1)) {
             switch (step.type) {
                 case 'goto': {
+                    continue
+                }
+                case 'brew': {
+                    // this.inventory.add(step.recipe.bottle, 1)
+                    // this.inventory.add(step.recipe.ingredient, -1)
+                    this.inventory.add(step.recipe.result, 1)
+                    continue
+                }
+                case 'fill_bottle': {
+                    switch (step.block.block.name) {
+                        case 'water':
+                            this.inventory.add(brew.makePotionItem('water'), 1)
+                            break
+                        default:
+                            break
+                    }
                     continue
                 }
                 case 'chest': {
@@ -188,52 +217,51 @@ class PredictedEnvironment {
                     const hash = `${step.chest.x}-${step.chest.y}-${step.chest.z}-${step.chest.dimension}`
                     this.chests[hash] ??= {
                         location: step.chest,
-                        delta: {},
+                        delta: new Freq(isItemEquals),
                     }
-                    this.chests[hash].delta[step.item] ??= 0
-                    this.chests[hash].delta[step.item] -= step.count
-                    // this.inventory[step.item] ??= 0
-                    // this.inventory[step.item] += step.count
+                    this.chests[hash].delta.add(step.item, -step.count)
+                    this.inventory.add(step.item, step.count)
                     continue
                 }
                 case 'harvest-mob': {
                     this.harvestedMobs.push(step.entity.id)
-                    if (!step.willToolDisappear) {
-                        this.inventory[step.tool] ??= 0
-                        this.inventory[step.tool]++
-                    }
+                    // if (step.willToolDisappear) {
+                    //     this.inventory.add(step.tool, -1)
+                    // }
+                    this.inventory.add(step.item, step.count)
                     continue
                 }
                 case 'inventory': {
-                    this.inventory[step.item] ??= 0
-                    this.inventory[step.item] -= step.count
+                    this.inventory.add(step.item, -step.count)
                     continue
                 }
                 case 'trade': {
-                    if (step.trade.inputItem1) {
-                        this.inventory[step.trade.inputItem1.name] ??= 0
-                        this.inventory[step.trade.inputItem1.name] -= step.trade.inputItem1.count
-                    }
-                    if (step.trade.inputItem2) {
-                        this.inventory[step.trade.inputItem2.name] ??= 0
-                        this.inventory[step.trade.inputItem2.name] -= step.trade.inputItem2.count
-                    }
+                    // if (step.trade.inputItem1) {
+                    //     this.inventory.add(step.trade.inputItem1.name, -step.trade.inputItem1.count)
+                    // }
+                    // if (step.trade.inputItem2) {
+                    //     this.inventory.add(step.trade.inputItem2.name, -step.trade.inputItem2.count)
+                    // }
                     if (step.trade.outputItem) {
-                        this.inventory[step.trade.outputItem.name] ??= 0
-                        this.inventory[step.trade.outputItem.name] += step.trade.outputItem.count
+                        this.inventory.add(step.trade.outputItem.name, step.trade.outputItem.count * step.count)
                     }
                     continue
                 }
                 case 'smelt': {
-                    this.inventory[step.recipe.result] ??= 0
-                    this.inventory[step.recipe.result] += step.count
+                    // for (const ingredient of step.recipe.ingredient) {
+                    //     this.inventory.add(ingredient, -step.count)
+                    // }
+                    this.inventory.add(step.recipe.result, step.count)
                     continue
                 }
                 case 'craft': {
                     for (const delta of step.recipe.delta) {
                         const itemName = registry.items[delta.id].name
-                        this.inventory[itemName] ??= 0
-                        this.inventory[itemName] += delta.count
+                        if (delta.count < 0) {
+                            // this.inventory.add(itemName, delta.count)
+                        } else {
+                            this.inventory.add(itemName, delta.count * step.count)
+                        }
                     }
                     continue
                 }
@@ -243,24 +271,31 @@ class PredictedEnvironment {
                 case 'bundle-out': {
                     continue
                 }
+                case 'dig': {
+                    this.inventory.add(step.loot.item, step.loot.count * step.count)
+                    if (!step.isGenerator) {
+                        this.harvestedBlocks.push(step.block.position)
+                    }
+                    continue
+                }
             }
         }
     }
 
     /**
      * @param {ReadonlyArray<{ name: string; count: number; }>} items
-     * @param {Record<string, number>} delta
+     * @param {Freq<import('../utils/other').ItemId>} delta
      * @returns {Array<{ name: string; count: number; }>}
      */
     static applyDelta(items, delta) {
         const _items = items.map(v => ({ ...v }))
-        for (const item in delta) {
-            const count = delta[item]
+        for (const item of delta.keys) {
+            const count = delta.get(item)
             for (let i = _items.length - 1; i >= 0; i--) {
                 if (_items[i].name !== item) continue
                 const remove = Math.min(_items[i].count, count)
                 _items[i].count -= remove
-                delta[item] -= remove
+                delta.add(item, -remove)
                 if (_items[i].count <= 0) {
                     _items.splice(i, 1)
                 }
@@ -280,6 +315,9 @@ function planCost(plan) {
     for (const step of plan) {
         if ('type' in step) {
             switch (step.type) {
+                case 'fill_bottle':
+                    cost += 1
+                    break
                 case 'chest':
                     cost += 0.1
                     break
@@ -314,6 +352,10 @@ function planCost(plan) {
                     }
                     break
                 }
+                case 'brew': {
+                    cost += 2
+                    break
+                }
                 case 'request': {
                     cost += 0.1
                     break
@@ -340,55 +382,73 @@ function planCost(plan) {
 
 /**
  * @param {Plan} plan
- * @param {string} item
+ * @param {import('../utils/other').ItemId} item
  */
 function planResult(plan, item) {
     let count = 0
     for (const step of plan) {
         if ('type' in step) {
             if (step.type === 'goto') { continue }
+            if (step.type === 'fill_bottle') {
+                switch (step.block.block.name) {
+                    case 'water':
+                        if (isItemEquals(item, brew.makePotionItem('water'))) {
+                            count++
+                        }
+                        break
+                    default:
+                        break
+                }
+                continue
+            }
+            if (step.type === 'brew') {
+                if (isItemEquals(step.recipe.result, item)) {
+                    count += step.count
+                }
+                continue
+            }
             if (step.type === 'request') {
                 for (const lock of step.locks) {
-                    if (lock.item !== item) { continue }
+                    if (isItemEquals(lock.item, item)) { continue }
                     count += lock.count
                 }
                 continue
             }
             if (step.type === 'request-from-anyone' &&
-                step.item === item) {
+                isItemEquals(step.item, item)) {
                 count += step.count
                 continue
             }
             if (step.type === 'bundle-out' &&
-                step.item === item) {
+                isItemEquals(step.item, item)) {
                 count += step.count
                 continue
             }
             if (step.type === 'trade') {
-                if (step.trade.outputItem.name === item) {
+                if (isItemEquals(step.trade.outputItem.name, item)) {
                     count += step.count * step.trade.outputItem.count
                 }
                 continue
             }
             if (step.type === 'harvest-mob') {
-                if (step.item === item) {
+                if (isItemEquals(step.item, item)) {
                     count += step.count
                 }
                 continue
             }
             if (step.type === 'dig') {
-                if (step.loot.item === item) {
+                if (isItemEquals(step.loot.item, item)) {
                     count += step.count * step.loot.count
                 }
                 continue
             }
             if (step.type === 'smelt') {
-                if (step.recipe.result === item) {
+                if (isItemEquals(step.recipe.result, item)) {
                     count += step.count
                 }
                 continue
             }
-            if (step.item === item) {
+            if (isItemEquals(step.item, item)) {
                 switch (step.type) {
                     case 'chest':
                     case 'inventory': {
@@ -412,7 +472,7 @@ function planResult(plan, item) {
 /**
  * @type {ReadonlyArray<(
  *   bot: import('../bruh-bot'),
- *   item: string,
+ *   item: import('../utils/other').ItemId,
  *   count: number,
  *   permissions : PermissionArgs & { force?: boolean },
  *   context: PlanningContext,
@@ -431,7 +491,7 @@ const planners = [
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
-        const inInventory = bot.inventoryItemCount(null, { name: item }) + (future.inventory[item] ?? 0)
+        const inInventory = bot.inventoryItemCount(null, item) + (future.inventory.get(item) ?? 0)
         if (inInventory === 0) {
             if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   None`)
             return null
@@ -449,12 +509,13 @@ const planners = [
         // const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canUseInventory) { return null }
+        if (typeof item !== 'string') { return null }
 
         const bundleItem = bundle.bestBundleWithItem(bot.bot, item)
         if (!bundleItem) { return null }
         const content = bundle.content(bundleItem.nbt)
         if (!content) { return null }
-        const items = content.filter(v => v.name === item)
+        const items = content.filter(v => isItemEquals(v.name, item))
         if (items.length === 0) { return null }
 
         return {
@@ -471,9 +532,9 @@ const planners = [
         const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check chests ...`)
-        const inChests = bot.env.searchForItem(bot, item)
+        const inChests = bot.env.searchForItem(item)
         const inChestsWithMyItems = inChests.filter(v => {
-            const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.delta[item] ?? 0)
+            const have = v.myCount + (future.chests[`${v.position.x}-${v.position.y}-${v.position.z}-${v.position.dimension}`]?.delta.get(item) ?? 0)
             return have > 0 && v.position.dimension === bot.dimension
         })
         inChestsWithMyItems.sort((a, b) => {
@@ -484,7 +545,7 @@ const planners = [
 
         for (const inChestWithMyItems of inChestsWithMyItems) {
             yield
-            const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.delta[item] ?? 0)
+            const have = inChestWithMyItems.myCount + (future.chests[`${inChestWithMyItems.position.x}-${inChestWithMyItems.position.y}-${inChestWithMyItems.position.z}-${inChestWithMyItems.position.dimension}`]?.delta.get(item) ?? 0)
             if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Found ${have} in a chest`)
 
             return {
@@ -502,6 +563,7 @@ const planners = [
         // const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canRequestFromBots && context.depth === 0) { return null }
+        if (typeof item !== 'string') { return null }
 
         const need = count
         const locked = bot.env.lockOthersItems(bot.username, item, need)
@@ -516,6 +578,7 @@ const planners = [
         const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canCraft) { return null }
+        if (typeof item !== 'string') { return null }
 
         const recipes = bot.bot.recipesAll(bot.mc.registry.itemsByName[item].id, null, true)
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check ${recipes.length} recipes ...`)
@@ -524,7 +587,7 @@ const planners = [
             for (const delta of v.delta) {
                 if (delta.count > 0) { continue }
                 const item = bot.mc.registry.items[delta.id].name
-                const successfulGathering = bot.memory.successfulGatherings[item]
+                const successfulGathering = bot.memory.successfulGatherings.get(item)
                 if (!successfulGathering) { continue }
                 // if ((Date.now() - successfulGathering.lastTime) > 120_000) {
                 //     delete bot.memory.successfulGatherings[item]
@@ -665,6 +728,7 @@ const planners = [
         const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canSmelt) { return null }
+        if (typeof item !== 'string') { return null }
 
         const recipes = []
 
@@ -733,23 +797,22 @@ const planners = [
                 } else {
                     goodItems = [ingredient]
                 }
-                const isGood = goodItems.some(v => planResult(subplan, v))
-                if (!isGood) {
+                let goodItem = goodItems.find(v => planResult(subplan, v) >= count)
+                if (!goodItem) {
                     if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
                     return null
                 }
                 ingredientPlans.push(subplan.flat())
             }
 
-            const thisPlanCost = planCost(ingredientPlans)
-            const selfCost = planCost([
+            const totalRecipeCost = planCost([
+                ...ingredientPlans,
                 {
                     type: 'smelt',
                     count: count,
                     recipe: recipe,
                 }
             ])
-            const totalRecipeCost = thisPlanCost + selfCost
             if (totalRecipeCost < bestRecipeCost) {
                 bestRecipe = {
                     plan: ingredientPlans,
@@ -793,9 +856,132 @@ const planners = [
         return result
     },
     function*(bot, item, count, permissions, context, planSoFar) {
+        const _depthPrefix = ' '.repeat(context.depth)
+
+        if (!permissions.canBrew) { return null }
+        if (typeof item === 'string') { return null }
+        if (count !== 1) { return null }
+
+        const recipes = []
+
+        for (const recipe of brew.recipes) {
+            if (!isItemEquals(recipe.result, item)) { continue }
+            recipes.push(recipe)
+        }
+
+        if (recipes.length === 0) { return null }
+
+        const brewingStand = bot.findBlocks({
+            matching: 'brewing_stand',
+            maxDistance: 32,
+            count: 1,
+        }).filter(v => !!v).first()
+
+        if (!brewingStand) { return null }
+
+        yield
+
+        /**
+         * @type {{
+         *   plan: Plan;
+         *   recipe: import('./brew')['recipes'][0];
+         * } | null}
+         */
+        let bestRecipe = null
+        let bestRecipeCost = Infinity
+
+        /**
+         * @param {import('./brew')['recipes'][0]} recipe
+         */
+        const visitRecipe = function*(recipe) {
+            const ingredientPlan = yield* plan(bot, recipe.ingredient, count, {
+                ...permissions,
+                force: false,
+            }, {
+                depth: context.depth + 1,
+                recursiveItems: [
+                    ...context.recursiveItems,
+                    recipe.result,
+                ],
+            }, [...planSoFar])
+            if (!planResult(ingredientPlan, recipe.ingredient)) {
+                if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
+                return null
+            }
+
+            const bottlePlan = yield* plan(bot, recipe.bottle, count, {
+                ...permissions,
+                force: false,
+            }, {
+                depth: context.depth + 1,
+                recursiveItems: [
+                    ...context.recursiveItems,
+                    recipe.result,
+                ],
+            }, [...planSoFar])
+            if (!planResult(bottlePlan, recipe.bottle)) {
+                if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
+                return null
+            }
+
+            const totalIngredientPlans = [
+                ...ingredientPlan,
+                ...bottlePlan,
+            ]
+
+            const thisPlanCost = planCost(totalIngredientPlans)
+            const selfCost = planCost([
+                {
+                    type: 'brew',
+                    count: count,
+                    recipe: recipe,
+                    brewingStand: new Vec3Dimension(brewingStand.position, bot.dimension),
+                }
+            ])
+            const totalRecipeCost = thisPlanCost + selfCost
+            if (totalRecipeCost < bestRecipeCost) {
+                bestRecipe = {
+                    plan: totalIngredientPlans,
+                    recipe: recipe,
+                }
+                bestRecipeCost = totalRecipeCost
+            }
+
+            return totalIngredientPlans
+        }
+
+        for (const recipe of recipes) {
+            yield
+            yield* visitRecipe(recipe)
+        }
+
+        if (!bestRecipe) {
+            if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   No recipe found`)
+            return null
+        }
+
+        /**
+         * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
+         */
+        const result = []
+
+        if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Recipe found`)
+
+        result.push(bestRecipe.plan.flat())
+        result.push({
+            type: 'brew',
+            recipe: bestRecipe.recipe,
+            brewingStand: new Vec3Dimension(brewingStand.position, bot.dimension),
+            count: count,
+        })
+
+        return result
+    },
+    function*(bot, item, count, permissions, context, planSoFar) {
         // const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canTrade) { return null }
+        if (typeof item !== 'string') { return null }
 
         const sortedVillagers = [...Object.values(bot.env.villagers)].sort((a, b) => bot.bot.entity.position.distanceSquared(a.position.xyz(bot.dimension)) - bot.bot.entity.position.distanceSquared(b.position.xyz(bot.dimension)))
         for (const villager of sortedVillagers) {
@@ -870,6 +1056,7 @@ const planners = [
         // const _depthPrefix = ' '.repeat(context.depth)
 
         if (!permissions.canRequestFromPlayers) { return null }
+        if (typeof item !== 'string') { return null }
 
         return {
             type: 'request-from-anyone',
@@ -880,7 +1067,8 @@ const planners = [
     function*(bot, item, count, permissions, context, planSoFar) {
         if (item !== 'cobblestone') { return null }
 
-        if (!permissions.canDig) { return null }
+        if (!permissions.canDigGenerators) { return null }
+        if (typeof item !== 'string') { return null }
 
         if (!bot.searchInventoryItem(null,
             'wooden_pickaxe',
@@ -891,7 +1079,9 @@ const planners = [
             'netherite_pickaxe',
         )) { return null }
 
-        /** @type {Vec3} */
+        const future = new PredictedEnvironment(planSoFar, bot.bot.registry)
+
+        /** @type {Vec3Dimension} */
         let found = null
         bot.bot.findBlock({
             matching: bot.mc.registry.blocksByName['lava'].id,
@@ -901,23 +1091,35 @@ const planners = [
                 for (const lavaNeighborPosition of directBlockNeighbors(block.position, 'side')) {
                     const lavaNeighbor = bot.bot.blockAt(lavaNeighborPosition)
                     if (!lavaNeighbor || lavaNeighbor.name !== 'cobblestone') { continue }
+                    if (future.harvestedBlocks.some(v => v.equals(new Vec3Dimension(lavaNeighborPosition, bot.dimension)))) { continue }
 
+                    let isNextToWater = false
                     for (const cobblestoneNeighborPosition of directBlockNeighbors(lavaNeighbor.position, 'side')) {
                         if (cobblestoneNeighborPosition.equals(block.position)) { continue }
+
                         const cobblestoneNeighbor = bot.bot.blockAt(cobblestoneNeighborPosition)
                         if (!cobblestoneNeighbor || cobblestoneNeighbor.name !== 'water') { continue }
+
                         const waterLevel = cobblestoneNeighbor.getProperties()['level']
                         if (!waterLevel) { continue }
+
                         if (waterLevel !== 1) { continue }
+
                         const blockBelowFlowingWater = bot.bot.blockAt(cobblestoneNeighborPosition.offset(0, -1, 0))
                         if (!blockBelowFlowingWater) { continue }
                         if (blockBelowFlowingWater.name !== 'water') { continue }
-                        if (found) {
-                            return false
+
+                        if (isNextToWater) {
+                            isNextToWater = false
+                            break
                         } else {
-                            found = lavaNeighborPosition
+                            isNextToWater = true
                         }
                     }
+
+                    if (!isNextToWater) { continue }
+
+                    found = new Vec3Dimension(lavaNeighborPosition, bot.dimension)
                 }
                 if (!found) { return false }
                 return true
@@ -928,7 +1130,10 @@ const planners = [
 
         return {
             type: 'dig',
-            block: bot.bot.blockAt(found),
+            block: {
+                position: found,
+                block: bot.bot.blockAt(found.xyz(bot.dimension)),
+            },
             loot: { item: 'cobblestone', count: 1 },
             count: count,
             isGenerator: true,
@@ -937,10 +1142,11 @@ const planners = [
     },
     function*(bot, item, count, permissions, context, planSoFar) {
         if (!permissions.canHarvestMobs) { return null }
+        if (typeof item !== 'string') { return null }
 
         switch (item) {
             case 'milk_bucket': {
-                const bucketPlan = yield* plan(bot, "bucket", 1, {
+                const bucketPlan = yield* plan(bot, 'bucket', 1, {
                     ...permissions,
                     force: false,
                     canUseInventory: true,
@@ -983,7 +1189,7 @@ const planners = [
                 ]
             }
             case 'mushroom_stew': {
-                const bowlPlan = yield* plan(bot, "bowl", 1, {
+                const bowlPlan = yield* plan(bot, 'bowl', 1, {
                     ...permissions,
                     force: false,
                     canUseInventory: true,
@@ -1028,28 +1234,60 @@ const planners = [
             default: return null
         }
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        if (!isItemEquals(item, brew.makePotionItem('water'))) { return null }
+        if (count !== 1) { return null }
+
+        const bottlePlan = yield* plan(bot, 'glass_bottle', count, permissions, {
+            depth: context.depth + 1,
+            recursiveItems: [
+                ...context.recursiveItems,
+                brew.makePotionItem('water'),
+            ]
+        }, planSoFar)
+        if (!planResult(bottlePlan, 'glass_bottle')) { return null }
+
+        const water = bot.bot.findBlock({
+            matching: bot.mc.registry.blocksByName['water'].id,
+            count: 1,
+            maxDistance: 32,
+        })
+
+        if (!water) { return null }
+
+        return [
+            bottlePlan,
+            {
+                type: 'fill_bottle',
+                block: {
+                    position: new Vec3Dimension(water.position, bot.dimension),
+                    block: water,
+                },
+            },
+        ]
+    },
 ]
 
 /**
  * @param {import('../bruh-bot')} bot
- * @param {ReadonlyArray<string>} item
+ * @param {ReadonlyArray<import('../utils/other').ItemId>} item
  * @param {number} count
  * @param {PermissionArgs & { force?: boolean }} permissions
  * @param {PlanningContext} [context]
  * @param {Plan} [planSoFar]
- * @returns {import('../task').Task<{ item: string; plan: Plan; }>}
+ * @returns {import('../task').Task<{ item: import('../utils/other').ItemId; plan: Plan; }>}
  */
 function* planAny(bot, item, count, permissions, context, planSoFar) {
     context ??= { depth: 0, recursiveItems: [] }
     planSoFar = []
 
     /**
-     * @type {{ item: string; plan: Plan; planCost: number; planResult: number; } | null}
+     * @type {{ item: import('../utils/other').ItemId; plan: Plan; planCost: number; planResult: number; } | null}
      */
     let bestPlan = null
 
     /**
-     * @param {string} item
+     * @param {import('../utils/other').ItemId} item
      */
     const visitItem = function*(item) {
         const itemPlan = yield* plan(bot, item, count, permissions, context, planSoFar)
@@ -1079,7 +1317,7 @@ function* planAny(bot, item, count, permissions, context, planSoFar) {
 
     const scoredItems = item.map(v => ({
         item: v,
-        score: bot.memory.successfulGatherings[v]?.successCount ?? 0,
+        score: bot.memory.successfulGatherings.get(v)?.successCount ?? 0,
     }))
     yield
     scoredItems.sort((a, b) => (b.score - a.score))
@@ -1113,7 +1351,7 @@ function* planAny(bot, item, count, permissions, context, planSoFar) {
 
 /**
  * @param {import('../bruh-bot')} bot
- * @param {string} item
+ * @param {import('../utils/other').ItemId} item
  * @param {number} count
  * @param {PermissionArgs & { force?: boolean }} permissions
  * @param {PlanningContext} context
@@ -1121,7 +1359,7 @@ function* planAny(bot, item, count, permissions, context, planSoFar) {
  * @returns {import('../task').Task<Plan>}
  */
 function* plan(bot, item, count, permissions, context, planSoFar) {
-    if (item.startsWith('#')) {
+    if (typeof item === 'string' && item.startsWith('#')) {
         const resolvedItems = bot.mc.local.resolveItemTag(item.replace('#', ''))
         return (yield* planAny(
             bot,
@@ -1132,22 +1370,22 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
             planSoFar))?.plan ?? []
     }
 
-    if (!bot.mc.registry.itemsByName[item]) {
+    if (typeof item === 'string' && !bot.mc.registry.itemsByName[item]) {
         console.warn(`[Bot "${bot.username}"] Unknown item "${item}"`)
         return []
     }
 
     const _depthPrefix = ' '.repeat(context.depth)
-    if (context.recursiveItems.includes(item)) {
-        if (planningLogs) console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Recursive plan for item "${item}", skipping`)
+    if (context.recursiveItems.some(v => isItemEquals(v, item))) {
+        if (planningLogs) console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Recursive plan for item "${stringifyItem(item)}", skipping`)
         return []
     }
     if (context.depth > 10) {
-        console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Too deep plan for item "${item}", skipping`)
+        console.warn(`[Bot "${bot.username}"] ${_depthPrefix} Too deep plan for item "${stringifyItem(item)}", skipping`)
         return []
     }
 
-    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} Planning ${count} "${item}" ...`)
+    if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} Planning ${count} "${stringifyItem(item)}" ...`)
 
     /**
      * @type {Array<PlanStep | ReadonlyArray<PlanStep>>}
@@ -1184,15 +1422,15 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
     if (count &&
         (planResult(result, item) >= count) &&
         !result.flat().find(v => v.type === 'request-from-anyone')) {
-        const existing = bot.memory.successfulGatherings[item]
+        const existing = bot.memory.successfulGatherings.get(item)
         if (existing) {
-            bot.memory.successfulGatherings[item].lastTime = Date.now()
-            bot.memory.successfulGatherings[item].successCount++
+            bot.memory.successfulGatherings.get(item).lastTime = Date.now()
+            bot.memory.successfulGatherings.get(item).successCount++
         } else {
-            bot.memory.successfulGatherings[item] = {
+            bot.memory.successfulGatherings.set(item, {
                 lastTime: Date.now(),
                 successCount: 1,
-            }
+            })
         }
     } else {
         // delete bot.memory.successfulGatherings[item]
@@ -1204,9 +1442,10 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
 /**
  * @param {import('../bruh-bot')} bot
  * @param {OrganizedPlan} plan
+ * @param {ReadonlyArray<import('../bruh-bot').ItemLock>} locks
  * @returns {import('../task').Task<void>}
  */
-function* evaluatePlan(bot, plan) {
+function* evaluatePlan(bot, plan, locks) {
     /**
      * @type {{ chestPosition: Vec3Dimension; chest: Chest; } | null}
      */
@@ -1236,6 +1475,42 @@ function* evaluatePlan(bot, plan) {
                     })
                     continue
                 }
+                case 'fill_bottle': {
+                    const bottleBefore = bot.inventoryItemCount(null, brew.makePotionItem('water'))
+                    yield* goto.task(bot, {
+                        block: step.block.position,
+                        reach: 3,
+                    })
+                    if (!bot.searchInventoryItem(null, 'glass_bottle')) {
+                        throw `I have no bottle`
+                    }
+                    yield* bot.equip('glass_bottle', [], 'hand')
+                    const water = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                    if (!water) {
+                        throw `The chunk where I want to fill my bottle aint loaded`
+                    }
+                    if (water.name !== 'water') {
+                        throw `Aint water`
+                    }
+                    if (!bot.blockInView(water)) {
+                        yield* goto.task(bot, {
+                            block: step.block.position,
+                            raycast: true,
+                        })
+                    }
+                    yield* wrap(bot.lookAtBlock(water))
+                    yield* sleepG(40)
+                    bot.bot.activateItem(false)
+                    yield* sleepG(40)
+                    bot.bot.deactivateItem()
+                    // yield* wrap(bot.bot.activateBlock(water))
+                    // yield* sleepG(80)
+                    const bottleAfter = bot.inventoryItemCount(null, brew.makePotionItem('water'))
+                    if (bottleAfter <= bottleBefore) {
+                        throw `Failed to fill my bottle`
+                    }
+                    continue
+                }
                 case 'chest': {
                     yield* goto.task(bot, {
                         block: step.chest.clone(),
@@ -1256,7 +1531,7 @@ function* evaluatePlan(bot, plan) {
                             chest: chest,
                         }
                     }
-                    const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), { name: step.item }, step.count)
+                    const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
                     if (took < step.count) {
                         throw `Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`
                     }
@@ -1347,6 +1622,7 @@ function* evaluatePlan(bot, plan) {
                         count: step.count,
                         noFuel: false,
                         recipes: [step.recipe],
+                        locks: locks,
                     })
                     continue
                 }
@@ -1383,7 +1659,7 @@ function* evaluatePlan(bot, plan) {
                     if (!bundleItem) { throw `Bundle disappeared` }
                     const content = bundle.content(bundleItem.nbt)
                     if (!content) { throw `Bundle content sublimated` }
-                    const items = content.filter(v => v.name === step.item)
+                    const items = content.filter(v => isItemEquals(v.name, step.item))
                     if (items.length === 0) { throw `Item disappeared from the bundle` }
                     if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
 
@@ -1401,8 +1677,8 @@ function* evaluatePlan(bot, plan) {
                     try {
                         const _response = yield* bot.askYesNo(
                             (step.count === 1) ?
-                                `Can someone give me a ${step.item}?` :
-                                `Can someone give me ${step.count} ${step.item}?`,
+                                `Can someone give me a ${stringifyItem(step.item)}?` :
+                                `Can someone give me ${step.count} ${stringifyItem(step.item)}?`,
                             bot.bot.chat,
                             null,
                             30000)
@@ -1413,7 +1689,7 @@ function* evaluatePlan(bot, plan) {
                     }
                     if (!response) { throw `:(` }
 
-                    bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${step.item}`)
+                    bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItem(step.item)}`)
 
                     let location = bot.env.getPlayerPosition(requestPlayer, 10000)
                     if (!location) {
@@ -1439,11 +1715,10 @@ function* evaluatePlan(bot, plan) {
 
                     bot.bot.whisper(requestPlayer, `Please give me ${step.count} ${step.item}`)
 
-                    /** @type {Record<string, number>} */
-                    const originalItems = {}
+                    /** @type {Freq<import('../utils/other').ItemId>} */
+                    const originalItems = new Freq(isItemEquals)
                     bot.inventoryItems().forEach(item => {
-                        originalItems[item.name] ??= 0
-                        originalItems[item.name] += item.count
+                        originalItems.add(item, item.count)
                     })
 
                     const interval = new Interval(20000)
@@ -1451,37 +1726,36 @@ function* evaluatePlan(bot, plan) {
 
                     while (true) {
                         yield* sleepG(100)
-                        /** @type {Record<string, number>} */
-                        const newItems = {}
+                        /** @type {Freq<import('../utils/other').ItemId>} */
+                        const newItems = new Freq(isItemEquals)
                         bot.inventoryItems().forEach(item => {
-                            newItems[item.name] ??= 0
-                            newItems[item.name] += item.count
+                            newItems.add(item, item.count)
                         })
 
-                        /** @type {Record<string, number>} */
-                        const delta = { ...newItems }
-                        for (const key in originalItems) {
-                            delta[key] ??= 0
-                            delta[key] -= originalItems[key]
-                            if (delta[key] === 0) { delete delta[key] }
+                        /** @type {Freq<import('../utils/other').ItemId>} */
+                        const delta = new Freq(isItemEquals)
+                        delta.from(newItems)
+                        for (const key of originalItems.keys) {
+                            delta.add(key, -originalItems.get(key))
+                            if (delta.get(key) === 0) { delta.remove(key) }
                         }
                         let done = false
-                        for (const key in delta) {
+                        for (const key of delta.keys) {
                             if (key === step.item &&
-                                delta[key] >= step.count) {
+                                delta.get(key) >= step.count) {
                                 done = true
-                                if (delta[key] > step.count) {
+                                if (delta.get(key) > step.count) {
                                     bot.bot.whisper(requestPlayer, `Too much`)
                                     yield* giveTo.task(bot, {
                                         player: requestPlayer,
-                                        items: [{ name: key, count: step.count - delta[key] }],
+                                        items: [{ item: key, count: step.count - delta.get(key) }],
                                     })
                                 }
-                            } else if (delta[key] > 0) {
+                            } else if (delta.get(key) > 0) {
                                 bot.bot.whisper(requestPlayer, `This aint a ${step.item}`)
                                 yield* giveTo.task(bot, {
                                     player: requestPlayer,
-                                    items: [{ name: key, count: delta[key] }],
+                                    items: [{ item: key, count: delta.get(key) }],
                                 })
                             }
                         }
@@ -1492,11 +1766,11 @@ function* evaluatePlan(bot, plan) {
                         }
 
                         if (timeout.done()) {
-                            for (const key in delta) {
-                                if (delta[key] > 0) {
+                            for (const key of delta.keys) {
+                                if (delta.get(key) > 0) {
                                     yield* giveTo.task(bot, {
                                         player: requestPlayer,
-                                        items: [{ name: key, count: delta[key] }],
+                                        items: [{ item: key, count: delta.get(key) }],
                                     })
                                 }
                             }
@@ -1504,7 +1778,7 @@ function* evaluatePlan(bot, plan) {
                         }
 
                         if (interval.done()) {
-                            bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta[step.item] ?? 0)} ${step.item}`)
+                            bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta.get(step.item) ?? 0)} ${step.item}`)
                         }
                     }
 
@@ -1515,22 +1789,28 @@ function* evaluatePlan(bot, plan) {
                         let remainingRetries = step.retryCount
                         while (remainingRetries--) {
                             try {
-                                let block = bot.bot.blockAt(step.block.position)
-                                while (!block || block.name !== step.block.name) {
+                                if (step.block.position.dimension !== bot.dimension) {
+                                    yield* goto.task(bot, {
+                                        block: step.block.position,
+                                    })
+                                }
+
+                                let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                while (!block || block.name !== step.block.block.name) {
                                     yield* sleepG(100)
                                     if (!block) {
                                         yield* goto.task(bot, {
                                             block: step.block.position,
                                         })
-                                        block = bot.bot.blockAt(step.block.position)
+                                        block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
                                     }
 
                                     if (!block) { break }
 
                                     const timeout = new Timeout(5000)
-                                    while (!timeout.done() && block && block.name !== step.block.name) {
+                                    while (!timeout.done() && block && block.name !== step.block.block.name) {
                                         yield* sleepG(100)
-                                        block = bot.bot.blockAt(step.block.position)
+                                        block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
                                     }
                                 }
 
@@ -1538,8 +1818,8 @@ function* evaluatePlan(bot, plan) {
                                     throw `Chunk where I like to dig aint loaded`
                                 }
 
-                                if (block.name !== step.block.name) {
-                                    throw `Unexpected block at ${step.block.position}: expected ${step.block.name}, found ${block.name}`
+                                if (block.name !== step.block.block.name) {
+                                    throw `Unexpected block at ${step.block.position}: expected ${step.block.block.name}, found ${block.name}`
                                 }
 
                                 const digResult = yield* dig.task(bot, {
@@ -1560,6 +1840,15 @@ function* evaluatePlan(bot, plan) {
                         }
                     }
                     continue
+                }
+                case 'brew': {
+                    yield* brew.task(bot, {
+                        count: step.count,
+                        recipe: step.recipe,
+                        brewingStand: step.brewingStand,
+                        locks: locks,
+                    })
+                    break
                 }
                 default: debugger
             }
@@ -1589,27 +1878,32 @@ function stringifyPlan(bot, plan) {
             continue
         }
         switch (step.type) {
+            case 'fill_bottle': {
+                builder += `Fill my bottle\n`
+                break
+            }
             case 'inventory': {
-                builder += `I have ${step.count} ${step.item}\n`
+                builder += `I have ${step.count} ${stringifyItem(step.item)}\n`
                 break
             }
             case 'chest': {
-                builder += `I found ${step.count} ${step.item} in a chest (${step.chest})\n`
+                builder += `I found ${step.count} ${stringifyItem(step.item)} in a chest (${step.chest})\n`
                 break
             }
             case 'harvest-mob': {
-                builder += `Harvest mob ${step.entity.expectedType} for ${step.count} ${step.item}\n`
+                builder += `Harvest mob ${step.entity.expectedType} for ${step.count} ${stringifyItem(step.item)}\n`
                 break
             }
             case 'craft': {
-                builder += `Craft ${step.recipe.result.count} ${step.item}\n`
+                builder += `Craft ${step.recipe.result.count} ${stringifyItem(step.item)}`
                 if (step.count > 1) {
                     builder += `, ${step.count} times`
                 }
+                builder += `\n`
                 break
             }
             case 'smelt': {
-                builder += `Smelt ${step.count} ${step.recipe.result}\n`
+                builder += `Smelt ${step.count} ${stringifyItem(step.recipe.result)}\n`
                 break
             }
             case 'goto': {
@@ -1629,15 +1923,19 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'bundle-out': {
-                builder += `I have a bundle with ${step.count} ${step.item} in it\n`
+                builder += `I have a bundle with ${step.count} ${stringifyItem(step.item)} in it\n`
                 break
             }
             case 'request-from-anyone': {
-                builder += `Request ${step.count} ${step.item} from anyone\n`
+                builder += `Request ${step.count} ${stringifyItem(step.item)} from anyone\n`
                 break
             }
             case 'dig': {
-                builder += `Dig ${step.block.name} at ${step.block.position}${(step.count > 1 ? ` ${step.count} times` : '')}\n`
+                builder += `Dig ${step.block.block.name} at ${step.block.position}${(step.count > 1 ? ` ${step.count} times` : '')}\n`
+                break
+            }
+            case 'brew': {
+                builder += `Brew ${step.count} ${stringifyItem(step.recipe.result)}\n`
                 break
             }
             default: {
@@ -1670,8 +1968,11 @@ function organizePlan(plan) {
     /** @type {ReadonlyArray<PlanStepType>} */ //@ts-ignore
     const stepTypes = Object.keys(grouped)
 
-    /** @type {readonly ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out']} */
-    const orderedStepTypes = ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out']
+    /** @type {readonly ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out', 'brew', 'fill_bottle']} */
+    const orderedStepTypes = ['craft', 'trade', 'goto', 'smelt', 'dig', 'bundle-out', 'brew', 'fill_bottle']
+
+    /** @type {readonly ['request-from-anyone', 'request', 'chest', 'inventory']} */
+    const unorderedStepTypes = ['request-from-anyone', 'request', 'chest', 'inventory']
 
     /** @typedef {orderedStepTypes[number]} OrderedStepTypes */
     /** @typedef {Exclude<PlanStepType, OrderedStepTypes>} UnorderedStepTypes */
@@ -1695,13 +1996,7 @@ function organizePlan(plan) {
 
     /** @type {Record<UnorderedStepTypes, number>} */ //@ts-ignore
     const unorderedStepPriorities = {}
-        ;[
-            'request-from-anyone',
-            'request',
-            'chest',
-            'inventory',
-            // @ts-ignore
-        ].forEach((value, index) => unorderedStepPriorities[value] = index)
+    unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = index)
 
     orderedSteps.sort((a, b) => a.i - b.i)
     unorderedSteps.sort((a, b) => unorderedStepPriorities[a.type] - unorderedStepPriorities[b.type])
@@ -1720,6 +2015,11 @@ function lockPlanItems(bot, plan) {
     const locks = []
     for (const step of plan) {
         switch (step.type) {
+            case 'brew':
+                locks.push(new ItemLock(null, step.recipe.ingredient, step.count))
+                locks.push(new ItemLock(null, step.recipe.bottle, step.count))
+                locks.push(new ItemLock(null, step.recipe.result, step.count))
+                break
             case 'bundle-out':
                 locks.push(new ItemLock(null, step.item, step.count))
                 break
@@ -1727,7 +2027,7 @@ function lockPlanItems(bot, plan) {
                 locks.push(new ItemLock(null, step.item, step.count))
                 break
             case 'craft':
-                locks.push(...step.recipe.delta.map(v => new ItemLock(null, bot.bot.registry.items[v.id].name, v.count * step.count)))
+                locks.push(...step.recipe.delta.map(v => new ItemLock(null, bot.bot.registry.items[v.id].name, Math.abs(v.count * step.count))))
                 break
             case 'dig':
                 if (step.loot.item) locks.push(new ItemLock(null, step.loot.item, step.loot.count))
@@ -1736,7 +2036,10 @@ function lockPlanItems(bot, plan) {
                 break
             case 'harvest-mob':
                 if (step.item) locks.push(new ItemLock(null, step.item, step.count))
-                if (step.tool) locks.push(new ItemLock(null, step.tool, 1))
+                if (step.tool) {
+                    if (step.willToolDisappear) locks.push(new ItemLock(null, step.tool, step.count))
+                    else locks.push(new ItemLock(null, step.tool, 1))
+                }
                 break
             case 'inventory':
                 locks.push(new ItemLock(null, step.item, step.count))
@@ -1764,7 +2067,7 @@ function lockPlanItems(bot, plan) {
 }
 
 /**
- * @type {import('../task').TaskDef<{ item: string | ''; count: number | NaN; }, Args> & {
+ * @type {import('../task').TaskDef<{ item: import('../utils/other').ItemId | null; count: number | NaN; }, Args> & {
  *   planCost: planCost;
  *   planResult: planResult;
  *   plan: plan;
@@ -1788,8 +2091,8 @@ const def = {
                 const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
 
                 let inventoryBuilder = ''
-                for (const name in future.inventory) {
-                    const delta = future.inventory[name]
+                for (const name of future.inventory.keys) {
+                    const delta = future.inventory.get(name)
                     if (!delta) { continue }
                     inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
                 }
@@ -1803,8 +2106,8 @@ const def = {
                     /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
                     const chest = future.chests[position]
                     chestsBuilder += `  at "${chest.location}"`
-                    for (const name in chest.delta) {
-                        const delta = chest.delta[name]
+                    for (const name of chest.delta.keys) {
+                        const delta = chest.delta.get(name)
                         if (!delta) { continue }
                         chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
                     }
@@ -1824,7 +2127,7 @@ const def = {
             const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
             args.cancel = function*() { cleanup() }
             try {
-                yield* evaluatePlan(bot, _organizedPlan)
+                yield* evaluatePlan(bot, _organizedPlan, locks)
             } finally {
                 cleanup()
             }
@@ -1834,7 +2137,7 @@ const def = {
                 count: NaN,
             }
         } else {
-            if (typeof args.item === 'string') args.item = [args.item]
+            args.item = [args.item].flat()
 
             console.log(`[Bot "${bot.username}"] Planning`, args.count, args.item)
             const bestPlan = yield* planAny(
@@ -1848,12 +2151,12 @@ const def = {
             const _organizedPlan = organizePlan(bestPlan.plan)
             const _planResult = planResult(_organizedPlan, bestPlan.item)
             if (_planResult <= 0) {
-                throw `Can't gather ${bestPlan.item}`
+                throw `Can't gather ${stringifyItem(bestPlan.item)}`
             }
             if (_planResult < args.count) {
-                throw `I can only gather ${_planResult} ${bestPlan.item}`
+                throw `I can only gather ${_planResult} ${stringifyItem(bestPlan.item)}`
             }
-            console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${bestPlan.item}:`)
+            console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${stringifyItem(bestPlan.item)}:`)
             console.log(stringifyPlan(bot, _organizedPlan))
             console.log(`[Bot "${bot.username}"] Environment in the future:`)
             {
@@ -1861,10 +2164,10 @@ const def = {
                 const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
 
                 let inventoryBuilder = ''
-                for (const name in future.inventory) {
-                    const delta = future.inventory[name]
+                for (const name of future.inventory.keys) {
+                    const delta = future.inventory.get(name)
                     if (!delta) { continue }
-                    inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                    inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
                 }
                 if (inventoryBuilder) {
                     builder += 'Inventory:\n'
@@ -1876,10 +2179,10 @@ const def = {
                     /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
                     const chest = future.chests[position]
                     chestsBuilder += `  at "${chest.location}"`
-                    for (const name in chest.delta) {
-                        const delta = chest.delta[name]
+                    for (const name of chest.delta.keys) {
+                        const delta = chest.delta.get(name)
                         if (!delta) { continue }
-                        chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                        chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
                     }
                 }
                 if (chestsBuilder) {
@@ -1890,7 +2193,7 @@ const def = {
                 console.log(builder)
             }
 
-            const itemsBefore = bot.inventoryItemCount(null, { name: bestPlan.item })
+            const itemsBefore = bot.inventoryItemCount(null, bestPlan.item)
 
             console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
             const locks = lockPlanItems(bot, _organizedPlan)
@@ -1899,12 +2202,12 @@ const def = {
             const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
             args.cancel = function*() { cleanup() }
             try {
-                yield* evaluatePlan(bot, _organizedPlan)
+                yield* evaluatePlan(bot, _organizedPlan, locks)
             } finally {
                 cleanup()
             }
 
-            const itemsAfter = bot.inventoryItemCount(null, { name: bestPlan.item })
+            const itemsAfter = bot.inventoryItemCount(null, bestPlan.item)
             const itemsGathered = itemsAfter - itemsBefore
 
             return {
@@ -1917,14 +2220,14 @@ const def = {
         if ('plan' in args) {
             return `gather-${args.plan}`
         } else {
-            return `gather-${args.count}-${args.item}`
+            return `gather-${args.count}-${[args.item].flat().map(stringifyItem).join('-')}`
         }
     },
     humanReadableId: function(args) {
         if ('plan' in args) {
             return `Gathering something`
         } else {
-            return `Gathering ${args.count} ${args.item}`
+            return `Gathering ${args.count} ${[args.item].flat().length > 1 ? 'something' : stringifyItem([args.item].flat()[0])}`
         }
     },
     definition: 'gatherItem',

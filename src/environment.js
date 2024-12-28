@@ -5,7 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
 const { wrap, sleepG } = require('./utils/tasks')
-const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor } = require('./utils/other')
+const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor, isItemEquals } = require('./utils/other')
 const { Block } = require('prismarine-block')
 const { Item } = require('prismarine-item')
 const Minecraft = require('./minecraft')
@@ -16,12 +16,13 @@ const Vec3Dimension = require('./vec3-dimension')
 const { EntityPose } = require('./entity-metadata')
 const Iterable = require('./iterable')
 const config = require('./config')
+const Freq = require('./utils/freq')
 
 /**
  * @typedef {{
  *   position: Vec3Dimension;
- *   content: Record<string, number>;
- *   myItems: Record<string, number>;
+ *   content: Freq<import('./utils/other').ItemId>;
+ *   myItems: Freq<import('./utils/other').ItemId>;
  * }} SavedChest
  */
 
@@ -571,17 +572,16 @@ module.exports = class Environment {
                 if (!found) {
                     found = {
                         position: new Vec3Dimension(chestBlock.position, bot.dimension),
-                        content: {},
-                        myItems: {},
+                        content: new Freq(isItemEquals),
+                        myItems: new Freq(isItemEquals),
                     }
                     this.chests.push(found)
                 } else {
-                    found.content = {}
+                    found.content = new Freq(isItemEquals)
                 }
 
                 for (const item of chest.containerItems()) {
-                    found.content[item.name] ??= 0
-                    found.content[item.name] += item.count
+                    found.content.add(item, item.count)
                 }
 
                 scannedChests++
@@ -668,48 +668,40 @@ module.exports = class Environment {
         if (!saved) {
             saved = {
                 position: chestPosition,
-                content: {},
-                myItems: {},
+                content: new Freq(isItemEquals),
+                myItems: new Freq(isItemEquals),
             }
             this.chests.push(saved)
         }
 
-        saved.content = {}
+        saved.content = new Freq(isItemEquals)
 
         for (const item of bot.containerItems(chest)) {
-            saved.content[item.name] ??= 0
-            saved.content[item.name] += item.count
+            saved.content.add(item, item.count)
         }
 
-        saved.myItems[item] ??= 0
-        saved.myItems[item] += count
+        saved.myItems.add(item, count)
 
-        for (const item in saved.content) {
-            if (!saved.myItems[item]) { continue }
-            saved.myItems[item] = Math.min(saved.myItems[item], saved.content[item])
+        for (const item of saved.content.keys) {
+            if (!saved.myItems.get(item)) { continue }
+            saved.myItems.set(item, Math.min(saved.myItems.get(item), saved.content.get(item)))
         }
     }
 
     /**
-     * @param {import('./bruh-bot')} bot
-     * @param {Item | number | string} item
+     * @param {import('./utils/other').ItemId} item
      * @returns {Array<{ position: Vec3Dimension; count: number; myCount: number; }>}
      */
-    searchForItem(bot, item) {
-        if (typeof item === 'number') {
-            item = bot.mc.registry.items[item].name
-        } else if (typeof item === 'string') { } else {
-            item = item.name
-        }
+    searchForItem(item) {
         /**
          * @type {Array<{ position: Vec3Dimension; count: number; myCount: number; }>}
          */
         const result = []
         for (const chest of this.chests) {
-            for (const itemName in chest.content) {
-                const count = chest.content[itemName]
-                const myCount = chest.myItems[itemName]
-                if (itemName === item) {
+            for (const itemName of chest.content.keys) {
+                const count = chest.content.get(itemName)
+                const myCount = chest.myItems.get(itemName)
+                if (isItemEquals(itemName, item)) {
                     result.push({
                         position: chest.position.clone(),
                         count: count,
