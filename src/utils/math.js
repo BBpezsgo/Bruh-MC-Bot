@@ -118,4 +118,4 @@ Math.lineDistanceSquared = function(point, a, b) {
         })
 }
 
-module.exports = null
+module.exports = { }

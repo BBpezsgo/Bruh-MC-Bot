@@ -5,8 +5,9 @@ const { Block } = require('prismarine-block')
 const goto = require('./goto')
 const hoeing = require('./hoeing')
 const Minecraft = require('../minecraft')
-const { basicRouteSearch } = require('../utils/other')
+const { basicRouteSearch, isItemEquals } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
+const Freq = require('../utils/freq')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -51,27 +52,18 @@ module.exports = {
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
 
-            /** @type {Record<string, number>} */
-            const seedsNeed = {}
+            const seedsNeed = new Freq(isItemEquals)
             for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
-                const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
-                seedsNeed[seedName] ??= 0
-                seedsNeed[seedName] += 1
+                seedsNeed.add(crop.seed, 1)
             }
-
-            // for (const seedName in seedsNeed) {
-            //     yield* bot.ensureItem(seedName, seedsNeed[seedName])
-            // }
 
             for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
                 // yield
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
-
-                const seedName = crop.type === 'tree' ? crop.sapling : crop.seed
 
                 const at = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
 
@@ -87,7 +79,7 @@ module.exports = {
                 let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${seedName}": Couldn't find a good spot`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant "${crop.seed}": Couldn't find a good spot`)
                     continue
                 }
 
@@ -114,19 +106,19 @@ module.exports = {
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn.isExactBlock) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant ${seedName}: couldn't find a good spot`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant ${crop.seed}: couldn't find a good spot`)
                     continue
                 }
 
-                const seed = yield* bot.ensureItem(seedName, seedsNeed[seedName])
+                const seed = yield* bot.ensureItem(crop.seed, seedsNeed.get(crop.seed))
                 if (!seed) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${seedName}"`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${crop.seed}"`)
                     continue
                 }
 
                 // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
-                seedsNeed[seedName] -= 1
+                seedsNeed.set(crop.seed, -1)
                 plantedCount++
                 continue
             }
@@ -137,13 +129,7 @@ module.exports = {
                 const seed = bot.searchInventoryItem(null, ...args.seedItems.map(v => bot.mc.registry.items[v].name))
                 if (!seed) { break }
 
-                const cropInfo = Object.values(Minecraft.cropsByBlockName).find(v => {
-                    if (v.type === 'tree') {
-                        return v.sapling === seed.name
-                    } else {
-                        return v.seed === seed.name
-                    }
-                })
+                const cropInfo = Object.values(Minecraft.cropsByBlockName).find(v => v.seed === seed.name)
                 if (!cropInfo) { break }
                 if (cropInfo.type === 'tree') { break }
 

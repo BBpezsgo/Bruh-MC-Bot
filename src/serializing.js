@@ -2,6 +2,7 @@
 
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('./vec3-dimension')
+const Freq = require('./utils/freq')
 
 /**
  * @this {any}
@@ -34,6 +35,14 @@ function reviver(key, value) {
         }
     }
 
+    if (value &&
+        (typeof value === 'object') &&
+        ('__class' in value) &&
+        ('v' in value)
+    ) {
+        return Freq.fromJSON(value['v'], (a, b) => { throw new Error() })
+    }
+
     return value
 }
 
@@ -60,6 +69,13 @@ function replacer(key, value) {
             y: value.y,
             z: value.z,
             dimension: value.dimension,
+        }
+    }
+
+    if (value instanceof Freq) {
+        return {
+            __class: 'Freq',
+            v: value.toJSON(),
         }
     }
 

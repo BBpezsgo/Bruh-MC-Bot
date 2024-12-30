@@ -369,6 +369,7 @@ function NBT2JSON(nbt) {
  * @param {ItemId} item
  */
 function stringifyItem(item) {
+    if (!item) { return 'null' }
     if (typeof item === 'string') {
         return item
     } else {
@@ -382,7 +383,17 @@ function stringifyItem(item) {
         } else if (item.nbt) {
             const nbt = NBT2JSON(item.nbt)
             if (nbt['Potion']) {
-                result += ` (${nbt['Potion'].replace('minecraft:', '')})`
+                const potion = require('../tasks/brew').potions.find(v => [v.name, v.long, v.level2].includes(nbt['Potion']))
+                if (potion) {
+                    result = potion.displayName
+                    if (nbt['Potion'] === potion.level2) {
+                        result += ` (strong)`
+                    } else if (nbt['Potion'] === potion.long) {
+                        result += ` (long)`
+                    }
+                } else {
+                    result += ` (${nbt['Potion'].replace('minecraft:', '')})`
+                }
             } else {
                 result += ` (+NBT)`
             }
@@ -398,6 +409,7 @@ function stringifyItem(item) {
  * @returns {boolean}
  */
 function isItemEquals(a, b) {
+    if (!a || !b) { return false }
     if (typeof a === 'string') {
         if (typeof b === 'string') {
             return a === b

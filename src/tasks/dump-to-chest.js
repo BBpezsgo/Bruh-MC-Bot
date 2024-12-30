@@ -1,10 +1,11 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { sleepG } = require('../utils/tasks')
+const { sleepTicks } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
-const { stringifyItem } = require('../utils/other')
+const Freq = require('../utils/freq')
+const { isItemEquals } = require('../utils/other')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -30,13 +31,15 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @type {import('../task').TaskDef<boolean, { items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
+ * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, { items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
         if (bot.quietMode) { throw `Can't open chest in quiet mode` }
 
-        if (args.items.length === 0) { return false }
+        const dumped = new Freq(isItemEquals)
+
+        if (args.items.length === 0) { return dumped }
 
         const fullChests = []
 
@@ -96,32 +99,33 @@ module.exports = {
                             break
                         }
 
-                        try {
-                            const deposited = yield* bot.chestDeposit(
-                                chest,
-                                chestBlock.position,
-                                itemToDeposit.item,
-                                itemToDeposit.count)
-                            shouldBreak = !deposited
-                        } catch (error) {
-                            if (error instanceof Error) {
-                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
-                            } else {
-                                console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
-                            }
-                        }
+                        // try {
+                        const deposited = yield* bot.chestDeposit(
+                            chest,
+                            chestBlock.position,
+                            itemToDeposit.item,
+                            itemToDeposit.count)
+                        dumped.add(itemToDeposit.item, deposited)
+                        shouldBreak = !deposited
+                        // } catch (error) {
+                        //     if (error instanceof Error) {
+                        //         console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
+                        //     } else {
+                        //         console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
+                        //     }
+                        // }
                     }
 
                     if (shouldBreak) { break }
                 }
             } finally {
-                yield* sleepG(20)
+                yield* sleepTicks(1)
                 chest.close()
-                yield* sleepG(20)
+                yield* sleepTicks(1)
             }
         }
 
-        return true
+        return dumped
     },
     id: `dump`,
     humanReadableId: `Dump items`,

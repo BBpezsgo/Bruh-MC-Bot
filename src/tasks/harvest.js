@@ -26,7 +26,7 @@ module.exports = {
         /**
          * @type {Array<import('../environment').SavedCrop>}
          */
-        const harvestedCrops = []
+        const replantPositions = []
         /**
          * @type {Array<import('vec3').Vec3>}
          */
@@ -83,7 +83,8 @@ module.exports = {
 
                 switch (cropInfo.type) {
                     case 'seeded':
-                    case 'simple': {
+                    case 'simple':
+                    case 'up': {
                         if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* bot.dig(cropBlock)
                         break
@@ -144,36 +145,29 @@ module.exports = {
                 }
                 n++
 
-                let isSaved = false
+                if (Minecraft.isCropRoot(bot.bot, cropBlock)) {
+                    let isSaved = false
 
-                for (const crop of bot.env.crops) {
-                    if (crop.position.equals(cropPosition)) {
-                        crop.block = cropInfo.cropName
-                        isSaved = true
-                        break
+                    for (const crop of bot.env.crops) {
+                        if (crop.position.equals(cropPosition)) {
+                            crop.block = cropInfo.cropName
+                            isSaved = true
+                            break
+                        }
+                    }
+
+                    if (isSaved) {
+                        // console.log(`[Bot "${bot.username}"] Crop already saved`)
+                    } else {
+                        // console.log(`[Bot "${bot.username}"] Crop saved`)
+                        bot.env.crops.push({
+                            position: new Vec3Dimension(cropPosition, bot.dimension),
+                            block: cropInfo.cropName,
+                        })
                     }
                 }
 
-                if (isSaved) {
-                    // console.log(`[Bot "${bot.username}"] Crop already saved`)
-                } else {
-                    // console.log(`[Bot "${bot.username}"] Crop saved`)
-                    bot.env.crops.push({
-                        position: new Vec3Dimension(cropPosition, bot.dimension),
-                        block: cropInfo.cropName,
-                    })
-                }
-
                 harvestedPoints.push(cropPosition)
-
-                if (!replantDuringHarvesting) {
-                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
-                    harvestedCrops.push({
-                        position: new Vec3Dimension(cropPosition, bot.dimension),
-                        block: cropInfo.cropName,
-                    })
-                    continue
-                }
 
                 if (cropInfo.type === 'grows_block') {
                     continue
@@ -183,11 +177,20 @@ module.exports = {
                     continue
                 }
 
-                if (cropInfo.type === 'tree') {
+                if (cropInfo.type === 'spread') {
                     continue
                 }
 
-                if (cropInfo.type === 'spread') {
+                if (cropInfo.type === 'up') {
+                    continue
+                }
+
+                if (!replantDuringHarvesting) {
+                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
+                    replantPositions.push({
+                        position: new Vec3Dimension(cropPosition, bot.dimension),
+                        block: cropInfo.cropName,
+                    })
                     continue
                 }
 
@@ -211,7 +214,7 @@ module.exports = {
                     // console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
                 } catch (error) {
                     // console.log(`[Bot "${bot.username}"] Crop position saved`)
-                    harvestedCrops.push({
+                    replantPositions.push({
                         position: new Vec3Dimension(cropPosition, bot.dimension),
                         block: cropInfo.cropName,
                     })
@@ -231,7 +234,7 @@ module.exports = {
         }
 
         yield* plantSeed.task(bot, {
-            harvestedCrops: harvestedCrops,
+            harvestedCrops: replantPositions,
             locks: [],
         })
 

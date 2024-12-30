@@ -239,7 +239,13 @@ module.exports = class Environment {
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
         this.playerPositions = data.playerPositions ?? this.playerPositions
         this.crops = data.crops ?? this.crops
-        this.chests = data.chests ?? this.chests
+        this.chests = data.chests
+            ? (/** @type {SavedChest[]} */ (data.chests)).map(v => ({
+                content: new Freq(isItemEquals).from(v.content),
+                myItems: new Freq(isItemEquals).from(v.myItems),
+                position: v.position,
+            }))
+            : this.chests
         this.villagers = data.villagers ?? this.villagers
         this.animalBreedTimes = data.animalBreedTimes ?? this.animalBreedTimes
         this.minePositions = data.minePositions ?? this.minePositions
@@ -288,27 +294,8 @@ module.exports = class Environment {
             }
         }
 
-        if (isPlace && newBlock) {
-            if (newBlock.name in Minecraft.cropsByBlockName) {
-                let isSaved = false
-                for (const crop of this.crops) {
-                    if (crop.position.equals(newBlock.position)) {
-                        crop.block = newBlock.name
-                        isSaved = true
-                        break
-                    }
-                }
-                if (!isSaved) {
-                    this.crops.push({
-                        position: new Vec3Dimension(newBlock.position, dimension),
-                        block: newBlock.name,
-                    })
-                }
-            }
-        }
-
         if (isBreak) {
-            if (oldBlock && oldBlock.name in Minecraft.cropsByBlockName) {
+            if (Minecraft.isCropRoot(bot.bot, oldBlock)) {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(oldBlock.position)) {
@@ -323,6 +310,23 @@ module.exports = class Environment {
                         block: oldBlock.name,
                     })
                 }
+            }
+        }
+
+        if (Minecraft.isCropRoot(bot.bot, newBlock)) {
+            let isSaved = false
+            for (const crop of this.crops) {
+                if (crop.position.equals(newBlock.position)) {
+                    crop.block = newBlock.name
+                    isSaved = true
+                    break
+                }
+            }
+            if (!isSaved) {
+                this.crops.push({
+                    position: new Vec3Dimension(newBlock.position, dimension),
+                    block: newBlock.name,
+                })
             }
         }
     }
@@ -582,6 +586,10 @@ module.exports = class Environment {
 
                 for (const item of chest.containerItems()) {
                     found.content.add(item, item.count)
+                }
+
+                for (const item of found.myItems.keys) {
+                    found.myItems.set(item, Math.min(found.myItems.get(item), found.content.get(item)))
                 }
 
                 scannedChests++
@@ -868,6 +876,17 @@ module.exports = class Environment {
                     }
                 }
                 isGrown = !!fruitBlock
+                break
+            }
+            case 'up': {
+                const below1 = bot.bot.blockAt(block.position.offset(0, -1, 0))
+                const below2 = bot.bot.blockAt(block.position.offset(0, -2, 0))
+                if (block.type === below1.type && block.type === below2.type) return false
+                if (below1.type !== block.type) {
+                    isGrown = false
+                } else {
+                    isGrown = true
+                }
                 break
             }
             case 'grows_fruit': {
@@ -1186,7 +1205,7 @@ module.exports = class Environment {
             type: type,
             ...args,
         }
-        console.log(`ALLOC ${position} ${type} by ${bot}`)
+        // console.log(`ALLOC ${position} ${type} by ${bot}`)
         return true
     }
 
@@ -1206,7 +1225,7 @@ module.exports = class Environment {
             return false
         }
         delete this.allocatedBlocks[hash]
-        console.log(`DEALLOC ${position} by ${bot}`)
+        // console.log(`DEALLOC ${position} by ${bot}`)
         return true
     }
 

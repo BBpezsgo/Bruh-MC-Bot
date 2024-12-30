@@ -15,7 +15,7 @@ const LocalMinecraftData = require('./local-minecraft-data')
  */
 
 /**
- * @typedef {SimpleCrop | SeededCrop | BlockCrop | FruitCrop | Tree | SpreadingCrop} AnyCrop
+ * @typedef {SimpleCrop | SeededCrop | BlockCrop | FruitCrop | Tree | SpreadingCrop | UpwardsCrop} AnyCrop
  */
 
 /**
@@ -62,7 +62,7 @@ const LocalMinecraftData = require('./local-minecraft-data')
 /**
  * @typedef {GeneralCrop & {
  *   type: 'tree';
- *   sapling: string;
+ *   seed: string;
  *   log: string;
  *   size: 'small' | 'can-be-large' | 'always-large';
  *   branches: 'never' | 'sometimes' | 'always';
@@ -74,6 +74,13 @@ const LocalMinecraftData = require('./local-minecraft-data')
  *   type: 'spread';
  *   seed: string;
  * }} SpreadingCrop
+ */
+
+/**
+ * @typedef {GeneralCrop & {
+ *   type: 'up';
+ *   seed: string;
+ * }} UpwardsCrop
  */
 
 /**
@@ -100,7 +107,9 @@ module.exports = class Minecraft {
         /** @type {number} */
         hurtTime: 500,
         /** @type {number} */
-        fallDamageVelocity: -1
+        fallDamageVelocity: -1,
+        /** @type {number} */
+        jumpTotalTime: 600,
     })
 
     /**
@@ -740,7 +749,7 @@ module.exports = class Minecraft {
         },
         'oak_sapling': {
             type: 'tree',
-            sapling: 'oak_sapling',
+            seed: 'oak_sapling',
             log: 'oak_log',
             size: 'small',
             branches: 'sometimes',
@@ -751,7 +760,7 @@ module.exports = class Minecraft {
         },
         'spruce_sapling': {
             type: 'tree',
-            sapling: 'spruce_sapling',
+            seed: 'spruce_sapling',
             log: 'spruce_log',
             size: 'can-be-large',
             branches: 'never',
@@ -762,7 +771,7 @@ module.exports = class Minecraft {
         },
         'birch_sapling': {
             type: 'tree',
-            sapling: 'birch_sapling',
+            seed: 'birch_sapling',
             log: 'birch_log',
             size: 'small',
             branches: 'never',
@@ -773,7 +782,7 @@ module.exports = class Minecraft {
         },
         'jungle_sapling': {
             type: 'tree',
-            sapling: 'jungle_sapling',
+            seed: 'jungle_sapling',
             log: 'jungle_log',
             size: 'can-be-large',
             branches: 'never',
@@ -784,7 +793,7 @@ module.exports = class Minecraft {
         },
         'acacia_sapling': {
             type: 'tree',
-            sapling: 'acacia_sapling',
+            seed: 'acacia_sapling',
             log: 'acacia_log',
             size: 'small',
             branches: 'always',
@@ -795,7 +804,7 @@ module.exports = class Minecraft {
         },
         'dark_oak_sapling': {
             type: 'tree',
-            sapling: 'dark_oak_sapling',
+            seed: 'dark_oak_sapling',
             log: 'dark_oak_log',
             size: 'always-large',
             branches: 'never',
@@ -806,7 +815,7 @@ module.exports = class Minecraft {
         },
         'mangrove_propagule': {
             type: 'tree',
-            sapling: 'mangrove_propagule',
+            seed: 'mangrove_propagule',
             log: 'mangrove_log',
             size: 'small',
             branches: 'always',
@@ -820,7 +829,7 @@ module.exports = class Minecraft {
         },
         'cherry_sapling': {
             type: 'tree',
-            sapling: 'cherry_sapling',
+            seed: 'cherry_sapling',
             log: 'cherry_log',
             size: 'small',
             branches: 'always',
@@ -831,7 +840,7 @@ module.exports = class Minecraft {
         },
         'azalea': {
             type: 'tree',
-            sapling: 'azalea',
+            seed: 'azalea',
             log: 'oak_log',
             size: 'small',
             branches: 'always',
@@ -845,7 +854,7 @@ module.exports = class Minecraft {
         },
         'flowering_azalea': {
             type: 'tree',
-            sapling: 'flowering_azalea',
+            seed: 'flowering_azalea',
             log: 'oak_log',
             size: 'small',
             branches: 'always',
@@ -877,6 +886,35 @@ module.exports = class Minecraft {
             growsOnSide: 'top',
             lightLevel: { max: 12 },
         },
+        'sugar_cane': {
+            type: 'up',
+            canUseBonemeal: false,
+            growsOnBlock: [
+                ...Minecraft.soilBlocks,
+                'sand',
+                'red_sand',
+            ],
+            growsOnSide: 'top',
+            seed: 'sugar_cane',
+        },
+    }
+
+    /**
+     * @param {import('mineflayer').Bot} bot
+     * @param {import('prismarine-block').Block} block
+     * @returns {boolean | null}
+     */
+    static isCropRoot(bot, block) {
+        if (!block?.name) return false
+        const crop = Minecraft.cropsByBlockName[block.name]
+        if (!crop) return false
+        if (crop.type === 'up') {
+            const below = bot.blockAt(block.position.offset(0, -1, 0))
+            if (!below) return null
+            return below.type !== block.type
+        } else {
+            return true
+        }
     }
 
     /**

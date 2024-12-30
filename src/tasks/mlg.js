@@ -4,6 +4,9 @@ const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const Minecraft = require('../minecraft')
+const { stringifyItem, isItemEquals } = require('../utils/other')
+const { Item } = require('prismarine-item')
+const eat = require('./eat')
 
 /**
  * @typedef {{
@@ -27,45 +30,74 @@ module.exports = {
     task: function*(bot) {
         let didMLG = false
 
-        const neighbor = bot.bot.nearestEntity()
-        if (neighbor &&
-            Minecraft.mlg.vehicles.includes(neighbor.name) &&
-            bot.bot.entity.position.distanceTo(neighbor.position) < 6) {
-            console.log(`[Bot "${bot.username}"] [MLG] Mounting "${neighbor.name}" ...`)
-            bot.bot.mount(neighbor)
-            didMLG = true
-            yield* sleepG(100)
-            bot.bot.dismount()
-            return 'ok'
+        /**
+         * @returns {import('../task').Task<Item | null>}
+         */
+        const equipMlgItem = function*() {
+            let haveMlgItem = 0
+            let equipped = null
+            for (const item of bot.inventoryItems()) {
+                if (Minecraft.mlg.boats.includes(item.name) && haveMlgItem < 1) {
+                    equipped = yield* bot.equip(item)
+                    console.log(`[Bot "${bot.username}"] [MLG] Equipped ${stringifyItem(item)}`)
+                    haveMlgItem = 1
+                }
+
+                if (Minecraft.mlg.mlgBlocks.includes(item.name) && haveMlgItem < 2) {
+                    equipped = yield* bot.equip(item)
+                    console.log(`[Bot "${bot.username}"] [MLG] Equipped ${stringifyItem(item)}`)
+                    haveMlgItem = 2
+                    return equipped
+                }
+            }
+
+            return equipped
         }
 
+        let equippedMlgItem = null
+        if (!(equippedMlgItem = yield* equipMlgItem())) {
+            const chorusFruit = bot.searchInventoryItem(null, 'chorus_fruit')
+            if (chorusFruit) {
+                const eatStarted = performance.now()
+
+                /** @type {import('../task').CommonArgs<import('../managed-task').TaskArgs<eat>>} */
+                const eatArgs = { food: chorusFruit }
+                const eatTask = eat.task(bot, eatArgs)
+
+                while (true) {
+                    const v = eatTask.next()
+                    if (v.done) return 'ok'
+                    if (performance.now() - eatStarted < 1600 &&
+                        bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) {
+                        if (eatArgs.cancel) yield* eatArgs.cancel()
+                        console.warn(`[Bot "${bot.username}"] [MLG] There was not enough time to eat chorus fruit`)
+                        return 'failed'
+                    }
+                    yield* sleepTicks()
+                }
+            }
+
+            console.warn(`[Bot "${bot.username}"] [MLG] No suitable item found`)
+            return 'failed'
+        }
+
+        console.log(`[Bot "${bot.username}"] [MLG] Will use ${bot.bot.heldItem?.name ?? 'null'} ...`)
+
         while (!didMLG) {
+            yield
+
             try {
-                let haveMlgItem = 0
-                for (const item of bot.bot.inventory.slots) {
-                    if (!item) { continue }
-
-                    if (Minecraft.mlg.boats.includes(item.name) &&
-                        haveMlgItem < 1) {
-                        yield* wrap(bot.bot.equip(item.type, 'hand'))
-                        haveMlgItem = 1
-                        continue
-                    }
-
-                    if (Minecraft.mlg.mlgBlocks.includes(item.name) &&
-                        haveMlgItem < 2) {
-                        yield* wrap(bot.bot.equip(item.type, 'hand'))
-                        haveMlgItem = 2
-                        break
-                    }
+                const neighbor = bot.bot.nearestEntity()
+                if (neighbor &&
+                    Minecraft.mlg.vehicles.includes(neighbor.name) &&
+                    bot.bot.entity.position.distanceTo(neighbor.position) < 6) {
+                    console.log(`[Bot "${bot.username}"] [MLG] Mounting "${neighbor.name}" ...`)
+                    bot.bot.mount(neighbor)
+                    didMLG = true
+                    yield* sleepG(100)
+                    bot.bot.dismount()
+                    return 'ok'
                 }
-
-                if (!haveMlgItem) {
-                    console.warn(`[Bot "${bot.username}"] [MLG] No suitable item found`)
-                    return 'failed'
-                }
-
-                console.log(`[Bot "${bot.username}"] [MLG] Will use ${bot.bot.heldItem?.name ?? 'null'} ...`)
 
                 yield* wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
 
@@ -73,25 +105,28 @@ module.exports = {
 
                 const reference = bot.bot.blockAtCursor()
                 if (!reference) {
-                    console.warn(`[Bot "${bot.username}"] [MLG] No reference block`)
-                    return 'failed'
+                    // console.warn(`[Bot "${bot.username}"] [MLG] No reference block`)
+                    continue
                 }
 
-                while (reference.position.distanceTo(bot.bot.entity.position) > 3) {
+                while (reference.position.offset(0.5, 1, 0.5).distanceTo(bot.bot.entity.position.offset(0, 1.6, 0)) > 4) {
+                    // console.warn(`[Bot "${bot.username}"] [MLG] Reference block too far away`)
                     yield
                 }
 
-                if (!bot.bot.heldItem) {
-                    console.warn(`[Bot "${bot.username}"] [MLG] Not holding anything`)
-                    return 'failed'
+                if (!isItemEquals(equippedMlgItem, bot.bot.heldItem)) {
+                    if (!(yield* equipMlgItem())) {
+                        console.warn(`[Bot "${bot.username}"] [MLG] No suitable item found`)
+                        return 'failed'
+                    }
+
+                    if (!bot.bot.heldItem) {
+                        console.warn(`[Bot "${bot.username}"] [MLG] Not holding anything`)
+                        return 'failed'
+                    }
                 }
 
-                if (bot.bot.heldItem.name === 'bucket') {
-                    console.warn(`[Bot "${bot.username}"] [MLG] This is a bucket`)
-                    return 'failed'
-                }
-
-                console.log(`[Bot "${bot.username}"] [MLG] Using "${bot.bot.heldItem.name ?? 'null'}" ...`)
+                console.log(`[Bot "${bot.username}"] [MLG] Using ${bot.bot.heldItem?.name ?? 'null'} ...`)
 
                 if (bot.bot.heldItem.name === 'water_bucket') {
                     console.log(`[Bot "${bot.username}"] [MLG] Placing water ...`)
@@ -101,13 +136,14 @@ module.exports = {
                     yield* sleepTicks(2)
 
                     const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
-                    if (junkBlock) {
+                    if (junkBlock && junkBlock.name === 'water') {
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = bot.searchInventoryItem(null, null, 'bucket')
+                        const bucket = bot.searchInventoryItem(null, 'bucket')
                         if (bucket) {
-                            yield* bot.equip(bucket, null, 'hand')
+                            yield* bot.equip(bucket)
                             yield* wrap(bot.bot.lookAt(junkBlock.position, true))
                             bot.bot.activateItem(false)
+                            console.log(`[Bot "${bot.username}"] Water cleared`)
                         } else {
                             console.warn(`[Bot "${bot.username}"] No bucket found`)
                             console.log(`[Bot "${bot.username}"] [MLG] Junk water saved`)
@@ -117,11 +153,11 @@ module.exports = {
                             })
                         }
                     } else {
-                        console.log(`[Bot "${bot.username}"] [MLG] Possible junk water saved`)
-                        bot.memory.mlgJunkBlocks.push({
-                            type: 'water',
-                            position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
-                        })
+                        console.error(`[Bot "${bot.username}"] [MLG] Water not saved`)
+                        // bot.memory.mlgJunkBlocks.push({
+                        //     type: 'water',
+                        //     position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
+                        // })
                     }
                 } else if (Minecraft.mlg.boats.includes(bot.bot.heldItem.name)) {
                     console.log(`[Bot "${bot.username}"] [MLG] Activating item ...`)
@@ -137,6 +173,12 @@ module.exports = {
                             id: junkBoat.id,
                             dimension: bot.dimension,
                         })
+
+                        console.log(`[Bot "${bot.username}"] [MLG] Mounting "${junkBoat.name}" ...`)
+                        bot.bot.mount(junkBoat)
+                        didMLG = true
+                        yield* sleepG(100)
+                        bot.bot.dismount()
                     }
                 } else {
                     console.log(`[Bot "${bot.username}"] [MLG] Placing block ...`)
@@ -160,15 +202,14 @@ module.exports = {
             } catch (error) {
                 console.error(error)
             }
-            yield
         }
 
-        while (bot.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
+        if (bot.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
             console.log(`[Bot "${bot.username}"] Already did MLG, just falling ...`)
-            yield
         }
-
-        yield* sleepG(100)
+        while (bot.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
+            yield* sleepG(100)
+        }
 
         return 'ok'
     },

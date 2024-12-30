@@ -1,49 +1,65 @@
 'use strict'
 
-const { sleepG } = require('../utils/tasks')
+const { sleepG, wrap, parallel, race, withCancellation } = require('../utils/tasks')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
+const { Vec3 } = require('vec3')
+const Vec3Dimension = require('../vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, {
  *   player: string;
  *   range: number;
- *   onNoPlayer?: import('../task').SimpleTaskDef<Vec3Dimension | null, null>;
  * }>}
  */
 module.exports = {
-    task: function* (bot, args) {
-        let isFollowing = true
+    task: function*(bot, args) {
+        /** @type {import('../utils/tasks').CancellationToken} */
+        const cancellationToken = { isCancelled: false }
 
         args.cancel = function*() {
-            isFollowing = false
+            cancellationToken.isCancelled = true
         }
 
-        while (isFollowing) {
+        while (!cancellationToken.isCancelled) {
             yield
 
             let target = bot.env.getPlayerPosition(args.player, config.followPlayer.playerPositionMaxAge)
 
             if (!target) {
-                if (!args.onNoPlayer) {
-                    console.warn(`[Bot "${bot.username}"] Can't find ${args.player}`)
-                    throw `Can't find ${args.player}`
-                }
                 console.warn(`[Bot "${bot.username}"] Can't find ${args.player}, asking for location ...`)
-                target = yield* args.onNoPlayer(bot, null)
-                console.log(`[Bot "${bot.username}"] Location response: ${target}`)
 
-                if (!target) {
-                    target = bot.env.getPlayerPosition(args.player)
-                    if (!target) {
-                        throw `Can't find ${args.player}`
-                    } else {
+                const askTask = (/** @type {() => import('../task').Task<Vec3Dimension>} */ function*() {
+                    let _target = args.response ? (yield* wrap(args.response.askPosition(`I lost you. Where are you?`, 120000, args.player)))?.message : null
+
+                    if (!_target) {
+                        _target = bot.env.getPlayerPosition(args.player)
+                        if (!_target) { throw `Can't find ${args.player}` }
                         console.warn(`[Bot "${bot.username}"] Player not responded, using outdated position`)
+                        return _target
                     }
-                } else {
-                    bot.env.setPlayerPosition(args.player, target)
-                }
+
+                    args.response.respond(`${_target.x} ${_target.y} ${_target.z} in ${_target.dimension} I got it`, args.player)
+                    console.log(`[Bot "${bot.username}"] Location response: ${_target}`)
+                    bot.env.setPlayerPosition(args.player, _target)
+                    return _target
+                }())
+
+                const foundTask = (/** @type {() => import('../task').Task<Vec3Dimension>} */ function*() {
+                    while (true) {
+                        yield
+                        const _target = bot.env.getPlayerPosition(args.player, 1)
+                        if (_target) {
+                            console.log(`[Bot "${bot.username}"] Player appeared after asking for location`)
+                            args.response.respond(`Nevermind`, args.player)
+                            return new Vec3Dimension(_target, bot.dimension)
+                        }
+                    }
+                }())
+
+                const foundTarget = yield* withCancellation(race([askTask, foundTask]), cancellationToken)
+                if (foundTarget.cancelled) { break }
+                target = foundTarget.result
             }
 
             if (target.dimension &&
@@ -63,22 +79,22 @@ module.exports = {
                     yield* goto.task(bot, {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
-                        sprint: true,
+                        sprint: distance > 10,
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
-                        sprint: true,
+                        sprint: distance > 10,
                     })
                 }
             } catch (error) {
-                console.error(error)
+                console.error(`[Bot "${bot.username}"]`, error)
                 yield* sleepG(5000)
             }
         }
     },
-    id: function (args) {
+    id: function(args) {
         return `follow-${args.player}`
     },
     humanReadableId: function(args) {

@@ -14,14 +14,14 @@ const config = require('../config')
  * @param {Block} composter
  */
 const waitCompost = function*(bot, composter) {
-    if (composter.getProperties()['level'] === 7) {
+    if (Number(composter.getProperties()['level']) === 7) {
         const timeout = new Timeout(2000)
-        while (!timeout.done() && composter.getProperties()['level'] !== 8) {
+        while (!timeout.done() && Number(composter.getProperties()['level']) !== 8) {
             yield* sleepTicks()
         }
     }
 
-    if (composter.getProperties()['level'] === 8) {
+    if (Number(composter.getProperties()['level']) === 8) {
         yield* wrap(bot.bot.unequip('hand'))
         yield* wrap(bot.bot.activateBlock(composter))
         return true
@@ -45,21 +45,7 @@ const getItem = function(bot, includeNono) {
         for (const cropBlockName in Minecraft.cropsByBlockName) {
             if (isSeed) { break }
             const crop = Minecraft.cropsByBlockName[cropBlockName]
-            switch (crop.type) {
-                case 'seeded':
-                case 'simple':
-                case 'spread':
-                case 'grows_fruit':
-                case 'grows_block': {
-                    isSeed = isItemEquals(crop.seed, trashItem.item)
-                    break
-                }
-                case 'tree': {
-                    isSeed = isItemEquals(crop.sapling, trashItem.item)
-                    break
-                }
-                default: break
-            }
+            isSeed = isItemEquals(crop.seed, trashItem.item)
         }
         if (isSeed && trashItem.count <= 4) { continue }
         const has = bot.searchInventoryItem(null, trashItem.item)

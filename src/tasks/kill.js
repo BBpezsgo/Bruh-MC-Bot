@@ -1,5 +1,6 @@
 'use strict'
 
+const { wrap } = require('../utils/tasks')
 const attack = require('./attack')
 
 /**
@@ -17,9 +18,11 @@ module.exports = {
                 throw `I can only kill players on command`
             }
 
-            if (targetPlayer.username === 'BB_vagyok') {
-                const confirmation = yield* bot.askYesNo(`Do you allow me to kill you? Requested by ${args.requestedBy}`, m => bot.bot.whisper(targetPlayer.username, m), targetPlayer.username, 10000)
-                if (!confirmation.message) {
+            if (targetPlayer.username !== args.requestedBy &&
+                targetPlayer.username === 'BB_vagyok') {
+                if (!args.response) { throw `I can't ask questions` }
+                const confirmation = yield* wrap(args.response.askYesNo(`Do you allow me to kill you? Requested by ${args.requestedBy}`, 10000, targetPlayer.username))
+                if (confirmation && !confirmation.message) {
                     throw `${targetPlayer.username} didn't allow this`
                 }
             }

@@ -5,6 +5,7 @@
  */
 
 module.exports = class {
+    /** @readonly */ static get campfire() { return require('./tasks/campfire') }
     /** @readonly */ static get attack() { return require('./tasks/attack') }
     /** @readonly */ static get bonemealing() { return require('./tasks/bonemealing') }
     /** @readonly */ static get build() { return require('./tasks/build') }

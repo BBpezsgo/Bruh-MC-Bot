@@ -17,7 +17,7 @@ class GoalBlockSimple extends goals.Goal {
     constructor(pos, options) {
         super()
         this.pos = pos
-        this.reach = options.reach || 4.5
+        this.reach = options.reach || 3.5
         this.entityHeight = options.entityHeight || 1.6
         this.raycast = options.raycast || false
         this.bot = options.bot
@@ -40,7 +40,7 @@ class GoalBlockSimple extends goals.Goal {
      * @param {Vec3} node
      */
     isEnd(node) {
-        if (node.floored().offset(0, this.entityHeight, 0).distanceTo(this.pos) > this.reach) return false
+        if (node.offset(0, this.entityHeight, 0).distanceTo(this.pos.offset(0.5, 0.5, 0.5)) > this.reach) return false
         if (this.raycast && !this.bot.blockInView(this.bot.bot.blockAt(this.pos), node.offset(0, 1.6, 0))) return false
         return true
     }
@@ -179,7 +179,12 @@ class GoalEntity extends goals.Goal {
 
 /**
  * @exports @typedef {{
- *   goal: import('mineflayer-pathfinder/lib/goals').GoalBase;
+ *   goal: {
+ *     heuristic?: (node: Vec3) => number;
+ *     isEnd: (node: Vec3) => boolean;
+ *     hasChanged?: () => boolean;
+ *     isValid?: () => boolean;
+ *   };
  *   options: GeneralArgs;
  * }} GoalArgs
  */
@@ -363,7 +368,7 @@ function setOptions(bot, args) {
         bot.bot.pathfinder.searchRadius = Infinity
     }
     bot.bot.pathfinder.tickTimeout = 20
-    bot.bot.pathfinder.enablePathShortcut = false
+    bot.bot.pathfinder.enablePathShortcut = true
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
     const originalMovements = args.movements ?? bot.restrictedMovements
@@ -597,52 +602,67 @@ module.exports = {
                 }
             } else if ('goal' in args) {
                 if (args.goal.isEnd(bot.bot.entity.position)) { return 'here' }
+                /** @type {import("/home/BB/Projects/mineflayer-pathfinder/lib/goals").GoalBase} */ //@ts-ignore
+                const _goal = args.goal
+                _goal.hasChanged ??= () => false
+                _goal.isValid ??= () => true
+                _goal.heuristic ??= (node) => {
+                    const dx = bot.bot.entity.position.x - node.x
+                    const dy = bot.bot.entity.position.y - node.y
+                    const dz = bot.bot.entity.position.z - node.z
+                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+                }
 
-                if (bot.memory.isGoalUnreachable(args.goal)) { throw `If I remember correctly I can't get there` }
+                if (bot.memory.isGoalUnreachable(_goal)) { throw `If I remember correctly I can't get there` }
 
-                const retryCount = (('retryCount' in args.options) ? args.options.retryCount : 3) + 1
+                let retryCount = ('retryCount' in args.options) ? args.options.retryCount : 3
+                let lastError = null
 
-                for (let i = 0; i < retryCount; i++) {
+                for (let i = 0; i <= retryCount; i++) {
                     setOptions(bot, args.options)
 
-                    if (args.options.savePathError) {
-                        args.cancel = function*() { bot.bot.pathfinder.stop() }
-                        try {
-                            yield* wrap(bot.bot.pathfinder.goto(args.goal))
-                        } catch (error) {
-                            if (error.name === 'NoPath') {
-                                bot.memory.theGoalIsUnreachable(args.goal)
-                            }
+                    let isCancelled = false
+                    args.cancel = function*() {
+                        bot.bot.pathfinder.stop()
+                        isCancelled = true
+                    }
+                    try {
+                        yield* wrap(bot.bot.pathfinder.goto(_goal))
+                    } catch (error) {
+                        lastError = error
+                        if (error.name === 'NoPath') {
+                            if (args.options.savePathError) bot.memory.theGoalIsUnreachable(_goal)
+                        } else if (error.name === 'GoalChanged') {
+                            retryCount++
+                            console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
+                        } else if (error.name === 'PathStopped' && isCancelled) {
+                            console.log(`[Bot "${bot.username}"] Pathfinder stopped but that was expected`)
+                        } else {
                             throw error
-                        } finally {
-                            args.cancel = undefined
                         }
-                    } else {
-                        args.cancel = function*() { bot.bot.pathfinder.stop() }
-                        try {
-                            yield* wrap(bot.bot.pathfinder.goto(args.goal))
-                        } finally {
-                            args.cancel = undefined
-                        }
+                    } finally {
+                        args.cancel = undefined
                     }
 
-                    if (args.goal.isEnd(bot.bot.entity.position)) {
+                    if (_goal.isEnd(bot.bot.entity.position) ||
+                        _goal.isEnd(bot.bot.entity.position.floored())) {
                         return 'ok'
                     }
 
-                    if (args.goal.isEnd(bot.bot.entity.position.floored())) {
-                        return 'ok'
+                    if (isCancelled) {
+                        throw `cancelled`
                     }
 
                     if (i === retryCount - 1) {
-                        // console.warn(`[Bot "${bot.username}"] Goal not reached`)
+                        // console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
                         bot.bot.pathfinder.stop()
+                        if (args.options.savePathError) bot.memory.theGoalIsUnreachable(_goal)
                         throw `I can't get there`
                         // return 'failed'
                     } else {
                         bot.bot.pathfinder.stop()
-                        // console.warn(`[Bot "${bot.username}"] Goal not reached, retrying ...`)
-                        yield* sleepG(500)
+                        // console.log(`[Bot "${bot.username}"] Goal not reached, retrying (${i}/${retryCount}) ...`, lastError)
+                        yield* sleepG(200)
                     }
                 }
 

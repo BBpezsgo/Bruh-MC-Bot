@@ -32,6 +32,7 @@ const Vec3Dimension = require('./vec3-dimension')
 const { Vec3 } = require('vec3')
 const Iterable = require('./iterable')
 const config = require('./config')
+const Freq = require('./utils/freq')
 
 //#endregion
 
@@ -116,15 +117,34 @@ class ItemLock {
 
 /**
  * @typedef {{
+ *   respond: (message: string, player?: string) => void;
+ *   broadcast: (message: string) => void;
+ *   askYesNo: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
+ *     message: true | false;
+ *     sender: string;
+ *   } | null>;
+ *   askPosition: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
+ *     message: Vec3Dimension;
+ *     sender: string;
+ *   } | null>;
+ *   ask: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
+ *     message: string;
+ *     sender: string;
+ *   } | null>;
+ * }} ChatResponseHandler
+ */
+
+/**
+ * @typedef {{
  *   match: string | ReadonlyArray<string>;
- *   command: (sender: string, message: string, respond: (reply: any) => void) => void;
+ *   command: (sender: string, message: string, response: ChatResponseHandler, isWhispered: boolean) => void;
  * }} StringChatHandler
  */
 
 /**
  * @typedef {{
  *   match: RegExp;
- *   command: (sender: string, message: RegExpExecArray, respond: (reply: any) => void) => void;
+ *   command: (sender: string, message: RegExpExecArray, response: ChatResponseHandler, isWhispered: boolean) => void;
  * }} RegexpChatHandler
  */
 
@@ -196,6 +216,11 @@ module.exports = class BruhBot {
      * @private @readonly
      * @type {Interval}
      */
+    forceDumpTrashInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
     saveInterval
     /**
      * @private @readonly
@@ -217,6 +242,11 @@ module.exports = class BruhBot {
      * @type {Interval}
      */
     randomLookInterval
+    /**
+     * @private @readonly
+     * @type {Interval}
+     */
+    clearHandInterval
     /**
      * @private
      * @type {number}
@@ -267,27 +297,27 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     * @type {Record<number, { time: number; entity: import('prismarine-entity').Entity; }>}
+     * @type {Record<number, { time: number; entity: import('prismarine-entity').Entity; trajectory: ReadonlyArray<import('vec3').Vec3>; }>}
      */
     aimingEntities
 
     /**
      * @private
-     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: import('minecrafthawkeye').Projectile; }>}
+     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: import('minecrafthawkeye').Projectil; }>}
      */
     incomingProjectiles
 
     /**
-     * @private
-     * @type {boolean}
+     * @readonly
+     * @type {{ isActivated: boolean; activatedTime: number; }}
      */
-    _isLeftHandActive
+    leftHand
 
     /**
-     * @private
-     * @type {boolean}
+     * @readonly
+     * @type {{ isActivated: boolean; activatedTime: number; }}
      */
-    _isRightHandActive
+    rightHand
 
     /**
      * @type {import('./managed-task').AsManaged<import('./tasks/attack')> | null}
@@ -322,9 +352,6 @@ module.exports = class BruhBot {
      * @type {((soundName: string | number) => void) | null}
      */
     onHeard
-
-    get isLeftHandActive() { return this._isLeftHandActive }
-    get isRightHandActive() { return this._isRightHandActive }
 
     /**
      * @readonly
@@ -425,7 +452,8 @@ module.exports = class BruhBot {
                 'place_entity': false,
                 'pathfinder': require('mineflayer-pathfinder').pathfinder,
                 'armor_manager': require('mineflayer-armor-manager'),
-                // 'hawkeye': require('minecrafthawkeye').default,
+                // @ts-ignore
+                'hawkeye': require('minecrafthawkeye').default,
                 // 'elytra': require('mineflayer-elytrafly').elytrafly,
             }
             // storageBuilder: (options) => {
@@ -436,7 +464,7 @@ module.exports = class BruhBot {
             //     }
             //     const Anvil = require('prismarine-provider-anvil').Anvil('1.18')
             //     return new Anvil(worldPath)
-            //     /** @type {typeof import('prismarine-chunk').CommonChunk} */  // @ts-ignore
+            //     /** @type {typeof import('prismarine-chunk').CommonChunk} */
             //     const Chunk = require('prismarine-chunk')(this.bot.registry)
             //     return {
             //         load: async (chunkX, chunkY) => {
@@ -459,12 +487,141 @@ module.exports = class BruhBot {
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
         this.tasks = new TaskManager()
 
+        /**
+         * @param {string} sender
+         * @param {(message: string) => void} send
+         * @returns {ChatResponseHandler}
+         */
+        const makeResponseHandler = (sender, send) => {
+            return {
+                respond: (message, player) => {
+                    if (player) {
+                        this.bot.whisper(player, stringifyMessage(message))
+                    } else {
+                        send(message)
+                    }
+                },
+                broadcast: (message) => {
+                    this.bot.chat(message)
+                },
+                askYesNo: async (question, timeout, player, detailProvider) => {
+                    /**
+                     * @param {string} message
+                     */
+                    const parse = (message) => {
+                        if ([
+                            'y',
+                            'yes',
+                            'ye',
+                            'yah',
+                            'yeah',
+                        ].includes(message)) {
+                            return true
+                        }
+
+                        if ([
+                            'n',
+                            'no',
+                            'nope',
+                            'nuhuh',
+                            'nuh uh',
+                        ].includes(message)) {
+                            return false
+                        }
+
+                        return null
+                    }
+                    let response
+                    if (player) {
+                        response = await this.askAsync(question, v => this.bot.whisper(player, stringifyMessage(v)), player, timeout, res => {
+                            if (parse(res) !== null) { return true }
+                            if (detailProvider) {
+                                const details = detailProvider(res)
+                                if (details) { this.bot.whisper(player, stringifyMessage(details)) }
+                            }
+                            return false
+                        })
+                    } else {
+                        response = await this.askAsync(question, send, sender, timeout, res => {
+                            if (parse(res) !== null) { return true }
+                            if (detailProvider) {
+                                const details = detailProvider(res)
+                                if (details) { send(details) }
+                            }
+                            return false
+                        })
+                    }
+                    return response ? {
+                        sender: response.sender,
+                        message: parse(response.message),
+                    } : null
+                },
+                askPosition: async (question, timeout, player, detailProvider) => {
+                    if (player) {
+                        const res = await this.askAsync(question, v => this.bot.whisper(player, stringifyMessage(v)), player, timeout, v => {
+                            if (parseLocationH(v)) return true
+                            if (detailProvider) {
+                                const detRes = detailProvider(v)
+                                if (detRes) this.bot.whisper(player, stringifyMessage(detRes))
+                            }
+                            return false
+                        })
+                        if (res) {
+                            return {
+                                sender: res.sender,
+                                message: parseLocationH(res.message),
+                            }
+                        }
+                    } else {
+                        const res = await this.askAsync(question, send, sender, timeout, v => {
+                            if (parseLocationH(v)) return true
+                            if (detailProvider) {
+                                const detRes = detailProvider(v)
+                                if (detRes) send(detRes)
+                            }
+                            return false
+                        })
+                        if (res) {
+                            return {
+                                sender: res.sender,
+                                message: parseLocationH(res.message),
+                            }
+                        }
+                    }
+                    return null
+                },
+                ask: (question, timeout, player, detailProvider) => {
+                    if (player) {
+                        return this.askAsync(question, v => this.bot.whisper(player, stringifyMessage(v)), player, timeout, v => {
+                            if (detailProvider) {
+                                const detRes = detailProvider(v)
+                                if (detRes) this.bot.whisper(player, stringifyMessage(v))
+                            }
+                            return true
+                        })
+                    } else {
+                        return this.askAsync(question, send, sender, timeout, v => {
+                            if (detailProvider) {
+                                const detRes = detailProvider(v)
+                                if (detRes) send(detRes)
+                            }
+                            return true
+                        })
+                    }
+                },
+            }
+        }
+
         try {
             const tasksPath = path.join(config.worldPath, 'tasks-' + this.username + '.json')
             if (fs.existsSync(tasksPath)) {
                 const json = fs.readFileSync(tasksPath, 'utf8')
-                this.tasks.fromJSON(this, json)
-                console.log(`[Bot "${this.username}"] Loaded ${json.length} tasks`)
+                this.tasks.fromJSON(this, json, task => ({
+                    response: 'byPlayer' in task
+                        ? makeResponseHandler(task.byPlayer, task.isWhispered ? (v => this.bot.whisper(task.byPlayer, v)) : (v => this.bot.chat(v)))
+                        : undefined
+                }))
+                console.log(`[Bot "${this.username}"] Loaded ${this.tasks.tasks.length} tasks`)
             }
         } catch (error) {
             console.error(`[Bot "${this.username}"] Failed to load the tasks`, error)
@@ -476,8 +633,8 @@ module.exports = class BruhBot {
         this._quietMode = false
         this.userQuiet = false
         this._isLeaving = false
-        this._isLeftHandActive = false
-        this._isRightHandActive = false
+        this.leftHand = { isActivated: false, activatedTime: 0 }
+        this.rightHand = { isActivated: false, activatedTime: 0 }
         this.defendMyselfGoal = null
         this.onHeard = null
         this.aimingEntities = {}
@@ -512,7 +669,7 @@ module.exports = class BruhBot {
 
         const stringifyMessage = function(/** @type {any} */ message) {
             if (typeof message === 'string') {
-                return message
+                return message.trim()
             } else if (typeof message === 'number' ||
                 typeof message === 'bigint') {
                 return message.toString()
@@ -529,20 +686,19 @@ module.exports = class BruhBot {
 
         this.bot.on('chat', (sender, message) => {
             if (this.env.bots.find(v => v.username === sender)) { return }
-            this.handleChat(sender, message, reply => {
-                this.bot.chat(stringifyMessage(reply))
-            })
+            this.handleChat(sender, message, makeResponseHandler(sender, v => this.bot.chat(stringifyMessage(v))), false)
         })
 
-        this.bot.on('whisper', (sender, message) => this.handleChat(sender, message, reply => {
-            this.bot.whisper(sender, stringifyMessage(reply))
-        }))
+        this.bot.on('whisper', (sender, message) => {
+            this.handleChat(sender, message, makeResponseHandler(sender, v => this.bot.whisper(sender, stringifyMessage(v))), true)
+        })
 
         this.bot.on('target_aiming_at_you', (entity, trajectory) => {
             if (!this.aimingEntities[entity.id]) {
                 this.aimingEntities[entity.id] = {
                     time: performance.now(),
                     entity: entity,
+                    trajectory: trajectory,
                 }
             } else {
                 this.aimingEntities[entity.id].time = performance.now()
@@ -550,7 +706,7 @@ module.exports = class BruhBot {
             }
         })
 
-        this.bot.on('incoming_projectile', (projectile, trajectory) => {
+        this.bot.on('incoming_projectil', (projectile, trajectory) => {
             if (!this.incomingProjectiles[projectile.entity.id]) {
                 this.incomingProjectiles[projectile.entity.id] = {
                     time: performance.now(),
@@ -578,10 +734,10 @@ module.exports = class BruhBot {
             /** @type {number} */
             const sourceCauseId = packet.sourceCauseId
             if (!sourceCauseId) { return }
-            if (this.env.bots.find(v => v.bot.entity.id === sourceCauseId)) { return }
+            if (this.env.bots.find(v => v.bot.entity && v.bot.entity.id === sourceCauseId)) { return }
             const source = this.bot.entities[sourceCauseId - 1]
             if (!source) { return }
-            if (entity.id === this.bot.entity.id) {
+            if (this.bot.entity && entity.id === this.bot.entity.id) {
                 let indirectSource = source
                 while (this.env.entityOwners[indirectSource.id]) {
                     indirectSource = this.env.entityOwners[source.id]
@@ -639,7 +795,7 @@ module.exports = class BruhBot {
                     console.warn(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
                 default:
-                    console.log(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
+                    // console.log(`[Bot "${this.username}"] [Pathfinder] ${reason}`)
                     break
             }
             this._currentPath = null
@@ -672,7 +828,11 @@ module.exports = class BruhBot {
 
         this.bot.on('mount', () => {
             if (!tickInterval) {
-                tickInterval = setInterval(this.tick, 50)
+                tickInterval = setInterval(() => {
+                    if (this.bot.entity) {
+                        this.tick()
+                    }
+                }, 50)
             }
         })
 
@@ -681,7 +841,9 @@ module.exports = class BruhBot {
                 clearInterval(tickInterval)
                 tickInterval = null
             }
-            this.tick()
+            if (this.bot.entity) {
+                this.tick()
+            }
         })
 
         this.bot.on('death', () => {
@@ -689,6 +851,10 @@ module.exports = class BruhBot {
             this.bot.clearControlStates()
             this.bot.pathfinder.stop()
             this.tasks.death()
+            this.leftHand.isActivated = false
+            this.leftHand.activatedTime = 0
+            this.rightHand.isActivated = false
+            this.rightHand.activatedTime = 0
         })
 
         this.bot.on('kicked', (/** @type {any} */ reason) => {
@@ -798,7 +964,7 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'test1',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
                         /** @type {Vec3} */
@@ -883,16 +1049,16 @@ module.exports = class BruhBot {
                     },
                     id: 'test1',
                     humanReadableId: 'test1',
-                }, {}, priorities.user, true)
+                }, {}, priorities.user, true, sender, isWhispered)
                     ?.wait()
-                    .then(() => respond(`K`))
-                    .catch(reason => reason === 'cancelled' || respond(reason))
+                    .then(() => response.respond(`K`))
+                    .catch(reason => reason === 'cancelled' || response.respond(reason))
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'test2',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
                         const fencings = yield* bot.env.scanFencings(bot)
@@ -930,98 +1096,98 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['breed'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: BruhBot.breedAnimals,
                     id: `breed-animals`,
-                }, {}, priorities.user)
+                }, {}, priorities.user, false, sender, isWhispered)
 
                 if (task) {
                     task.wait()
-                        .then(result => result ? respond(`I fed ${result} animals`) : respond(`No animals to feed`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => result ? response.respond(`I fed ${result} animals`) : response.respond(`No animals to feed`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already breeding animals`)
+                    response.respond(`I'm already breeding animals`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['harvest'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: BruhBot.tryHarvestCrops,
                     id: `harvest-crops`,
-                }, {}, priorities.user)
+                }, {}, priorities.user, false, sender, isWhispered)
 
                 if (task) {
                     task.wait()
-                        .then(result => result ? respond(`Done`) : respond(`No crops found that I can harvest`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => result ? response.respond(`Done`) : response.respond(`No crops found that I can harvest`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already harvesting crops`)
+                    response.respond(`I'm already harvesting crops`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['check crops'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: BruhBot.tryRestoreCrops,
                     id: `check-crops`,
-                }, {}, priorities.user)
+                }, {}, priorities.user, false, sender, isWhispered)
 
                 if (task) {
                     task.wait()
-                        .then(() => respond(`Done`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(() => response.respond(`Done`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already checking crops`)
+                    response.respond(`I'm already checking crops`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['dump', 'dump trash'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.dumpToChest, {
                     items: this.getTrashItems()
-                }, priorities.user)
+                }, priorities.user, false, sender, isWhispered)
 
                 if (task) {
                     task.wait()
-                        .then(result => result ? respond(`Done`) : respond(`I don't have any trash`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => result.isEmpty ? response.respond(`I don't have any trash`) : response.respond(`Done`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already dumping trash`)
+                    response.respond(`I'm already dumping trash`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['ensure equipment', 'prepare', 'prep'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: BruhBot.ensureEquipment,
                     id: 'ensure-equipment',
                     humanReadableId: 'Ensure equipment',
                 }, {
                     explicit: true,
-                }, priorities.user)
+                }, priorities.user, false, sender, isWhispered)
                 if (task) {
                     task.wait()
-                        .then(() => respond(`Done`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(() => response.respond(`Done`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already ensuring equipment`)
+                    response.respond(`I'm already ensuring equipment`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['clear debug', 'cdebug', 'dispose debug', 'ddebug', 'ndebug'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 TextDisplay.disposeAll(this.commands)
                 BlockDisplay.disposeAll(this.commands)
             },
@@ -1029,19 +1195,14 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'fly',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
-                            try {
-                                const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
-                                location = parseLocationH(response.message)
-                            } catch (error) {
-
-                            }
+                            location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
                             if (location) {
-                                respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
+                                response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                             } else {
                                 throw `I can't find you`
                             }
@@ -1060,37 +1221,31 @@ module.exports = class BruhBot {
 
                         bot.bot.equip(elytraItem, 'torso')
                         bot.bot.elytrafly.elytraFlyTo(location.xyz(bot.dimension))
-                        let isDone = false
-                        bot.bot.once('elytraFlyGoalReached', () => {
-                            isDone = true
-                        })
-                        while (!isDone) {
-                            yield
-                        }
+                        yield* taskUtils.waitForEvent(bot.bot, 'elytraFlyGoalReached')
                     },
                     id: function(args) { return `fly-to-${args.player}` },
                     humanReadableId: function(args) { return `Flying to ${args.player}` },
                 }, {
                     player: sender
-                }, priorities.user, true)
+                }, priorities.user, true, sender, isWhispered)
             },
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /get\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
                 const items = this.resolveItemInput(message[2])
 
                 if (items.length === 0) {
-                    respond(`I don't know what \"${message[2]}\" is`)
+                    response.respond(`I don't know what \"${message[2]}\" is`)
                     return
                 }
 
                 this.tasks.push(this, tasks.gatherItem, {
                     count: count,
                     item: items,
-                    onStatusMessage: respond,
+                    response: response,
                     canTrade: true,
                     canCraft: true,
                     canBrew: true,
@@ -1103,25 +1258,54 @@ module.exports = class BruhBot {
                     canRequestFromPlayers: false,
                     canHarvestMobs: true,
                     force: false,
-                }, priorities.user, true)
+                }, priorities.user, true, sender, isWhispered)
                     ?.wait()
-                    .then(result => result.count <= 0 ? respond(`I couldn't gather the item(s)`) : respond(`I gathered ${result.count} ${stringifyItem(result.item)}`))
-                    .catch(error => error === 'cancelled' || respond(error))
+                    .then(result => {
+                        if (result.count <= 0) {
+                            response.respond(`I couldn't gather the item${count > 1 ? 's' : ''}`)
+                            return
+                        }
+                        this.tasks.push(this, {
+                            task: function*(bot, args) {
+                                const res = yield* taskUtils.wrap(args.onNeedYesNo(`I gathered ${result.count} ${stringifyItem(result.item)}, do you need it?`, 10000))
+                                if (!res || res.message === true) {
+                                    bot.tasks.push(bot, tasks.giveTo, {
+                                        player: sender,
+                                        items: [result],
+                                        response: args.response,
+                                    }, priorities.user, false, sender, isWhispered)
+                                        ?.wait()
+                                        .then(() => response.respond(`There it is`))
+                                        .catch(error => error === 'cancelled' || response.respond(error))
+                                }
+                            },
+                            id: `ask-if-${sender}-need-${result.count}-${stringifyItem(result.item)}`,
+                            humanReadableId: `Asking ${sender} something`,
+                        }, {
+                            onNeedYesNo: response.askYesNo,
+                        }, priorities.user, false, sender, isWhispered)
+                            ?.wait()
+                            .catch(error => error === 'cancelled' || response.respond(error))
+                    })
+                    .catch(error => error === 'cancelled' || response.respond(error))
             },
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /plan\s+([0-9]*)\s*([a-zA-Z_ ]+)/,
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const count = (message[1] === '') ? 1 : Number.parseInt(message[1])
                 const items = this.resolveItemInput(message[2])
+
                 if (items.length === 0) {
-                    respond(`I don't know what \"${message[2]}\" is`)
+                    response.respond(`I don't know what \"${message[2]}\" is`)
                     return
                 }
+
                 if (this.tasks.isIdle) {
-                    respond(`Let me think`)
+                    response.respond(`Let me think`)
                 }
+
                 this.tasks.push(this, {
                     task: function*(bot, args) {
                         const plan = yield* tasks.gatherItem.planAny(bot, args.item, args.count, args, {
@@ -1133,50 +1317,50 @@ module.exports = class BruhBot {
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
 
                         if (organizedPlan.length === 0 && planResult === 0) {
-                            respond(`I can't gather ${stringifyItem(plan.item)}`)
+                            response.respond(`I can't gather ${stringifyItem(plan.item)}`)
                             return
                         }
 
-                        respond(`There is a plan for ${planResult} ${stringifyItem(plan.item)} with a cost of ${planCost}:`)
-                        yield* taskUtils.sleepG(20)
+                        response.respond(`There is a plan for ${planResult} ${stringifyItem(plan.item)} with a cost of ${planCost}:`)
+                        yield* taskUtils.sleepTicks()
                         for (const step of tasks.gatherItem.stringifyPlan(bot, organizedPlan).split('\n')) {
-                            respond(` ${step}`)
-                            yield* taskUtils.sleepG(20)
+                            response.respond(` ${step}`)
+                            yield* taskUtils.sleepTicks()
                         }
 
                         {
-                            respond(`Delta:`)
-                            yield* taskUtils.sleepG(20)
+                            response.respond(`Delta:`)
+                            yield* taskUtils.sleepTicks()
                             const future = new tasks.gatherItem.PredictedEnvironment(organizedPlan, bot.mc.registry)
 
                             if (!future.inventory.isEmpty) {
-                                respond(`Inventory:`)
-                                yield* taskUtils.sleepG(20)
+                                response.respond(`Inventory:`)
+                                yield* taskUtils.sleepTicks()
 
                                 for (const name of future.inventory.keys) {
                                     const delta = future.inventory.get(name)
                                     if (delta) {
-                                        respond(` ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
-                                        yield* taskUtils.sleepG(20)
+                                        response.respond(` ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
+                                        yield* taskUtils.sleepTicks()
                                     }
                                 }
                             }
 
                             if (Object.keys(future.chests).length) {
-                                respond(`Chests:`)
-                                yield* taskUtils.sleepG(20)
+                                response.respond(`Chests:`)
+                                yield* taskUtils.sleepTicks()
 
                                 for (const position in future.chests) {
                                     const chest = future.chests[/** @type {import('./environment').PositionHash} */ (position)]
 
-                                    respond(` at ${position}`)
-                                    yield* taskUtils.sleepG(20)
+                                    response.respond(` at ${position}`)
+                                    yield* taskUtils.sleepTicks()
 
                                     for (const name of chest.delta.keys) {
                                         const delta = chest.delta.get(name)
                                         if (delta) {
-                                            respond(`  ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
-                                            yield* taskUtils.sleepG(20)
+                                            response.respond(`  ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
+                                            yield* taskUtils.sleepTicks()
                                         }
                                     }
                                 }
@@ -1192,7 +1376,7 @@ module.exports = class BruhBot {
                 }, {
                     item: items,
                     count: count,
-                    onStatusMessage: respond,
+                    onStatusMessage: response.respond,
                     canCraft: true,
                     canSmelt: true,
                     canBrew: true,
@@ -1205,74 +1389,84 @@ module.exports = class BruhBot {
                     canTrade: true,
                     canHarvestMobs: true,
                     force: false,
-                }, priorities.user, true)
+                }, priorities.user, true, sender, isWhispered)
                     ?.wait()
                     .then(() => { })
-                    .catch(error => error === 'cancelled' || respond(error))
+                    .catch(error => error === 'cancelled' || response.respond(error))
                 return
             },
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /kill\s+([a-zA-Z0-9_]+)/,
-            command: (sender, message, respond) => {
-                const target = this.bot.players[message[1]]
-                if (!target) {
-                    respond(`Can't find ${message[1]}`)
-                    return
+            command: (sender, message, response, isWhispered) => {
+                let target
+                if (message[1] === 'me') {
+                    target = this.bot.players[sender]
+                    if (!target) {
+                        response.respond(`Can't find you`)
+                        return
+                    }
+                } else {
+                    target = this.bot.players[message[1]]
+                    if (!target) {
+                        response.respond(`Can't find ${message[1]}`)
+                        return
+                    }
                 }
 
                 this.tasks.push(this, tasks.kill, {
                     entity: target.entity,
                     requestedBy: sender,
-                }, priorities.user, true)
+                    response: response,
+                }, priorities.user, true, sender, isWhispered)
                     ?.wait()
-                    .then(() => respond(`Done`))
-                    .catch(error => error === 'cancelled' || respond(error))
+                    .then(() => response.respond(`Done`))
+                    .catch(error => error === 'cancelled' || response.respond(error))
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'scan chests',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: () => this.env.scanChests(this),
                     id: `scan-chests`,
                     humanReadableId: `Scanning chests`,
-                }, {}, priorities.user, true)
+                }, {}, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(result => respond(`I scanned ${result} chests`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => response.respond(`I scanned ${result} chests`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already scanning chests`)
+                    response.respond(`I'm already scanning chests`)
                 }
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'scan villagers',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: () => this.env.scanVillagers(this),
                     id: `scan-villagers`,
                     humanReadableId: `Scanning villagers`,
-                }, {}, priorities.user, true)
+                }, {}, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(result => respond(`I scanned ${result} villagers`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => response.respond(`I scanned ${result} villagers`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already scanning villagers`)
+                    response.respond(`I'm already scanning villagers`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'scan crops',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: function*(bot) {
                         for (let i = bot.env.crops.length - 1; i >= 0; i--) {
@@ -1285,17 +1479,15 @@ module.exports = class BruhBot {
                                 bot.env.crops.splice(i, 1)
                             }
                         }
-                        const cropNames = new Set(
-                            Object.keys(Minecraft.cropsByBlockName)
-                                .map(v => bot.mc.registry.blocksByName[v].id)
-                        )
                         const blocks = bot.findBlocks({
-                            matching: cropNames,
+                            matching: new Set(Object.keys(Minecraft.cropsByBlockName).map(v => bot.mc.registry.blocksByName[v].id)),
                             count: Infinity,
                             maxDistance: config.scanCrops.radius,
                             force: true,
+                            filter: (block) => Minecraft.isCropRoot(bot.bot, block),
                         })
-                        let n = 0
+                        /** @type {Freq<string>} */
+                        const scanned = new Freq((a, b) => a === b)
                         for (const block of blocks) {
                             yield
                             if (!block) { continue }
@@ -1303,44 +1495,44 @@ module.exports = class BruhBot {
                                 block: block.name,
                                 position: new Vec3Dimension(block.position, bot.dimension),
                             })
-                            n++
+                            scanned.add(block.name, 1)
                         }
-                        return n
+                        return scanned
                     },
                     id: `scan-crops`,
                     humanReadableId: `Scanning crops`,
-                }, {}, priorities.user, true)
+                }, {}, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(result => respond(`I scanned ${result} crops`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => response.respond(`Crops I found: ${result.keys.map(v => `${result.get(v)} ${v}`).join(', ')}`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already scanning crops`)
+                    response.respond(`I'm already scanning crops`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'fish',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.fish, {
-                    onStatusMessage: respond,
-                }, priorities.user, true)
+                    response: response,
+                }, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(result => result ? respond(`I fished ${result} items`) : respond(`I couldn't fish anything`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => result ? response.respond(`I fished ${result} items`) : response.respond(`I couldn't fish anything`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already fishing`)
+                    response.respond(`I'm already fishing`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'wyh',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const items = this.bot.inventory.items()
 
                 /**
@@ -1388,35 +1580,35 @@ module.exports = class BruhBot {
                 }
 
                 if (builder === '') {
-                    respond('Nothing')
+                    response.respond('Nothing')
                 } else {
-                    respond(builder)
+                    response.respond(builder)
                 }
             }
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /(stop|cancel|no) quiet/,
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 if (!this.userQuiet) {
-                    respond(`I'm not trying to be quiet`)
+                    response.respond(`I'm not trying to be quiet`)
                     return
                 }
 
-                respond(`Okay`)
+                response.respond(`Okay`)
                 this.userQuiet = false
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'quiet',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 if (this.userQuiet) {
-                    respond(`I'm already trying to be quiet`)
+                    response.respond(`I'm already trying to be quiet`)
                     return
                 }
 
-                respond(`Okay`)
+                response.respond(`Okay`)
 
                 this.userQuiet = true
 
@@ -1426,55 +1618,51 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'compost',
-            command: (sender, message, respond) => {
-                const task = this.tasks.push(this, tasks.compost, {})
+            command: (sender, message, response, isWhispered) => {
+                const task = this.tasks.push(this, tasks.compost, {}, 0, false, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(result => respond(`I composted ${result} items`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(result => response.respond(`I composted ${result} items`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already composting`)
+                    response.respond(`I'm already composting`)
                 }
             }
         }))
 
-        handlers.push(/** @type {StringChatHandler} */({
-            match: 'follow',
-            command: (sender, message, respond) => {
+        handlers.push(/** @type {RegexpChatHandler} */({
+            match: /follow\s*([a-zA-Z0-9_]+)?/,
+            command: (sender, message, response, isWhispered) => {
+                let target
+                const implyingSender = !message[1] || message[1] === 'me'
+                if (implyingSender) {
+                    target = sender
+                } else {
+                    target = message[1]
+                }
+
                 const task = this.tasks.push(this, tasks.followPlayer, {
-                    player: sender,
+                    player: target,
                     range: 2,
-                    onNoPlayer: function*(bot) {
-                        try {
-                            const response = yield* bot.ask(`I lost you. Where are you?`, respond, sender, 30000)
-                            const location = parseLocationH(response.message)
-                            if (location) {
-                                respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
-                            }
-                            return location
-                        } catch (error) {
-                            return null
-                        }
-                    },
-                    onStatusMessage: respond,
-                })
+                    response: response,
+                }, priorities.low - 1, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
                         .then(() => { })
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already following you`)
+                    response.respond(`I'm already following ${implyingSender ? 'you' : target}`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'wyd',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 if (this.tasks.tasks.length === 0) {
-                    respond(`Nothing`)
+                    response.respond(`Nothing`)
                 } else {
                     let builder = ''
                     for (let i = 0; i < this.tasks.tasks.length; i++) {
@@ -1482,7 +1670,7 @@ module.exports = class BruhBot {
                         if (builder) { builder += ' ; ' }
                         builder += `${task.humanReadableId ?? task.id} with priority ${task.priority}`
                     }
-                    respond(builder)
+                    response.respond(builder)
                 }
                 return
             }
@@ -1490,20 +1678,15 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'come',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
                     task: function*(bot, args) {
                         const playerEntity = bot.bot.players[args.player]?.entity
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
-                            try {
-                                const response = yield* bot.ask(`Where are you?`, respond, sender, 30000)
-                                location = parseLocationH(response.message)
-                            } catch (error) {
-
-                            }
+                            location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
                             if (location) {
-                                respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
+                                response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                             } else {
                                 throw `I can't find you`
                             }
@@ -1566,39 +1749,39 @@ module.exports = class BruhBot {
                     },
                 }, {
                     player: sender,
-                }, priorities.user, true)
+                }, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
                         .then(result => {
                             switch (result) {
                                 case 'ok':
-                                    respond(`I'm here`)
+                                    response.respond(`I'm here`)
                                     break
                                 case 'here':
-                                    respond(`I'm already here`)
+                                    response.respond(`I'm already here`)
                                     break
                                 case 'failed':
-                                    respond(`I can't get there`)
+                                    response.respond(`I can't get there`)
                                     break
                                 default:
                                     break
                             }
                         })
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already coming to you`)
+                    response.respond(`I'm already coming to you`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'sethome',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const location = this.env.getPlayerPosition(sender, 10000)
                 if (!location) {
                     if (location) {
-                        respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
+                        response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                     } else {
                         throw `I can't find you`
                     }
@@ -1606,11 +1789,11 @@ module.exports = class BruhBot {
                 if (this.memory.idlePosition &&
                     this.memory.idlePosition.dimension === location.dimension &&
                     this.memory.idlePosition.xyz(location.dimension).distanceTo(location.xyz(location.dimension)) < 5) {
-                    respond(`This is already my home`)
+                    response.respond(`This is already my home`)
                     return
                 }
                 this.memory.idlePosition = location.clone()
-                respond(`Okay`)
+                response.respond(`Okay`)
                 try {
                     this.memory.save()
                 } catch (error) {
@@ -1621,18 +1804,18 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'gethome',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 if (!this.memory.idlePosition) {
-                    respond(`I doesn't have a home`)
+                    response.respond(`I doesn't have a home`)
                 } else {
-                    respond(`My home is at ${Math.floor(this.memory.idlePosition.x)} ${Math.floor(this.memory.idlePosition.y)} ${Math.floor(this.memory.idlePosition.z)} in ${this.memory.idlePosition.dimension}`)
+                    response.respond(`My home is at ${Math.floor(this.memory.idlePosition.x)} ${Math.floor(this.memory.idlePosition.y)} ${Math.floor(this.memory.idlePosition.z)} in ${this.memory.idlePosition.dimension}`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'tp',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const target = this.env.getPlayerPosition(sender)
 
                 if (!target) {
@@ -1646,119 +1829,108 @@ module.exports = class BruhBot {
 
                 const task = this.tasks.push(this, tasks.enderpearlTo, {
                     destination: target.xyz(this.dimension).offset(0, 0.1, 0),
-                    onStatusMessage: respond,
+                    response: response,
                     locks: [],
-                }, priorities.user, true)
+                }, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
                         .then(result => {
                             if (result === 'here') {
-                                respond(`I'm already here`)
+                                response.respond(`I'm already here`)
                                 return
                             }
                             const error = task.args.destination.distanceTo(this.bot.entity.position)
                             if (error <= 2) {
-                                respond(`I'm here`)
+                                response.respond(`I'm here`)
                             } else {
-                                respond(`I missed by ${Math.round(error)} blocks`)
+                                response.respond(`I missed by ${Math.round(error)} blocks`)
                             }
                         })
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already teleporting to you`)
+                    response.respond(`I'm already teleporting to you`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'give all',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.giveAll, {
                     player: sender,
-                    onStatusMessage: respond,
-                }, priorities.user, true)
+                    response: response,
+                }, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(() => respond(`There it is`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(() => response.respond(`There it is`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already on my way`)
+                    response.respond(`I'm already on my way`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'give trash',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.giveTo, {
                     player: sender,
                     items: this.getTrashItems(),
-                    onStatusMessage: respond,
-                }, priorities.user, true)
+                    response: response,
+                }, priorities.user, true, sender, isWhispered)
                 if (task) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                     task.wait()
-                        .then(() => respond(`There it is`))
-                        .catch(error => error === 'cancelled' || respond(error))
+                        .then(() => response.respond(`There it is`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
                 } else {
-                    respond(`I'm already on my way`)
+                    response.respond(`I'm already on my way`)
                 }
             }
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /give\s+(all|[0-9]*)\s*([a-zA-Z_ ]+)/,
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 const count = (message[1] === '') ? 1 : (message[1] === 'all') ? Infinity : Number.parseInt(message[1])
-                const itemName = message[2].toLowerCase().trim()
-                let item = null
+                const items = this.resolveItemInput(message[2])
 
-                if (!item) {
-                    item = this.mc.registry.itemsByName[itemName]
-                }
-
-                if (!item) {
-                    item = this.mc.registry.itemsByName[itemName.replace(/ /g, '_')]
-                }
-
-                if (!item) {
-                    for (const _item of this.mc.registry.itemsArray) {
-                        if (_item.displayName === itemName) {
-                            item = _item
-                            break
-                        }
-                    }
-                }
-
-                if (!item) {
-                    respond(`I don't know what ${message[2]} is`)
+                if (!items.length) {
+                    response.respond(`I don't know what ${message[2]} is`)
                     return
                 }
 
-                const task = this.tasks.push(this, tasks.giveTo, {
+                if (items.length > 1) {
+                    response.respond(`Specify the item more clearly`)
+                    return
+                }
+
+                const item = items[0]
+
+                this.tasks.push(this, tasks.giveTo, {
                     player: sender,
-                    items: [{ item: item.name, count: count }],
-                })
-                task.wait()
+                    items: [{ item: item, count: count }],
+                }, 0, false, sender, isWhispered)
+                    .wait()
                     .then(result => {
-                        if (!result.get(item.name)) {
-                            respond(`I don't have ${item.name}`)
-                        } else if (result.get(item.name) < count && count !== Infinity) {
-                            respond(`I had only ${result.get(item.name)} ${item.name}`)
+                        if (!result.get(item)) {
+                            response.respond(`I don't have ${stringifyItem(item)}`)
+                        } else if (result.get(item) < count && count !== Infinity) {
+                            response.respond(`I had only ${result.get(item)} ${stringifyItem(item)}`)
                         } else {
-                            respond(`There it is`)
+                            response.respond(`There it is`)
                         }
                     })
-                    .catch(error => error === 'cancelled' || respond(error))
-                respond(`Okay`)
+                    .catch(error => error === 'cancelled' || response.respond(error))
+                response.respond(`Okay`)
             }
         }))
 
         handlers.push(/** @type {RegexpChatHandler} */({
             match: /goto(\s*$|\s+[\sa-zA-Z0-9_\-]+)/,
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 /**
                  * @param {string} rawLocation
                  */
@@ -1766,42 +1938,42 @@ module.exports = class BruhBot {
                     const location = parseAnyLocationH(rawLocation, this)
 
                     if (!location) {
-                        respond(`Bruh`)
+                        response.respond(`Bruh`)
                         return
                     }
 
                     if (typeof location === 'string') {
-                        respond(location)
+                        response.respond(location)
                         return
                     }
 
                     if ('id' in location) {
-                        respond(`Okay`)
+                        response.respond(`Okay`)
                         this.tasks.push(this, tasks.goto, {
                             entity: location,
                             distance: 3,
                             sprint: true,
-                        }, priorities.user)
+                        }, priorities.user, false, sender, isWhispered)
                             ?.wait()
-                            .then(result => result === 'here' ? respond(`I'm already at ${rawLocation}`) : respond(`I'm here`))
-                            .catch(reason => reason === 'cancelled' || respond(reason))
+                            .then(result => result === 'here' ? response.respond(`I'm already at ${rawLocation}`) : response.respond(`I'm here`))
+                            .catch(reason => reason === 'cancelled' || response.respond(reason))
                     } else {
-                        respond(`Okay`)
+                        response.respond(`Okay`)
                         this.tasks.push(this, tasks.goto, {
                             point: location,
                             distance: 3,
                             sprint: true,
-                        }, priorities.user)
+                        }, priorities.user, false, sender, isWhispered)
                             ?.wait()
-                            .then(result => result === 'here' ? respond(`I'm already here`) : respond(`I'm here`))
-                            .catch(reason => reason === 'cancelled' || respond(reason))
+                            .then(result => result === 'here' ? response.respond(`I'm already here`) : response.respond(`I'm here`))
+                            .catch(reason => reason === 'cancelled' || response.respond(reason))
                     }
                 }
 
                 if (!message[1]) {
-                    this.askAsync(`Where?`, respond, null, 15000)
-                        .then(response => confirm(response))
-                        .catch(reason => respond(reason))
+                    response.ask(`Where?`, 15000)
+                        .then(response => confirm(response.message))
+                        .catch(reason => response.respond(reason))
                 } else {
                     confirm(message[1])
                 }
@@ -1810,19 +1982,19 @@ module.exports = class BruhBot {
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['stop', 'cancel'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 if (!this.tasks.isIdle) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                 }
                 this.tasks.cancel()
-                    .then(didSomething => didSomething ? respond(`I stopped`) : respond(`I don't do anything`))
-                    .catch(error => respond(error))
+                    .then(didSomething => didSomething ? response.respond(`I stopped`) : response.respond(`I don't do anything`))
+                    .catch(error => response.respond(error))
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: ['stop now', 'abort'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 let didSomething = false
 
                 if (this.bot.pathfinder.goal) {
@@ -1845,22 +2017,22 @@ module.exports = class BruhBot {
                 this.tasks.abort()
 
                 if (didSomething) {
-                    respond(`Okay`)
+                    response.respond(`Okay`)
                 } else {
-                    respond(`I don't do anything`)
+                    response.respond(`I don't do anything`)
                 }
             }
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
             match: 'leave',
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 this._isLeaving = true
                 if (this.tasks.tasks.length === 0) {
                 } else if (this.tasks.tasks.length === 1) {
-                    respond(`I will leave before finishing this one task`)
+                    response.respond(`I will leave before finishing this one task`)
                 } else {
-                    respond(`I will leave before finishing these ${this.tasks.tasks.length} tasks`)
+                    response.respond(`I will leave before finishing these ${this.tasks.tasks.length} tasks`)
                 }
                 this.tasks.cancel()
                     .then(() => this.bot.quit(`${sender} asked me to leave`))
@@ -1870,7 +2042,7 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             // cspell: disable-next-line
             match: ['fleave', 'leave force', 'leave now', 'leave!'],
-            command: (sender, message, respond) => {
+            command: (sender, message, response, isWhispered) => {
                 this.bot.quit(`${sender} asked me to leave`)
             }
         }))
@@ -1919,67 +2091,22 @@ module.exports = class BruhBot {
             this.commands.tick()
         }
 
-        // for (const entityId in this.bot.entities) {
-        //     const entity = this.bot.entities[entityId]
-        //     const labelId = `entity-${entityId}`
-        //     if (entity.name === 'text_display') { continue }
-        //     if (!TextDisplay.registry[labelId]) {
-        //         new TextDisplay(this.commands, labelId)
-        //         TextDisplay.registry[labelId].text = { text: entity.username ?? entity.displayName ?? entity.name ?? '?' }
-        //     }
-        //     TextDisplay.registry[labelId].setPosition(entity.position.offset(0, entity.height + .3, 0))
-        // }
-
         for (let i = this.lockedItems.length - 1; i >= 0; i--) {
             if (this.lockedItems[i].isUnlocked) {
                 this.lockedItems.splice(i, 1)
             }
         }
 
-        if (this.checkQuietInterval?.done()) {
-            let shouldBeQuiet = false
-
-            if (!shouldBeQuiet && this.bot.findBlock({
-                matching: this.mc.registry.blocksByName['sculk_sensor'].id,
-                maxDistance: 8,
-                count: 1,
-                point: this.bot.entity.position,
-                useExtraInfo: false,
-            })) { shouldBeQuiet = true }
-
-            if (!shouldBeQuiet && this.bot.findBlock({
-                matching: this.mc.registry.blocksByName['calibrated_sculk_sensor'].id,
-                maxDistance: 16,
-                count: 1,
-                point: this.bot.entity.position,
-                useExtraInfo: false,
-            })) { shouldBeQuiet = true }
-
-            if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
-                if (entity.name !== 'warden') { return false }
-                const distance = entity.position.distanceTo(this.bot.entity.position)
-                if (distance > 16) { return false }
-                return true
-            })) { shouldBeQuiet = true }
-
-            this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
-
-            if (this.tasks.isIdle) {
-                if (!shouldBeQuiet && this.bot.controlState.sneak) {
-                    this.bot.setControlState('sneak', false)
-                } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
-                    this.bot.setControlState('sneak', true)
-                }
-            }
-
-            this.permissiveMovements.sneak = shouldBeQuiet
-            this.restrictedMovements.sneak = shouldBeQuiet
-            this.cutTreeMovements.sneak = shouldBeQuiet
-            this._quietMode = shouldBeQuiet
-        }
-
         if (this.saveInterval.done()) {
             this.memory.save()
+        }
+
+        if (this.leftHand.isActivated && this.leftHand.activatedTime && performance.now() >= this.leftHand.activatedTime) {
+            this.deactivateHand()
+        }
+
+        if (this.rightHand.isActivated && this.rightHand.activatedTime && performance.now() >= this.rightHand.activatedTime) {
+            this.deactivateHand()
         }
 
         this._runningTask = this.tasks.tick()
@@ -1988,12 +2115,15 @@ module.exports = class BruhBot {
             this._lastImportantTaskTime = performance.now()
         }
 
+        //#region Fall damage prevention
         if (this.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
             this.tasks.tick()
-            this.tasks.push(this, tasks.mlg, {}, priorities.critical)
+            this.tasks.push(this, tasks.mlg, {}, priorities.critical, false, null, false)
             return
         }
+        //#endregion
 
+        //#region Creeper
         {
             const explodingCreeper = this.env.getExplodingCreeper(this)
 
@@ -2003,7 +2133,8 @@ module.exports = class BruhBot {
                     distance: 8,
                     timeout: 300,
                     sprint: true,
-                }, priorities.critical)
+                    retryCount: 10,
+                }, priorities.critical, false, null, false)
                 return
             }
 
@@ -2014,56 +2145,81 @@ module.exports = class BruhBot {
                     distance: 8,
                     timeout: 300,
                     sprint: true,
-                }, priorities.critical - 1)
+                }, priorities.critical - 1, false, null, false)
                 return
             }
+        }
+        //#endregion
 
+        //#region Projectiles
+        {
             const now = performance.now()
 
             for (const id in this.aimingEntities) {
                 const hazard = this.aimingEntities[id]
-                if (now - hazard.time > 100) {
+                if (now - hazard.time > 100 || !hazard.entity.isValid || hazard.entity.type !== 'player') {
                     delete this.aimingEntities[id]
                     continue
                 }
+
                 // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
                 // this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
 
-                const directionToSelf = this.bot.entity.position.clone().subtract(hazard.entity.position).normalize()
+                this.tasks.push(this, {
+                    task: function*(bot, args) {
+                        const directionToSelf = bot.bot.entity.position.clone().subtract(args.hazard.entity.position).normalize()
 
-                const entityDirection = Math.rotationToVector(hazard.entity.pitch, hazard.entity.yaw)
+                        const entityDirection = Math.rotationToVector(args.hazard.entity.pitch, args.hazard.entity.yaw)
 
-                const angle = Math.vectorAngle({
-                    x: directionToSelf.x,
-                    y: directionToSelf.z,
+                        const angle = Math.vectorAngle({
+                            x: directionToSelf.x,
+                            y: directionToSelf.z,
+                        }, {
+                            x: entityDirection.x,
+                            y: entityDirection.z,
+                        })
+
+                        try {
+                            if (angle < 0) {
+                                yield* tasks.goto.task(bot, {
+                                    point: bot.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
+                                    distance: 0,
+                                    searchRadius: 3,
+                                    timeout: 300,
+                                    sprint: true,
+                                })
+                            } else {
+                                yield* tasks.goto.task(bot, {
+                                    point: bot.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
+                                    distance: 0,
+                                    searchRadius: 3,
+                                    timeout: 300,
+                                    sprint: true,
+                                })
+                            }
+                        } catch (error) {
+                            console.warn(error)
+                            const shield = bot.searchInventoryItem(null, 'shield')
+                            if (shield) {
+                                if (!bot.holds(shield, true)) {
+                                    yield* bot.equip(shield, 'off-hand')
+                                }
+                                bot.bot.lookAt(args.hazard.entity.position.offset(0, 1.6, 0), true)
+                                bot.activateHand('left', 5000)
+                            }
+                        }
+                    },
+                    id: `parry-aim-${hazard.entity.uuid ?? hazard.entity.id}`,
                 }, {
-                    x: entityDirection.x,
-                    y: entityDirection.z,
-                })
+                    hazard: hazard,
+                }, priorities.critical - 2, false, null, false)
 
-                if (angle < 0) {
-                    this.tasks.push(this, tasks.goto, {
-                        point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
-                        distance: 0,
-                        searchRadius: 3,
-                        timeout: 500,
-                        sprint: true,
-                    }, priorities.critical - 2)
-                } else {
-                    this.tasks.push(this, tasks.goto, {
-                        point: this.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
-                        distance: 0,
-                        searchRadius: 3,
-                        timeout: 500,
-                        sprint: true,
-                    }, priorities.critical - 2)
-                }
                 break
             }
 
             for (const id in this.incomingProjectiles) {
                 const hazard = this.incomingProjectiles[id]
-                if (now - hazard.time > 100) {
+                if (now - hazard.time > 100 || !hazard.projectile.entity.isValid) {
                     delete this.incomingProjectiles[id]
                     continue
                 }
@@ -2073,20 +2229,42 @@ module.exports = class BruhBot {
                 const dot = projectileDirection.dot(directionToSelf)
                 if (dot <= 0) { continue }
 
-                console.log(`[Bot "${this.username}"] Incoming projectile`)
-                // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+                this.tasks.push(this, {
+                    task: function*(bot, args) {
+                        const shield = bot.searchInventoryItem(null, 'shield')
 
-                this.tasks.push(this, tasks.goto, {
-                    point: this.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
-                    distance: 0,
-                    searchRadius: 3,
-                    timeout: 500,
-                    sprint: true,
-                }, priorities.critical - 1)
+                        if (shield) {
+                            if (!bot.holds('shield', true)) {
+                                bot.bot.equip(shield.type, 'off-hand')
+                            } else {
+                                bot.bot.lookAt(args.hazard.projectile.entity.position, true)
+                                bot.activateHand('left', 5000)
+                            }
+                        } else {
+                            console.log(`[Bot "${bot.username}"] Incoming projectile`)
+                            // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+
+                            yield* tasks.goto.task(bot, {
+                                point: bot.bot.entity.position.offset(-args.directionToSelf.z * 1, 0, args.directionToSelf.x * 1),
+                                distance: 0,
+                                searchRadius: 3,
+                                timeout: 500,
+                                sprint: true,
+                            })
+                        }
+                    },
+                    id: `parry-projectile-${hazard.projectile.uuid ?? hazard.projectile.entity.uuid ?? hazard.projectile.entity.id}`,
+                }, {
+                    hazard: hazard,
+                    directionToSelf: directionToSelf,
+                }, priorities.critical - 1, false, null, false)
+
                 break
             }
         }
+        //#endregion
 
+        //#region Fireball
         {
             this.bot.nearestEntity(e => {
                 if (!e.velocity.x && !e.velocity.y && !e.velocity.z) { return false }
@@ -2141,8 +2319,6 @@ module.exports = class BruhBot {
                         humanReadableId: `Flee from small fireball`,
                     }, {
                         goal: {
-                            hasChanged: () => false,
-                            isValid: () => true,
                             heuristic: node => {
                                 return -d(node.offset(0, 1, 0))
                             },
@@ -2155,167 +2331,226 @@ module.exports = class BruhBot {
                             sprint: true,
                             timeout: 500,
                         },
-                    }, priorities.critical - 1)
+                    }, priorities.critical - 1, false, null, false)
                     return true
                 }
 
                 return false
             })
         }
+        //#endregion
 
-        const blockAt = this.bot.blockAt(this.bot.entity.position)
+        //#region Fire & Lava
+        {
+            const blockAt = this.bot.blockAt(this.bot.entity.position)
 
-        if (this.bot.entity.metadata[0] & 0x01 &&
-            blockAt.name !== 'lava') {
-            this.tasks.push(this, {
-                task: function*(bot, args) {
-                    const waterBucketItem = bot.searchInventoryItem(null, null, 'water_bucket')
-                    if (waterBucketItem) {
-                        let refBlock = bot.bot.blockAt(bot.bot.entity.position)
-                        if (refBlock.name === 'fire') {
-                            yield* bot.dig(refBlock, 'ignore', false)
-                            yield
-                        }
-                        refBlock = bot.bot.blockAt(bot.bot.entity.position)
-                        if (refBlock.name === 'air') {
-                            yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
-                            yield
-                            yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
-                            bot.bot.activateItem(false)
-                            while (bot.bot.entity.metadata[0] & 0x01) {
-                                yield
-                            }
-                            const bucketItem = bot.searchInventoryItem(null, null, 'bucket')
-                            if (bucketItem) {
-                                yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
-                                yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
-                                bot.bot.activateItem(false)
-                            }
-                            return
-                        }
-                    }
-
-                    const water = bot.bot.findBlock({
-                        matching: bot.mc.registry.blocksByName['water'].id,
-                        count: 1,
-                        maxDistance: config.criticalSurviving.waterSearchRadius,
-                    })
-                    if (water) {
-                        yield* tasks.goto.task(bot, {
-                            point: water.position,
-                            distance: 0,
-                            sprint: true,
-                        })
-                    }
-                },
-                id: `extinguish-myself`,
-                humanReadableId: `Extinguish myself`,
-            }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
-        } else {
-            if (blockAt.name === 'fire') {
+            if (this.bot.entity.metadata[0] & 0x01 &&
+                blockAt.name !== 'lava') {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
-                        yield* bot.dig(blockAt, 'ignore', false)
+                        const waterBucketItem = bot.searchInventoryItem(null, 'water_bucket')
+                        if (waterBucketItem) {
+                            let refBlock = bot.bot.blockAt(bot.bot.entity.position)
+                            if (refBlock.name === 'fire') {
+                                yield* bot.dig(refBlock, 'ignore', false)
+                                yield
+                            }
+                            refBlock = bot.bot.blockAt(bot.bot.entity.position)
+                            if (refBlock.name === 'air') {
+                                yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
+                                yield
+                                yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
+                                bot.bot.activateItem(false)
+                                while (bot.bot.entity.metadata[0] & 0x01) {
+                                    yield
+                                }
+                                const bucketItem = bot.searchInventoryItem(null, 'bucket')
+                                if (bucketItem) {
+                                    yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
+                                    yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
+                                    bot.bot.activateItem(false)
+                                }
+                                return
+                            }
+                        }
+
+                        const water = bot.bot.findBlock({
+                            matching: bot.mc.registry.blocksByName['water'].id,
+                            count: 1,
+                            maxDistance: config.criticalSurviving.waterSearchRadius,
+                        })
+                        if (water) {
+                            yield* tasks.goto.task(bot, {
+                                point: water.position,
+                                distance: 0,
+                                sprint: true,
+                            })
+                        }
                     },
                     id: `extinguish-myself`,
                     humanReadableId: `Extinguish myself`,
-                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1)
+                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1, false, null, false)
+            } else {
+                if (blockAt.name === 'fire') {
+                    this.tasks.push(this, {
+                        task: function*(bot, args) {
+                            yield* bot.dig(blockAt, 'ignore', false)
+                        },
+                        id: `extinguish-myself`,
+                        humanReadableId: `Extinguish myself`,
+                    }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1, false, null, false)
+                }
             }
         }
+        //#endregion
 
-        const badEffects = this.mc.registry.effectsArray.filter(v => v.type === 'bad').map(v => v.id)
+        //#region Quiet
+        if (this.checkQuietInterval?.done()) {
+            let shouldBeQuiet = false
 
-        if (Object.keys(this.bot.entity.effects).length > 0) {
-            for (const badEffect of badEffects) {
-                if (this.bot.entity.effects[badEffect]) {
-                    const milk = this.searchInventoryItem(null, 'milk_bucket')
-                    if (milk) {
-                        this.tasks.push(this, {
-                            task: function*(bot) {
-                                const milk = bot.searchInventoryItem(null, 'milk_bucket')
-                                if (!milk) { throw `I have no milk` }
-                                yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'))
-                                yield* taskUtils.wrap(bot.bot.consume())
-                            },
-                            id: 'consume-milk',
-                        }, priorities.critical)
+            if (!shouldBeQuiet && this.bot.findBlock({
+                matching: this.mc.registry.blocksByName['sculk_sensor'].id,
+                maxDistance: 8,
+                count: 1,
+                point: this.bot.entity.position,
+                useExtraInfo: false,
+            })) { shouldBeQuiet = true }
+
+            if (!shouldBeQuiet && this.bot.findBlock({
+                matching: this.mc.registry.blocksByName['calibrated_sculk_sensor'].id,
+                maxDistance: 16,
+                count: 1,
+                point: this.bot.entity.position,
+                useExtraInfo: false,
+            })) { shouldBeQuiet = true }
+
+            if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
+                if (entity.name !== 'warden') { return false }
+                const distance = entity.position.distanceTo(this.bot.entity.position)
+                if (distance > 16) { return false }
+                return true
+            })) { shouldBeQuiet = true }
+
+            this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
+
+            if (this.tasks.isIdle) {
+                if (!shouldBeQuiet && this.bot.controlState.sneak) {
+                    this.bot.setControlState('sneak', false)
+                } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
+                    this.bot.setControlState('sneak', true)
+                }
+            }
+
+            this.permissiveMovements.sneak = shouldBeQuiet
+            this.restrictedMovements.sneak = shouldBeQuiet
+            this.cutTreeMovements.sneak = shouldBeQuiet
+            this._quietMode = shouldBeQuiet
+        }
+        //#endregion
+
+        //#region Bad effects (have to drink milk)
+        {
+            const badEffects = this.mc.registry.effectsArray.filter(v => v.type === 'bad').map(v => v.id)
+
+            if (Object.keys(this.bot.entity.effects).length > 0) {
+                for (const badEffect of badEffects) {
+                    if (this.bot.entity.effects[badEffect]) {
+                        const milk = this.searchInventoryItem(null, 'milk_bucket')
+                        if (milk) {
+                            this.tasks.push(this, {
+                                task: function*(bot) {
+                                    const milk = bot.searchInventoryItem(null, 'milk_bucket')
+                                    if (!milk) { throw `I have no milk` }
+                                    yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'))
+                                    yield* taskUtils.wrap(bot.bot.consume())
+                                },
+                                id: 'consume-milk',
+                            }, {}, priorities.critical, false, null, false)
+                        }
                     }
                 }
             }
         }
+        //#endregion
 
         if (this._runningTask && this._runningTask.priority >= priorities.critical) {
             return
         }
 
-        const hostile = this.bot.nearestEntity(v => {
-            if (v.metadata[2]) { // Has custom name
-                // console.log(`"${v.name}": Has custom name`)
-                return false
-            }
-            if (v.metadata[6] === EntityPose.DYING) {
-                // console.log(`"${v.name}": Dying`)
-                return false
-            }
-
-            if (this.defendMyselfGoal &&
-                !this.defendMyselfGoal.isDone &&
-                this.tasks.has(this.defendMyselfGoal.id) &&
-                'targets' in this.defendMyselfGoal.args &&
-                this.defendMyselfGoal.args.targets[v.id]) {
-                // console.log(`"${v.name}": Already attacking`)
-                return false
-            }
-
-            const _hostile = Minecraft.hostiles[v.name]
-            if (!_hostile) {
-                // console.log(`"${v.name}": Not hostile`)
-                return false
-            }
-
-            if (!_hostile.alwaysAngry) {
-                if (v.name === 'enderman') {
-                    // Isn't screaming
-                    if (!v.metadata[17]) {
-                        // console.log(`"${v.name}": Not screaming`)
-                        return false
-                    }
-                } else if (!(v.metadata[15] & 0x04)) { // Not aggressive
-                    // console.log(`"${v.name}": Not aggressive`)
-                    // console.log(v.name)
+        //#region Hostile mobs
+        {
+            const hostile = this.bot.nearestEntity(v => {
+                if (v.metadata[2]) { // Has custom name
+                    // console.log(`"${v.name}": Has custom name`)
                     return false
                 }
+                if (v.metadata[6] === EntityPose.DYING) {
+                    // console.log(`"${v.name}": Dying`)
+                    return false
+                }
+
+                if (this.defendMyselfGoal &&
+                    !this.defendMyselfGoal.isDone &&
+                    this.tasks.get(this.defendMyselfGoal.id) &&
+                    'targets' in this.defendMyselfGoal.args &&
+                    this.defendMyselfGoal.args.targets[v.id]) {
+                    // console.log(`"${v.name}": Already attacking`)
+                    return false
+                }
+
+                const _hostile = Minecraft.hostiles[v.name]
+                if (!_hostile) {
+                    // console.log(`"${v.name}": Not hostile`)
+                    return false
+                }
+
+                if (!_hostile.alwaysAngry) {
+                    if (v.name === 'enderman') {
+                        // Isn't screaming
+                        if (!v.metadata[17]) {
+                            // console.log(`"${v.name}": Not screaming`)
+                            return false
+                        }
+                    } else if (!(v.metadata[15] & 0x04)) { // Not aggressive
+                        // console.log(`"${v.name}": Not aggressive`)
+                        // console.log(v.name)
+                        return false
+                    }
+                }
+
+                if ((typeof v.metadata[15] === 'number') &&
+                    (v.metadata[15] & 0x01)) { // Has no AI
+                    // console.log(`"${v.name}": No AI`)
+                    return false
+                }
+
+                const distance = v.position.distanceTo(this.bot.entity.position)
+
+                if (distance > _hostile.rangeOfSight) {
+                    // console.log(`${distance.toFixed(2)} > ${_hostile.rangeOfSight.toFixed(2)}`)
+                    return false
+                }
+
+                const raycast = this.bot.world.raycast(
+                    this.bot.entity.position.offset(0, 1.6, 0),
+                    v.position.clone().subtract(this.bot.entity.position).normalize(),
+                    distance + 2,
+                    block => { return !block.transparent })
+                if (raycast) {
+                    // console.log(`Can't see`)
+                    return false
+                }
+
+                return true
+            })
+
+            if (hostile) {
+                this.defendAgainst(hostile)
             }
-
-            if ((typeof v.metadata[15] === 'number') &&
-                (v.metadata[15] & 0x01)) { // Has no AI
-                // console.log(`"${v.name}": No AI`)
-                return false
-            }
-
-            const distance = v.position.distanceTo(this.bot.entity.position)
-
-            if (distance > _hostile.rangeOfSight) {
-                // console.log(`${distance.toFixed(2)} > ${_hostile.rangeOfSight.toFixed(2)}`)
-                return false
-            }
-
-            const raycast = this.bot.world.raycast(
-                this.bot.entity.position.offset(0, 1.6, 0),
-                v.position.clone().subtract(this.bot.entity.position.offset(0, 1.6, 0)).normalize(),
-                distance + 2,
-                block => { return !block.transparent })
-            if (raycast) {
-                return false
-            }
-
-            return true
-        })
-
-        if (hostile) {
-            this.defendAgainst(hostile)
         }
+        //#endregion
 
+        //#region Lava & Water
         if (!this.bot.pathfinder.path?.length) {
             if (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'lava' ||
                 this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'lava') {
@@ -2323,12 +2558,6 @@ module.exports = class BruhBot {
                     task: function(bot, args) {
                         return tasks.goto.task(bot, {
                             goal: {
-                                heuristic: (node) => {
-                                    const dx = bot.bot.entity.position.x - node.x
-                                    const dy = bot.bot.entity.position.y - node.y
-                                    const dz = bot.bot.entity.position.z - node.z
-                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                                },
                                 isEnd: (node) => {
                                     const blockGround = bot.bot.blockAt(node.offset(0, -1, 0))
                                     const blockFoot = bot.bot.blockAt(node)
@@ -2341,8 +2570,6 @@ module.exports = class BruhBot {
                                     }
                                     return false
                                 },
-                                hasChanged: () => false,
-                                isValid: () => true,
                             },
                             options: {
                                 searchRadius: 20,
@@ -2352,20 +2579,14 @@ module.exports = class BruhBot {
                     },
                     id: `get-out-lava`,
                     humanReadableId: `Getting out of lava`,
-                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 2)
+                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 2, false, null, false)
             } else if (this.bot.oxygenLevel < 18 &&
-                       (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
-                       this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water')) {
+                (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
+                    this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water')) {
                 this.tasks.push(this, {
                     task: function(bot, args) {
                         return tasks.goto.task(bot, {
                             goal: {
-                                heuristic: (node) => {
-                                    const dx = bot.bot.entity.position.x - node.x
-                                    const dy = bot.bot.entity.position.y - node.y
-                                    const dz = bot.bot.entity.position.z - node.z
-                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                                },
                                 isEnd: (node) => {
                                     const blockGround = bot.bot.blockAt(node.offset(0, -1, 0))
                                     const blockFoot = bot.bot.blockAt(node)
@@ -2378,8 +2599,6 @@ module.exports = class BruhBot {
                                     }
                                     return false
                                 },
-                                hasChanged: () => false,
-                                isValid: () => true,
                             },
                             options: {
                                 searchRadius: 20,
@@ -2389,7 +2608,7 @@ module.exports = class BruhBot {
                     },
                     id: `get-out-water`,
                     humanReadableId: `Getting out of water`,
-                }, {}, this.bot.oxygenLevel < 18 ? priorities.surviving + 1 : priorities.low)
+                }, {}, this.bot.oxygenLevel < 18 ? priorities.surviving + 1 : priorities.low, false, null, false)
 
                 if (!this.bot.pathfinder.goal) {
                     if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
@@ -2434,29 +2653,31 @@ module.exports = class BruhBot {
                             isEnd: (node) => {
                                 return danger(node) === 0
                             },
-                            hasChanged: () => false,
-                            isValid: () => true,
                         },
                         options: {
                             searchRadius: 20,
                             timeout: 1000,
                         },
-                    }, priorities.surviving - 50)
+                    }, priorities.surviving - 50, false, null, false)
                 }
             }
         }
+        //#endregion
 
+        //#region Eating
         if (this.bot.food < 18 &&
             !this.quietMode) {
             if ((this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints', false).length > 0)) {
                 this.tasks.push(this, tasks.eat, {
                     sortBy: 'foodPoints',
                     includeRaw: false,
-                }, priorities.surviving)
+                }, priorities.surviving, false, null, false)
                 return
             }
         }
+        //#endregion
 
+        //#region Someone attacking me!
         {
             const now = performance.now()
             for (const by in this.memory.hurtBy) {
@@ -2475,8 +2696,7 @@ module.exports = class BruhBot {
                     if (entity &&
                         entity.isValid) {
                         let canAttack = true
-                        // @ts-ignore
-                        const player = Object.values(this.bot.players).find(v => v && v.entity && v.entity.id == by)
+                        const player = Object.values(this.bot.players).find(v => v && v.entity && Number(v.entity.id) === Number(by))
                         if (player && (
                             player.gamemode === 1 ||
                             player.gamemode === 3
@@ -2486,11 +2706,13 @@ module.exports = class BruhBot {
                         if (!canAttack) {
                             console.warn(`[Bot "${this.username}"]: Can't attack ${entity.name}`)
                             delete this.memory.hurtBy[by]
+                            continue
+                        }
+
+                        if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
+                            this.defendAgainst(entity)
                         } else if (Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), entity) < 4) {
                             this.bot.attack(entity)
-                            delete this.memory.hurtBy[by]
-                        } else if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
-                            this.defendAgainst(entity)
                         }
                     }
                 }
@@ -2526,6 +2748,7 @@ module.exports = class BruhBot {
                 */
             }
         }
+        //#endregion
 
         if (this.defendMyselfGoal &&
             !this.defendMyselfGoal.isDone) {
@@ -2548,7 +2771,7 @@ module.exports = class BruhBot {
                     item: request.lock.item,
                     count: request.lock.count,
                 }],
-            }, priorities.otherBots)
+            }, priorities.otherBots, false, null, false)
                 ?.wait()
                 .then(result => {
                     const givenCount = result.get(request.lock.item) ?? 0
@@ -2563,7 +2786,11 @@ module.exports = class BruhBot {
 
         if (this.trySleepInterval?.done() &&
             tasks.sleep.can(this)) {
-            this.tasks.push(this, tasks.sleep, {}, priorities.low)
+            this.tasks.push(this, tasks.sleep, {}, priorities.low - 2, false, null, false)
+        }
+
+        if (performance.now() - this._lastImportantTaskTime > 10000 || this.isFollowingButNotMoving) {
+            this.doSimpleBoredomTasks()
         }
 
         if (performance.now() - this._lastImportantTaskTime > 10000) {
@@ -2573,7 +2800,15 @@ module.exports = class BruhBot {
         this.doNothing()
     }
 
-    doBoredomTasks() {
+    get isFollowingButNotMoving() {
+        return (
+            this._runningTask &&
+            this._runningTask.id.startsWith('follow') &&
+            !this.bot.pathfinder.goal
+        )
+    }
+
+    doSimpleBoredomTasks() {
         if (this.loadCrossbowsInterval.done()) {
             this.tasks.push(this, {
                 task: function*(bot) {
@@ -2596,11 +2831,11 @@ module.exports = class BruhBot {
                 id: 'load-crossbow',
             }, {
                 silent: true
-            }, priorities.low)
+            }, priorities.low, false, null, false)
         }
 
         if (this.memory.mlgJunkBlocks.length > 0) {
-            this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup)
+            this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup, false, null, false)
             return
         }
 
@@ -2629,24 +2864,40 @@ module.exports = class BruhBot {
                 },
                 id: `pickup-my-arrows`,
                 humanReadableId: `Picking up my arrows`,
-            }, {}, priorities.cleanup)
+            }, {}, priorities.cleanup, false, null, false)
         }
 
-        if (tasks.pickupItem.can(this, { inAir: false, maxDistance: config.boredom.pickupItemRadius, minLifetime: config.boredom.pickupItemMinAge })) {
-            this.tasks.push(this, tasks.pickupItem, { inAir: false, maxDistance: config.boredom.pickupItemRadius, minLifetime: config.boredom.pickupItemMinAge }, priorities.unnecessary)
+        {
+            /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-item')>} */
+            const filter = {
+                inAir: false,
+                maxDistance: config.boredom.pickupItemRadius,
+                minLifetime: config.boredom.pickupItemMinAge,
+            }
+            if (tasks.pickupItem.can(this, filter)) {
+                this.tasks.push(this, tasks.pickupItem, filter, priorities.low, false, null, false)
+            }
         }
 
-        if (this.env.getClosestXp(this, { maxDistance: config.boredom.pickupXpRadius })) {
-            this.tasks.push(this, tasks.pickupXp, { maxDistance: config.boredom.pickupXpRadius }, priorities.unnecessary)
+        {
+            /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-xp')>} */
+            const filter = {
+                maxDistance: config.boredom.pickupXpRadius,
+            }
+            if (this.env.getClosestXp(this, filter)) {
+                this.tasks.push(this, tasks.pickupXp, filter,priorities.low, false, null, false)
+            }
         }
+    }
 
+    doBoredomTasks() {
         if (this.tryAutoHarvestInterval?.done()) {
             if (this.env.getCrop(this, this.bot.entity.position.clone(), true, config.harvest.cropSearchradius)) {
                 this.tasks.push(this, {
                     task: BruhBot.tryHarvestCrops,
                     id: `harvest-crops`,
                     humanReadableId: 'Harvest crops',
-                }, {}, priorities.unnecessary)
+                }, {}, priorities.unnecessary, false, null, false)
             }
         }
 
@@ -2655,7 +2906,7 @@ module.exports = class BruhBot {
                 task: BruhBot.tryRestoreCrops,
                 id: `check-crops`,
                 humanReadableId: `Checking crops`,
-            }, priorities.unnecessary)
+            }, {}, priorities.unnecessary, false, null, false)
         }
 
         if (this.breedAnimalsInterval?.done()) {
@@ -2663,15 +2914,24 @@ module.exports = class BruhBot {
                 task: BruhBot.breedAnimals,
                 id: `breed-animals`,
                 humanReadableId: `Breed animals`,
-            }, {}, priorities.unnecessary)
+            }, {}, priorities.unnecessary, false, null, false)
         }
 
         if (this.dumpTrashInterval?.done()) {
-            this.tasks.push(this, {
-                task: BruhBot.dumpTrash,
-                id: 'dump-trash',
-                humanReadableId: 'Dump trash',
-            }, {}, priorities.unnecessary)
+            const freeSlots = this.inventorySlots().filter(v => !this.bot.inventory.slots[v]).toArray()
+            if (freeSlots.length < 10 || this.forceDumpTrashInterval?.done()) {
+                this.tasks.push(this, {
+                    task: BruhBot.dumpTrash,
+                    id: 'dump-trash',
+                    humanReadableId: 'Dump trash',
+                }, {}, priorities.unnecessary, false, null, false)
+                    ?.wait()
+                    .then(dumped => {
+                        if (dumped.isEmpty) return
+                        console.log(`Dumped ${dumped.keys.map(v => `${dumped.get(v)} ${stringifyItem(v)}`).join(', ')}`)
+                    })
+                    .catch(v => v !== 'cancelled' && console.error(`[Bot "${this.bot.username}"]`, v))
+            }
         }
 
         if (this.ensureEquipmentInterval?.done()) {
@@ -2681,7 +2941,7 @@ module.exports = class BruhBot {
                 humanReadableId: 'Ensure equipment',
             }, {
                 explicit: false,
-            }, priorities.unnecessary)
+            }, priorities.unnecessary, false, null, false)
         }
     }
 
@@ -2702,23 +2962,18 @@ module.exports = class BruhBot {
                         point: this.memory.idlePosition,
                         distance: 4,
                         sprint: false,
-                    }, -999)
+                    }, -999, false, null, false)
                 }
             }
         }
 
-        if (this.tasks.isIdle || (
-            this._runningTask &&
-            this._runningTask.id.startsWith('follow') &&
-            !this.bot.pathfinder.goal
-        )) {
+        if (this.tasks.isIdle || this.isFollowingButNotMoving) {
             if (this.moveAwayInterval?.done()) {
-                const roundedSelfPosition = this.bot.entity.position.floored()
                 for (const playerName in this.bot.players) {
                     if (playerName === this.username) { continue }
                     const playerEntity = this.bot.players[playerName].entity
                     if (!playerEntity) { continue }
-                    if (roundedSelfPosition.equals(playerEntity.position.floored())) {
+                    if (this.bot.entity.position.distanceTo(playerEntity.position) < 1) {
                         this.tasks.push(this, {
                             task: tasks.goto.task,
                             id: `move-away-${playerName}`,
@@ -2726,19 +2981,26 @@ module.exports = class BruhBot {
                         }, {
                             flee: playerEntity,
                             distance: 1,
-                        }, priorities.unnecessary)
+                        }, this._runningTask ? this._runningTask.priority + 1 : priorities.unnecessary, false, null, false)
                         return
                     }
                 }
             }
 
-            if (idleTime > 1000 && this.lookAtNearestPlayer()) {
+            if ((!this.tasks.isIdle || idleTime > 1000) && this.lookAtNearestPlayer()) {
                 this.randomLookInterval?.restart()
                 return
             }
 
-            if (idleTime > 3000 && this.randomLookInterval?.done()) {
+            if ((!this.tasks.isIdle || idleTime > 1000) && this.randomLookInterval?.done()) {
                 this.lookRandomly()
+                return
+            }
+
+            if ((!this.tasks.isIdle || idleTime > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
+                this.tryUnequip()
+                    .then(v => v ? console.log(`[Bot "${this.username}"] Hand cleared`) : console.log(`[Bot "${this.username}"] Failed to clear hand`))
+                    .catch(console.error)
                 return
             }
         }
@@ -2795,10 +3057,10 @@ module.exports = class BruhBot {
     static *ensureEquipment(bot, options) {
         const equipment = require('./equipment')
 
-        let foodPointsInInventory = 0
+        let foodPointsInInventory = calculateFoodPoints(null)
 
         /**
-         * @param {import('./tasks/gather-item').PredictedEnvironment} future 
+         * @param {import('./tasks/gather-item').PredictedEnvironment | null} future 
          */
         function calculateFoodPoints(future) {
             const items = future ? tasks.gatherItem.PredictedEnvironment.applyDelta(bot.bot.inventory.items(), future.inventory) : bot.bot.inventory.items()
@@ -2833,7 +3095,7 @@ module.exports = class BruhBot {
                 case 'food': {
                     try {
                         if (foodPointsInInventory >= item.food) { break }
-                        console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
                         const foods = bot.mc.getGoodFoods(false).map(v => v.name)
                         // console.warn(`[Bot "${bot.username}"] Low on food`)
                         const permissions = {
@@ -2865,7 +3127,7 @@ module.exports = class BruhBot {
                             plan: plans.flat(),
                             ...permissions,
                         })
-                        console.log(`[Bot \"${bot.username}\"] Food gathered`, res)
+                        // console.log(`[Bot \"${bot.username}\"] Food gathered`, res)
                     } catch (error) {
                         console.error(`[Bot \"${bot.username}\"]`, error)
                     }
@@ -2874,7 +3136,7 @@ module.exports = class BruhBot {
                 case 'single': {
                     try {
                         if (bot.inventoryItemCount(null, item.item) > 0) { break }
-                        console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
@@ -2891,7 +3153,7 @@ module.exports = class BruhBot {
                             canTrade: true,
                             canHarvestMobs: true,
                         })
-                        console.log(`[Bot \"${bot.username}\"] Equipment ${item.item} gathered`, res)
+                        // console.log(`[Bot \"${bot.username}\"] Equipment ${item.item} gathered`, res)
                     } catch (error) {
                         console.error(`[Bot \"${bot.username}\"]`, error)
                     }
@@ -2900,7 +3162,7 @@ module.exports = class BruhBot {
                 case 'any': {
                     if (item.item.find(v => bot.inventoryItemCount(null, v) > 0)) { break }
                     try {
-                        console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.prefer,
                             count: item.count === 'any' ? 1 : item.count,
@@ -2917,7 +3179,7 @@ module.exports = class BruhBot {
                             canTrade: true,
                             canHarvestMobs: true,
                         })
-                        console.log(`[Bot \"${bot.username}\"] Preferred equipment ${item.prefer} gathered`, res)
+                        // console.log(`[Bot \"${bot.username}\"] Preferred equipment ${item.prefer} gathered`, res)
                         break
                     } catch (error) {
                         console.error(`[Bot \"${bot.username}\"]`, error)
@@ -2940,7 +3202,7 @@ module.exports = class BruhBot {
                             canTrade: true,
                             canHarvestMobs: true,
                         })
-                        console.log(`[Bot \"${bot.username}\"] Equipment gathered`, res)
+                        // console.log(`[Bot \"${bot.username}\"] Equipment gathered`, res)
                         break
                     } catch (error) {
                         console.error(`[Bot \"${bot.username}\"]`, error)
@@ -3012,11 +3274,11 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @type {import('./task').SimpleTaskDef<boolean>}
+     * @param {import("./bruh-bot")} bot
+     * @returns {import('./task').Task<Freq<import('./utils/other').ItemId>>}
      */
     static *dumpTrash(bot) {
         const trashItems = bot.getTrashItems()
-        if (trashItems.length === 0) { return false }
         return yield* tasks.dumpToChest.task(bot, {
             items: trashItems
         })
@@ -3038,14 +3300,14 @@ module.exports = class BruhBot {
         if (!this.defendMyselfGoal || (
             this.defendMyselfGoal.status !== 'running' &&
             this.defendMyselfGoal.status !== 'queued') ||
-            !this.tasks.has(this.defendMyselfGoal.id)) {
+            !this.tasks.get(this.defendMyselfGoal.id)) {
             console.log(`[Bot "${this.username}"] New attack task`)
             this.defendMyselfGoal = this.tasks.push(this, tasks.attack, {
                 targets: { [hazard.id]: hazard },
                 useBow: true,
                 useMelee: true,
                 useMeleeWeapon: true,
-            }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2))
+            }, priorities.surviving + ((priorities.critical - priorities.surviving) / 2), false, null, false)
         } else {
             if ('targets' in this.defendMyselfGoal.args) {
                 // console.log(`[Bot "${this.username}"] Add hazard`)
@@ -3119,9 +3381,10 @@ module.exports = class BruhBot {
     /**
      * @param {string} sender
      * @param {string} message
-     * @param {(reply: any) => void} respond
+     * @param {ChatResponseHandler} response
+     * @param {boolean} isWhispered
      */
-    handleChat(sender, message, respond) {
+    handleChat(sender, message, response, isWhispered) {
         if (sender === this.username) { return }
 
         message = message.trim()
@@ -3129,22 +3392,17 @@ module.exports = class BruhBot {
         for (const handler of this.chatHandlers) {
             if (typeof handler.match === 'string') {
                 if (handler.match === message) {
-                    // @ts-ignore
-                    handler.command(sender, message, respond)
+                    (/** @type {StringChatHandler} */ (handler)).command(sender, message, response, isWhispered)
                     return
                 }
-            } else if (typeof handler.match === 'object' &&
-                Array.isArray(handler.match)) {
+            } else if ('length' in handler.match) {
                 if (handler.match.includes(message)) {
-                    // @ts-ignore
-                    handler.command(sender, message, respond)
+                    (/** @type {StringChatHandler} */ (handler)).command(sender, message, response, isWhispered)
                     return
                 }
             } else {
-                // @ts-ignore
                 if (handler.match.exec(message)) {
-                    // @ts-ignore
-                    handler.command(sender, handler.match.exec(message), respond)
+                    (/** @type {RegexpChatHandler} */ (handler)).command(sender, handler.match.exec(message), response, isWhispered)
                     return
                 }
             }
@@ -3160,7 +3418,7 @@ module.exports = class BruhBot {
 
         {
             /**
-             * @type {ChatHandler | null}
+             * @type {StringChatHandler | null}
              */
             let bestHandler = null
             let bestMatchSteps = Infinity
@@ -3175,16 +3433,15 @@ module.exports = class BruhBot {
                     if (match.steps < bestMatchSteps) {
                         bestMatchSteps = match.steps
                         bestMatch = handler.match
-                        bestHandler = handler
+                        bestHandler = /** @type {StringChatHandler} */ (handler)
                     }
-                } else if (typeof handler.match === 'object' &&
-                    Array.isArray(handler.match)) {
+                } else if ('length' in handler.match) {
                     for (const _match of handler.match) {
                         const match = levenshtein(_match, message)
                         if (match.steps < bestMatchSteps) {
                             bestMatchSteps = match.steps
                             bestMatch = _match
-                            bestHandler = handler
+                            bestHandler = /** @type {StringChatHandler} */ (handler)
                             break
                         }
                     }
@@ -3193,11 +3450,10 @@ module.exports = class BruhBot {
 
             // console.log(`Best match:`, bestMatch, bestMatchSteps)
             if (bestMatchSteps <= 1) {
-                this.askAsync(`Did you mean '${bestMatch}'?`, respond, sender, 10000)
+                this.askAsync(`Did you mean '${bestMatch}'?`, response.respond, sender, 10000)
                     .then(res => {
-                        if (parseYesNoH(res)) {
-                            // @ts-ignore
-                            bestHandler.command(sender, message, respond)
+                        if (parseYesNoH(res.message)) {
+                            bestHandler.command(sender, message, response, isWhispered)
                         }
                     })
                     .catch(error => console.warn(`[Bot "${this.username}"] Ask timed out: ${error}`))
@@ -3213,89 +3469,25 @@ module.exports = class BruhBot {
      * @param {string} [player]
      * @param {number} [timeout]
      * @param {(message: string, sender: string) => boolean} [matcher]
-     * @returns {import('./task').Task<{ message: string; sender: string; }>}
+     * @returns {Promise<{ sender: string; message: string; }>}
      */
-    *ask(message, send, player, timeout, matcher) {
-        while (this.chatAwaits.length > 1) { yield }
-        /** @type {{ message: string; sender: string; } | null} */
+    async askAsync(message, send, player, timeout, matcher) {
+        while (this.chatAwaits.length) {
+            await taskUtils.sleep(100)
+        }
+
+        /** @type {{ sender: string; message: string; } | null} */
         let response = null
-        /**
-         * @type {ChatAwait}
-         */
+        /** @type {ChatAwait} */
         const chatAwait = {
             onChat: (/** @type {string} */ username, /** @type {string} */ message) => {
                 if (player && username !== player) { return false }
                 if (!player && username === this.username) { return false }
                 if (matcher && !matcher(message, username)) { return false }
-                response = { message: message, sender: username }
-                return true
-            },
-            done: false,
-        }
-        this.chatAwaits.push(chatAwait)
-        send(message)
-        const timeoutAt = timeout ? (performance.now() + timeout) : null
-        while (true) {
-            if (response) {
-                chatAwait.done = true
-                return response
-            }
-            if (timeoutAt && timeoutAt < performance.now()) {
-                chatAwait.done = true
-                throw 'Timed out'
-            }
-            yield* taskUtils.sleepG(200)
-        }
-    }
-
-    /**
-     * @param {string} message
-     * @param {(message: string) => void} send
-     * @param {string} [player]
-     * @param {number} [timeout]
-     * @returns {import('./task').Task<{ message: true | false | null; sender: string; }>}
-     */
-    *askYesNo(message, send, player, timeout) {
-        const yes = [
-            'y',
-            'yes',
-            'ye',
-            'yah',
-            'yeah',
-        ]
-        const no = [
-            'n',
-            'no',
-            'nope',
-            'nuhuh',
-            'nuh uh',
-        ]
-        const response = yield* this.ask(message, send, player, timeout, (message, sender) => {
-            return yes.includes(message) || no.includes(message)
-        })
-        return {
-            sender: response.sender,
-            message: yes.includes(response.message) ? true : no.includes(response.message) ? false : null,
-        }
-    }
-
-    /**
-     * @param {string} message
-     * @param {(message: string) => void} send
-     * @param {string} [player]
-     * @param {number} [timeout]
-     * @returns {Promise<string>}
-     */
-    async askAsync(message, send, player, timeout) {
-        /** @type {string | null} */
-        let response = null
-        /**
-         * @type {ChatAwait}
-         */
-        const chatAwait = {
-            onChat: (/** @type {string} */ username, /** @type {string} */ message) => {
-                if (player && username !== player) { return false }
-                response = message
+                response = {
+                    message: message,
+                    sender: username,
+                }
                 return true
             },
             done: false,
@@ -3312,7 +3504,7 @@ module.exports = class BruhBot {
             }
             if (timeoutAt && timeoutAt < performance.now()) {
                 chatAwait.done = true
-                throw 'Timed out'
+                return null
             }
             await taskUtils.sleep(100)
         }
@@ -3322,16 +3514,41 @@ module.exports = class BruhBot {
 
     //#region Items & Inventory
 
+    async tryUnequip() {
+        const QUICK_BAR_COUNT = 9
+        const QUICK_BAR_START = 36
+
+        for (let i = 0; i < QUICK_BAR_COUNT; ++i) {
+            if (!this.bot.inventory.slots[QUICK_BAR_START + i]) {
+                this.bot.setQuickBarSlot(i)
+                return true
+            }
+        }
+
+        const slot = this.bot.inventory.firstEmptyInventorySlot()
+        if (!slot) {
+            return false
+        }
+
+        const equipSlot = QUICK_BAR_START + this.bot.quickBarSlot
+        await this.bot.clickWindow(equipSlot, 0, 0)
+        await this.bot.clickWindow(slot, 0, 0)
+        if (this.bot.inventory.selectedItem) {
+            await this.bot.clickWindow(equipSlot, 0, 0)
+            return false
+        }
+        return true
+    }
+
     /**
      * @param {import('./utils/other').ItemId} item
-     * @param {ReadonlyArray<ItemLock>} locks
      * @param {MineFlayer.EquipmentDestination} destination
      */
-    *equip(item, locks, destination = 'hand') {
-        const _item = item = this.searchInventoryItem(null, item)
+    *equip(item, destination = 'hand') {
+        const _item = this.searchInventoryItem(null, item)
 
         if (!_item) {
-            throw new Error('Invalid item object in equip (item is null or typeof item is not object)')
+            throw `Item ${stringifyItem(item)} not found to equip`
         }
 
         const sourceSlot = _item.slot
@@ -3342,7 +3559,7 @@ module.exports = class BruhBot {
         }
 
         yield* taskUtils.wrap(this.bot.equip(_item, destination))
-        yield* taskUtils.sleepG(20)
+        yield* taskUtils.sleepTicks()
         return this.bot.inventory.slots[destSlot]
     }
 
@@ -3460,21 +3677,8 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {import('prismarine-windows').Window} window
-     * @returns {Iterable<Item>}
-     */
-    containerItems(window) {
-        return new Iterable(function*() {
-            for (let i = 0; i < window.inventoryStart; ++i) {
-                const item = window.slots[i]
-                if (!item) { continue }
-                yield item
-            }
-        })
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} [window] 
+     * @param {import('prismarine-windows').Window} [window]
+     * @returns {Iterable<number>}
      */
     inventorySlots(window) {
         const hasWindow = !!window
@@ -3489,26 +3693,46 @@ module.exports = class BruhBot {
             this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
-        /**
-         * @type {Record<number, Item>}
-         */
-        const slots = {}
+        /** @type {Set<number>} */
+        const set = new Set()
 
-        for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
-            const item = window.slots[i]
-            if (!item) { continue }
-            console.assert(item.slot === i)
-            slots[i] = item
-        }
+        return new Iterable(function*() {
+            const hotbarEnd = window.hotbarStart + 9
 
-        for (const specialSlotId of specialSlotIds) {
-            const item = window.slots[specialSlotId]
-            if (!item) { continue }
-            console.assert(item.slot === specialSlotId)
-            slots[specialSlotId] = item
-        }
+            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
+                if (set.has(i)) { continue }
+                set.add(i)
+                yield i
+            }
 
-        return slots
+            for (let i = window.hotbarStart; i < hotbarEnd; i++) {
+                if (set.has(i)) { continue }
+                set.add(i)
+                yield i
+            }
+
+            for (const specialSlotId of specialSlotIds) {
+                if (specialSlotId >= window.inventoryStart && specialSlotId < window.inventoryEnd) { continue }
+                if (specialSlotId >= window.hotbarStart && specialSlotId < hotbarEnd) { continue }
+                if (set.has(specialSlotId)) { continue }
+                set.add(specialSlotId)
+                yield specialSlotId
+            }
+        })
+    }
+
+    /**
+     * @param {import('prismarine-windows').Window} window
+     * @returns {Iterable<Item>}
+     */
+    containerItems(window) {
+        return new Iterable(function*() {
+            for (let i = 0; i < window.inventoryStart; ++i) {
+                const item = window.slots[i]
+                if (!item) { continue }
+                yield item
+            }
+        })
     }
 
     /**
@@ -3698,23 +3922,21 @@ module.exports = class BruhBot {
 
         const stackSize = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].stackSize
 
-        const botSlots = this.inventorySlots(chest)
-        const botItems = Object.keys(botSlots)
-            .map(i => Number.parseInt(i))
-            .map(i => ({ slot: i, item: botSlots[i] }))
-            .filter(v => isItemEquals(v.item, item) && v.item.count)
+        const botItems = this.inventoryItems(chest)
+            .filter(v => isItemEquals(v, item) && v.count > 0)
+            .toArray()
 
         if (botItems.length === 0) {
             return 0
         }
 
-        if (!botItems[0]?.item) {
+        if (!botItems[0]) {
             return 0
         }
 
         const actualCount = Math.min(
             depositCount,
-            botItems[0].item.count,
+            botItems[0].count,
             stackSize
         )
 
@@ -3861,7 +4083,9 @@ module.exports = class BruhBot {
             })
             const result = this.searchInventoryItem(null, item)
             if (result) { return result }
-        } catch (error) { }
+        } catch (error) {
+            console.warn(`[Bot "${this.username}"]`, error)
+        }
 
         return null
     }
@@ -3872,16 +4096,19 @@ module.exports = class BruhBot {
 
     /**
      * @param {'right' | 'left'} hand
+     * @param {number} [time]
      */
-    activateHand(hand) {
+    activateHand(hand, time = 0) {
         if (hand === 'right') {
-            this._isRightHandActive = true
+            this.rightHand.isActivated = true
+            this.rightHand.activatedTime = !time ? 0 : performance.now() + time
             this.bot.activateItem(false)
             return
         }
 
         if (hand === 'left') {
-            this._isLeftHandActive = true
+            this.leftHand.isActivated = true
+            this.leftHand.activatedTime = !time ? 0 : performance.now() + time
             this.bot.activateItem(true)
             return
         }
@@ -3890,8 +4117,10 @@ module.exports = class BruhBot {
     }
 
     deactivateHand() {
-        this._isLeftHandActive = false
-        this._isRightHandActive = false
+        this.leftHand.isActivated = false
+        this.leftHand.activatedTime = 0
+        this.rightHand.isActivated = false
+        this.rightHand.activatedTime = 0
         this.bot.deactivateItem()
     }
 
@@ -3928,7 +4157,6 @@ module.exports = class BruhBot {
     /**
      * @param {import('prismarine-entity').Entity} vehicle
      * @returns {import('./task').Task<void>}
-     * @throws {Error}
      */
     *mount(vehicle) {
         let isMounted = false
@@ -3939,7 +4167,7 @@ module.exports = class BruhBot {
         while (true) {
             if (isMounted) { return }
             if (timeout.done()) {
-                this.bot.off('actionBar', onMount)
+                this.bot.off('mount', onMount)
                 return
                 // throw new Error(`Could not mount the entity`)
             }
@@ -4133,10 +4361,10 @@ module.exports = class BruhBot {
             matching = new Set()
             for (const item of options.matching) {
                 if (typeof item === 'string') {
-                    // @ts-ignore
+                    //@ts-ignore
                     matching.add(this.bot.registry.blocksByName[item].id)
                 } else {
-                    // @ts-ignore
+                    //@ts-ignore
                     matching.add(item)
                 }
             }
@@ -4212,15 +4440,15 @@ module.exports = class BruhBot {
             while (next) {
                 yield
                 const column = bot.world.getColumn(next.x, next.z)
-                // @ts-ignore
+                //@ts-ignore
                 const sectionY = next.y + Math.abs(bot.game.minY >> 4)
-                // @ts-ignore
+                //@ts-ignore
                 const totalSections = bot.game.height >> 4
                 if (sectionY >= 0 && sectionY < totalSections && column && !visitedSections.has(next.toString())) {
                     /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */ //@ts-ignore
                     const section = column.sections[sectionY]
                     if (isBlockInSection(section)) {
-                        // @ts-ignore
+                        //@ts-ignore
                         const begin = new Vec3(next.x * 16, sectionY * 16 + bot.game.minY, next.z * 16)
                         const cursor = begin.clone()
                         const end = cursor.offset(16, 16, 16)
@@ -4241,11 +4469,11 @@ module.exports = class BruhBot {
                     visitedSections.add(next.toString())
                 }
                 // If we started a layer, we have to finish it otherwise we might miss closer blocks
-                // @ts-ignore
+                //@ts-ignore
                 if (startedLayer !== it.apothem && n >= count) {
                     break
                 }
-                // @ts-ignore
+                //@ts-ignore
                 startedLayer = it.apothem
                 next = it.next()
             }

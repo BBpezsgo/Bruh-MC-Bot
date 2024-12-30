@@ -13,7 +13,7 @@ export type TaskDef<TResult = void, TArgs extends {} = {}, TUtilities extends {}
 } & TUtilities
 
 export type CommonArgs<TArgs extends {}> = TArgs & {
-    onStatusMessage?: (message: string) => void;
+    response?: import('./bruh-bot').ChatResponseHandler,
     cancel?: () => Task<void>;
     silent?: boolean;
 }

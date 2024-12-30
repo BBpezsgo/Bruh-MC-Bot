@@ -62,7 +62,7 @@ function* wrap(promise) {
         .then(v => resolvedValue = v)
         .catch(v => error = v)
         .finally(() => isDone = true)
-        
+
     while (!isDone) {
         yield
     }
@@ -75,19 +75,33 @@ function* wrap(promise) {
 }
 
 /**
- * @template {{ once: (event: string, callback: (...args: Array<any>) => void) => void }} TEmitter
+ * @typedef {{ isCancelled: boolean; }} CancellationToken
+ */
+
+/**
+ * @template TEvent
+ * @template {{
+ *   once: (event: TEvent, callback: (...args: Array<any>) => void) => void;
+ *   off: (event: TEvent, callback: (...args: Array<any>) => void) => void;
+ * }} TEmitter
  * @param {TEmitter} emitter
  * @param {Parameters<TEmitter['once']>[0]} event
- * @returns {import('../task').Task<Parameters<Parameters<emitter['once']>[1]>>}
+ * @param {CancellationToken | null} [cancellationToken=null]
+ * @returns {import('../task').Task<Parameters<Parameters<emitter['once']>[1]>>  | null}
  */
-function* waitForEvent(emitter, event) {
+function* waitForEvent(emitter, event, cancellationToken = null) {
     let emitted = false
     let args = null
-    emitter.once(event, (..._args) => {
+    const onEmitted = (/** @type {Array<any>} */ ..._args) => {
         emitted = true
         args = _args
-    })
+    }
+    emitter.once(event, onEmitted)
     while (!emitted) {
+        if (cancellationToken?.isCancelled) {
+            emitter.off(event, onEmitted)
+            return null
+        }
         yield
     }
     return args
@@ -172,6 +186,40 @@ function* parallel(tasks) {
     }
 }
 
+/**
+ * @template {ReadonlyArray<import("../task").Task<any>>} TTasks
+ * @param {TTasks} tasks
+ * @returns {import('../task').Task<Parameters<TTasks[number]['return']>[0]>}
+ */
+function* race(tasks) {
+    while (true) {
+        yield
+        for (let i = 0; i < tasks.length; i++) {
+            const task = tasks[i]
+            const v = task.next()
+            if (v.done) {
+                return v.value
+            }
+        }
+    }
+}
+
+/**
+ * @template T
+ * @param {import('../task').Task<T>} task
+ * @param {CancellationToken} cancellationToken
+ * @returns {import('../task').Task<{ cancelled: true; result: undefined; } | { cancelled: false; result: T; }>}
+ */
+function* withCancellation(task, cancellationToken) {
+    while (true) {
+        const v = task.next()
+        if (v.done) return { cancelled: false, result: v.value }
+        if (cancellationToken.isCancelled) { return { cancelled: true, result: v.value } }
+
+        yield
+    }
+}
+
 module.exports = {
     sleepG,
     sleep,
@@ -182,4 +230,6 @@ module.exports = {
     sleepTicks,
     parallelAll,
     parallel,
+    race,
+    withCancellation,
 }

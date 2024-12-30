@@ -534,24 +534,22 @@ module.exports = {
         }
 
         if (!bot.bot.hawkEye) {
-            new Promise(resolve => {
-                // @ts-ignore
-                bot.bot.loadPlugin(require('minecrafthawkeye').default)
-                resolve()
-            })
+            setTimeout(() => bot.bot.loadPlugin(require('minecrafthawkeye').default), 0)
         }
 
-        let lastPunch = 0
-        const hurtTime = Minecraft.general.hurtTime
-        let cooldown = hurtTime
+        let cooldownEndAt = 0
+        let cooldown = 500
 
         /** @type {ReturnType<searchMeleeWeapon> | null}*/
         let meleeWeapon = null
         /** @type {Item | null} */
         let shield = bot.searchInventoryItem(null, 'shield')
 
-        const deactivateShield = function(/** @type {Item | null} */ shield) {
-            if (shield && bot.isLeftHandActive) {
+        /**
+         * @param {Item | null} shield
+         */
+        const deactivateShield = function(shield) {
+            if (shield && bot.leftHand.isActivated) {
                 bot.deactivateHand()
                 // console.log(`[Bot "${bot.username}"] Shield deactivated`)
                 return true
@@ -559,8 +557,11 @@ module.exports = {
             return false
         }
 
-        const activateShield = function(/** @type {Item | null} */ shield) {
-            if (shield && !bot.isLeftHandActive) {
+        /**
+         * @param {Item | null} shield
+         */
+        const activateShield = function(shield) {
+            if (shield && !bot.leftHand.isActivated) {
                 bot.activateHand('left')
                 // console.log(`[Bot "${bot.username}"] Shield activated`)
                 return true
@@ -577,7 +578,6 @@ module.exports = {
 
             if (meleeWeapon) {
                 if (!holds || holds.type !== meleeWeapon.item.type) {
-                    lastPunch = performance.now()
                     yield* wrap(bot.bot.equip(meleeWeapon.item.type, 'hand'))
                 }
             } else {
@@ -592,7 +592,8 @@ module.exports = {
             //     console.log(`[Bot "${bot.username}"] No melee weapon found`)
             // }
 
-            cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : hurtTime
+            cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : (1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4))
+            cooldownEndAt = performance.now() + cooldown
         }
 
         /**
@@ -614,6 +615,11 @@ module.exports = {
             const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), entity)
 
             const hostile = Minecraft.hostiles[entity.name]
+
+            if (entity.name === 'shulker') {
+                if (!entity.metadata[17]) { return 0.01 }
+                if (distance > config.attack.distanceToUseRangeWeapons) { return 0.01 }
+            }
 
             let activeMeleeDamage = (distance < 2) ? 1 : 0
             let activeRangeDamage = 0
@@ -679,18 +685,33 @@ module.exports = {
                 dangerScore += hurtScore
             }
 
-            if (entity.name === 'shulker' &&
-                !entity.metadata[17]) {
-                return 0.01
-            }
+            const hurtCooldownScoreMultiplier = isEntityHurting(entity) ? 0.1 : 1
 
-            return (
+            return ((
                 attackRangeScore +
                 healthScore +
                 dangerScore
-            ) *
-                damageScore +
-                activeDamageScore
+            ) * damageScore
+                + activeDamageScore
+            ) * hurtCooldownScoreMultiplier
+        }
+
+        /**
+         * @param {Entity} entity
+         */
+        const resolveEntityHurtTime = function(entity) {
+            if (entity.name === 'boat') return 80
+            return Minecraft.general.hurtTime
+        }
+
+        /**
+         * @param {Entity} entity
+         */
+        const isEntityHurting = function(entity) {
+            return (
+                bot.env.entityHurtTimes[entity.id] &&
+                (performance.now() - bot.env.entityHurtTimes[entity.id]) < resolveEntityHurtTime(entity)
+            )
         }
 
         const ensureMovement = function() {
@@ -700,7 +721,7 @@ module.exports = {
                 searchRadius: 5,
                 sprint: true,
                 movements: bot.restrictedMovements,
-                lookAtTarget: false,
+                lookAtTarget: false, // FIXME jumping backward
                 retryCount: 0,
             }
             switch (movementState) {
@@ -777,6 +798,7 @@ module.exports = {
             range: 0,
             melee: 0,
         }
+
         /**
          * @param {import('mineflayer-pathfinder').PartiallyComputedPath} path
          */
@@ -833,7 +855,6 @@ module.exports = {
 
         /**
          * @type {import('mineflayer-pathfinder/lib/goals').GoalBase & {
-         *   rangeSq: number;
          *   getEntities: () => Array<Entity>;
          *   getEntityPositions: () => Array<Vec3>;
          *   lastEntityPositions: Array<Vec3>;
@@ -841,7 +862,6 @@ module.exports = {
          * }}
          */
         const goal = {
-            rangeSq: Math.sqrt(3),
             isValid: function() {
                 for (const entity of this.getEntities()) {
                     if (entity && entity.isValid) { return true }
@@ -890,7 +910,7 @@ module.exports = {
             isEnd: function(node) {
                 for (const entity of this.getEntities()) {
                     const d = Math.entityDistanceSquared(node, entity)
-                    if (d <= this.rangeSq) { return false }
+                    if (d <= (3 * 3)) { return false }
                 }
                 if (target) {
                     switch (movementState) {
@@ -949,11 +969,6 @@ module.exports = {
                         label.lockOn(target.id)
                         label.text = { text: `${targetScore.toFixed(2)}` }
                     }
-
-                    if (bot.env.entityHurtTimes[target.id] &&
-                        (performance.now() - bot.env.entityHurtTimes[target.id]) < hurtTime) {
-                        continue
-                    }
                 } else {
                     const targetIds = Object.keys(args.targets).map(v => Number.parseInt(v))
                     if (targetIds.length === 0) { break }
@@ -961,11 +976,6 @@ module.exports = {
                         const candidate = args.targets[id]
                         if (!isAlive(candidate)) {
                             delete args.targets[id]
-                            continue
-                        }
-
-                        if (bot.env.entityHurtTimes[candidate.id] &&
-                            (performance.now() - bot.env.entityHurtTimes[candidate.id]) < hurtTime) {
                             continue
                         }
 
@@ -996,36 +1006,7 @@ module.exports = {
 
                 ensureMovement()
 
-                // {
-                //     const now = performance.now()
-                //     const timeUntilPunch = (cooldown - (now - lastPunch))
-                //     const label = TextDisplay.ensure(bot.commands, 'attack-label')
-                //     label.lockOn(bot.bot.entity.id)
-                //     label.text = { text: `${movementState}` }
-                //     console.log(movementState)
-                // }
-
-                // console.log(goal.isEnd(bot.bot.entity.position))
-
-                // yield* goto.task(bot, {
-                //     goal: new goals.GoalCompositeAll(('target' in args ? [args.target] : Object.values(args.targets)).filter(v => v && v.isValid).map(v => {
-                //         return new goals.GoalInvert(new goto.GoalEntity(v, 2))
-                //     })),
-                //     options: {
-                //         timeout: 100,
-                //         searchRadius: 5,
-                //         sprint: true,
-                //         movements: bot.restrictedMovements,
-                //     },
-                // })
-
                 // console.log(`[Bot "${bot.username}"] Attack ${target.name}`)
-
-                if (target.name === 'boat') {
-                    cooldown = 80
-                } else {
-                    cooldown = hurtTime
-                }
 
                 if (Debug.enabled) {
                     TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
@@ -1036,13 +1017,6 @@ module.exports = {
                 if (args.useMelee && !noPath.melee && (distance <= config.attack.distanceToUseRangeWeapons || !args.useBow)) {
                     if (distance > 4) {
                         // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
-                        // yield* goto.task(bot, {
-                        //     entity: target,
-                        //     distance: 4,
-                        //     timeout: 500,
-                        //     retryCount: 0,
-                        //     sprint: true,
-                        // })
                         reequipMeleeWeapon = true
                         isGoalChanged = movementState !== 'goto-melee'
                         movementState = 'goto-melee'
@@ -1074,36 +1048,42 @@ module.exports = {
                             yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
                         }
                         bot.bot.lookAt(target.position.offset(0, target.height, 0), true)
-                        // yield* wrap(bot.bot.lookAt(target.position.offset(0, target.height, 0), true))
                     }
 
+                    const extraCooldown = 40
                     const now = performance.now()
 
-                    const timeUntilPunch = (cooldown - (now - lastPunch))
-
-                    if (timeUntilPunch <= 0 && (
-                        bot.bot.entity.onGround ||
-                        bot.bot.entity.isInWater ||
-                        bot.bot.entity.velocity.y <= -0.3
-                    )) {
-                        bot.bot.attack(target)
-                        // @ts-ignore
-                        bot._isLeftHandActive = false
-                        lastPunch = now
-                        bot.env.entityHurtTimes[target.id] = performance.now()
-
-                        activateShield(shield)
-                    } else {
-                        if (bot.bot.blockAt(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland') {
-                            bot.bot.setControlState('jump', true)
-                            bot.bot.setControlState('jump', false)
-                        }
+                    if (bot.bot.entity.onGround &&
+                        bot.bot.blockAt(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland' &&
+                        now + Minecraft.general.jumpTotalTime > cooldownEndAt + extraCooldown) {
+                        bot.bot.jumpQueued = true
                     }
+
+                    if (now <= cooldownEndAt + extraCooldown) {
+                        // console.log(`Attack cooldown ...`)
+                        continue
+                    }
+
+                    if (isEntityHurting(target)) {
+                        // console.log(`Target is hurting ...`)
+                        continue
+                    }
+
+                    bot.bot.attack(target)
+                    bot.leftHand.isActivated = false
+                    cooldownEndAt = now + cooldown
+                    bot.env.entityHurtTimes[target.id] = performance.now()
+
+                    activateShield(shield)
 
                     continue
                 }
 
-                if (args.useBow && bot.bot.hawkEye && (distance > config.attack.distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
+                const isProjectileImmune = (
+                    (target.name === 'shulker' && !target.metadata[17])
+                )
+
+                if (!isProjectileImmune && args.useBow && bot.bot.hawkEye && (distance > config.attack.distanceToUseRangeWeapons || !args.useMelee || noPath.melee) && target.name !== 'enderman') {
                     const weapon = searchRangeWeapon(bot)
 
                     const getGrade = () => {
@@ -1137,6 +1117,8 @@ module.exports = {
                         movementState = 'none'
 
                         yield* wrap(bot.bot.equip(weapon.item, 'hand'))
+                        cooldown = 1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4)
+                        cooldownEndAt = performance.now() + cooldown
 
                         if (weapon.weapon === Weapons.crossbow) {
                             const isCharged = isCrossbowCharged(weapon.item)
@@ -1193,7 +1175,7 @@ module.exports = {
                             // console.log(`[Bot "${bot.username}"] Pulling bow`)
                             bot.activateHand('right')
                             const chargeTime = weapon.chargeTime
-                            yield* sleepG(Math.max(hurtTime, chargeTime))
+                            yield* sleepG(Math.max(resolveEntityHurtTime(target), chargeTime))
 
                             if (!target || !target.isValid || target.velocity.y < -0.1) {
                                 if (!(yield* bot.clearMainHand())) {
@@ -1253,7 +1235,7 @@ module.exports = {
             return true
         } finally {
             bot.bot.off('path_update', onPathUpdate)
-            if (bot.isLeftHandActive) {
+            if (bot.leftHand.isActivated) {
                 bot.deactivateHand()
             }
             stopMovement()

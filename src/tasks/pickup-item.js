@@ -10,7 +10,7 @@ const goto = require('./goto')
 /**
  * @type {import('../task').TaskDef<void, Args> & {
  *   can: (bot: import('../bruh-bot'), args: Args) => boolean;
- *   getGoal: (item: import('prismarine-physics').Entity) => import('mineflayer-pathfinder/lib/goals').GoalBase;
+ *   getGoal: (item: import('prismarine-entity').Entity) => import('mineflayer-pathfinder/lib/goals').GoalBase;
  * }}
  */
 module.exports = {
@@ -36,13 +36,12 @@ module.exports = {
 
         let isCollected = false
         /**
-         * @param {import('prismarine-physics').Entity} collector
-         * @param {import('prismarine-physics').Entity} collected
+         * @param {import('prismarine-entity').Entity} collector
+         * @param {import('prismarine-entity').Entity} collected
          */
         const listener = (collector, collected) => {
             if (collector.id !== bot.bot.entity.id) { return }
-            const droppedItem = collected.getDroppedItem()
-            if (droppedItem?.name && droppedItem.name !== item.name) { return }
+            if (collected.id !== nearest.id) { return }
             isCollected = true
             bot.bot.off('playerCollect', listener)
         }
@@ -52,7 +51,8 @@ module.exports = {
             yield* goto.task(bot, {
                 goal: this.getGoal(nearest),
                 options: {
-                    // savePathError: true,
+                    timeout: 5000,
+                    savePathError: true,
                 }
             })
         } catch (error) {
@@ -85,23 +85,16 @@ module.exports = {
             if ('item' in args) { return args.item }
             return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
-        if (!nearest) { return false }
+
+        if (!nearest) return false
 
         const item = nearest.getDroppedItem()
-        if (!item) { return false }
+        if (!item) return false
 
-        if (bot.isInventoryFull(item.name)) { return false }
+        if (bot.isInventoryFull(item.name)) return false
 
-        const goals = goto.getGoal(bot, {
-            entity: nearest,
-            distance: 1,
-            // savePathError: true,
-        })
-
-        for (const goal of goals) {
-            if ('dimension' in goal) { continue }
-            if (bot.memory.isGoalUnreachable(goal)) { return false }
-        }
+        const goal = this.getGoal(nearest)
+        if (bot.memory.isGoalUnreachable(goal)) return false
 
         return true
     },
@@ -109,7 +102,6 @@ module.exports = {
         return {
             isValid: () => item.isValid,
             hasChanged: () => false,
-            heuristic: node => Math.sqrt(Math.pow(node.x - item.position.x, 2) + Math.pow(node.z - item.position.z, 2)) + Math.abs((node.y - item.position.y)),
             isEnd: node => node.distanceTo(item.position.floored()) <= 0,
         }
     },

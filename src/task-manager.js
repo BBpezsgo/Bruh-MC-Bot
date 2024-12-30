@@ -46,18 +46,45 @@ module.exports = class TaskManager {
      * @param {import('./bruh-bot')} bot
      * @param {import('./task').TaskDef<TResult, TArgs>} task
      * @param {import('./task').CommonArgs<TArgs>} args
-     * @param {Priority<TArgs>} [priority]
-     * @param {boolean} [save]
+     * @param {Priority<TArgs>} priority
+     * @param {boolean} save
+     * @param {string | null} byPlayer
+     * @param {boolean} isWhispered
      * @returns {ManagedTask<TResult, TArgs, TError> | null}
      */
-    push(bot, task, args, priority = 0, save = false) {
+    push(bot, task, args, priority, save, byPlayer, isWhispered) {
         if (this._isStopping) {
             return null
         }
         const id = (typeof task.id === 'string') ? task.id : task.id(args)
-        if (this.has(id)) {
-            // console.log(`Task "${id}" already added`)
-            return null
+        const existingTask = this.get(id)
+
+        if (existingTask) {
+            let isUpdated = false
+            if (typeof existingTask.rawPriority !== typeof priority) {
+                existingTask.rawPriority = priority
+                isUpdated = true
+            }
+            if (typeof existingTask.rawPriority === 'number' &&
+                typeof priority === 'number' &&
+                existingTask.rawPriority < priority) {
+                existingTask.rawPriority = priority
+                isUpdated = true
+            }
+            if (existingTask.save !== save) {
+                existingTask.save = save
+                isUpdated = true
+            }
+            if (existingTask._byPlayer !== byPlayer) {
+                existingTask._byPlayer = byPlayer
+                existingTask._isWhispered = isWhispered
+                isUpdated = true
+            }
+            if (existingTask._isWhispered !== isWhispered) {
+                existingTask._isWhispered = isWhispered
+                isUpdated = true
+            }
+            return isUpdated ? existingTask : null
         }
 
         if (this._tasks.length > 10) {
@@ -73,7 +100,9 @@ module.exports = class TaskManager {
             args,
             bot,
             task,
-            save
+            save,
+            byPlayer,
+            isWhispered
         )
 
         this._tasks.push(newTask)
@@ -84,7 +113,7 @@ module.exports = class TaskManager {
     death() {
         for (let i = this._tasks.length - 1; i >= 0; i--) {
             const task = this._tasks[i]
-            if (task.priority < 100) {
+            if (task.priority < 100 || task.id === 'mlg' || task.id === 'eat') {
                 console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
                 this._tasks.splice(i)
             }
@@ -110,15 +139,12 @@ module.exports = class TaskManager {
         return index
     }
 
-    /**
-     * @param {string | null} id
-     */
-    has(id) {
+    get(id) {
         if (id) {
-            return !!this._tasks.find(v => v.id === id)
+            return this._tasks.find(v => v.id === id)
         }
 
-        return false
+        return undefined
     }
 
     tick() {
@@ -184,8 +210,9 @@ module.exports = class TaskManager {
     /**
      * @param {import("./bruh-bot")} bot
      * @param {string} json
+     * @param {(task: import('./managed-task').SavedManagedTask) => import('./task').CommonArgs<{}>} commonArgs 
      */
-    fromJSON(bot, json) {
+    fromJSON(bot, json, commonArgs) {
         const tasks = require('./tasks')
         /** @type {ReadonlyArray<import('./managed-task').SavedManagedTask>} */
         const rawTasks = JSON.parse(json, reviver)
@@ -194,7 +221,10 @@ module.exports = class TaskManager {
              * @type {import('./task').TaskDef<any, any, any>}
              */
             const definition = tasks[rawTask.definition]
-            this.push(bot, definition, rawTask.args, rawTask.priority, true)
+            this.push(bot, definition, {
+                ...rawTask.args,
+                ...commonArgs(rawTask),
+            }, rawTask.priority, true, 'byPlayer' in rawTask ? rawTask.byPlayer : null, 'isWhispered' in rawTask ? rawTask.isWhispered : false)
         }
     }
 }

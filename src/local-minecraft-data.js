@@ -138,14 +138,14 @@ module.exports = class LocalMinecraftData {
      */
     constructor(path) {
         this.recipes = {
-            other: { },
-            blasting: { },
-            campfire: { },
-            smelting: { },
-            smoking: { },
+            other: {},
+            blasting: {},
+            campfire: {},
+            smelting: {},
+            smoking: {},
         }
 
-        this.tags = { }
+        this.tags = {}
 
         const zip = new StreamZip.async({
             file: path,
@@ -178,7 +178,7 @@ module.exports = class LocalMinecraftData {
                 return
             }
             const values = rawTag['values']
-            const newValues = [ ]
+            const newValues = []
             for (const value of values) {
                 if (typeof value === 'string') {
                     newValues.push(value.replace('minecraft:', ''))
@@ -198,7 +198,7 @@ module.exports = class LocalMinecraftData {
      */
     parseIngredients(ingredient) {
         if (Array.isArray(ingredient)) {
-            const result = [ ]
+            const result = []
             for (const _ingredient of ingredient) {
                 if ('item' in _ingredient) {
                     result.push(_ingredient.item.replace('minecraft:', ''))
@@ -222,6 +222,35 @@ module.exports = class LocalMinecraftData {
      * @param {{ [name: string]: StreamZip.ZipEntry; }} zipEntries
      */
     async readRecipes(zip, zipEntries) {
+        const invalidSmeltingIngredients = [
+            'chainmail_helmet',
+            'chainmail_chestplate',
+            'chainmail_leggings',
+            'chainmail_boots',
+
+            'iron_helmet',
+            'iron_chestplate',
+            'iron_leggings',
+            'iron_boots',
+            'iron_sword',
+            'iron_pickaxe',
+            'iron_hoe',
+            'iron_axe',
+            'iron_shovel',
+            'iron_horse_armor',
+
+            'golden_helmet',
+            'golden_chestplate',
+            'golden_leggings',
+            'golden_boots',
+            'golden_sword',
+            'golden_pickaxe',
+            'golden_hoe',
+            'golden_axe',
+            'golden_shovel',
+            'golden_horse_armor',
+        ]
+
         for (const entry in zipEntries) {
             if (!entry.endsWith('.json')) { continue }
             if (!entry.startsWith('data/minecraft/recipes/')) { continue }
@@ -252,6 +281,7 @@ module.exports = class LocalMinecraftData {
                         result: rawRecipe.result.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
+                    if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break
                     this.recipes.smelting[id] = recipe
                     break
                 }
@@ -265,6 +295,7 @@ module.exports = class LocalMinecraftData {
                         result: rawRecipe.result.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
+                    if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break
                     this.recipes.blasting[id] = recipe
                     break
                 }
@@ -278,6 +309,7 @@ module.exports = class LocalMinecraftData {
                         result: rawRecipe.result.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
+                    if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break
                     this.recipes.smoking[id] = recipe
                     break
                 }
@@ -320,6 +352,6 @@ module.exports = class LocalMinecraftData {
             return this.tags[tag]
         }
         console.warn(`Unknown tag "${tag}"`)
-        return [ ]
+        return []
     }
 }

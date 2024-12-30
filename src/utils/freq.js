@@ -16,6 +16,8 @@ module.exports = class Freq {
 
     get keys() { return this.#entries.map(v => v.k) }
 
+    get comparer() { return this.#comparer }
+
     /**
      * @param {(a: TKey, b: TKey) => boolean} comparer
      */
@@ -87,21 +89,31 @@ module.exports = class Freq {
     }
 
     /**
-     * @param  {ReadonlyArray<Freq<TKey>>} entries
+     * @param {ReadonlyArray<Freq<TKey> | ReadonlyArray<{ k: TKey; f: number; }> | { k: TKey; f: number; }>} entries
+     * @returns {this}
      */
     from(...entries) {
         for (const other of entries) {
-            for (const otherEntry of other.#entries) {
-                this.add(otherEntry.k, otherEntry.f)
+            if (other instanceof Freq) {
+                for (const otherEntry of other.#entries) {
+                    this.add(otherEntry.k, otherEntry.f)
+                }
+            } else if ('length' in other) {
+                for (const otherEntry of other) {
+                    this.add(otherEntry.k, otherEntry.f)
+                }
+            } else {
+                this.add(other.k, other.f)
             }
         }
+        return this
     }
 
     /**
      * @returns {ReadonlyArray<Readonly<{ k: TKey; f: number; }>>}
      */
     toJSON() {
-        return Object.freeze(this.#entries)
+        return this.#entries
     }
 
     /**

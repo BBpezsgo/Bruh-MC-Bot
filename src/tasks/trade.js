@@ -1,6 +1,6 @@
 'use strict'
 
-const { sleepG, wrap } = require('../utils/tasks')
+const { wrap, sleepTicks } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
@@ -80,7 +80,7 @@ module.exports = {
                 if (tradeIndex !== -1) {
                     args.villager = entity
                     villager.close()
-                    yield* sleepG(100)
+                    yield* sleepTicks()
                     break
                 }
 

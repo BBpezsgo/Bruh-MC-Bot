@@ -59,3 +59,5 @@ interface Math {
     lineDistance(point: readonly Point3, a: readonly Point3, b: readonly Point3): number
     lineDistanceSquared(point: readonly Point3, a: readonly Point3, b: readonly Point3): number
 }
+
+export default { }

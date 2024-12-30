@@ -37,6 +37,23 @@ module.exports = class Iterable {
     }
 
     /**
+     * @returns {import('./task').Task<Array<T>>}
+     */
+    *toArrayAsync() {
+        const result = []
+        const iterator = this.iterator()
+
+        while (true) {
+            yield
+            const v = iterator.next()
+            if (v.done === true) { break }
+            result.push(v.value)
+        }
+
+        return result
+    }
+
+    /**
      * @returns {boolean}
      */
     isEmpty() {

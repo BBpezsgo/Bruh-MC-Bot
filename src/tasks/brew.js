@@ -1,7 +1,7 @@
 'use strict'
 
-const { wrap } = require('../utils/tasks')
-const { NBT2JSON } = require('../utils/other')
+const { wrap, waitForEvent } = require('../utils/tasks')
+const { NBT2JSON, stringifyItem } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
@@ -320,6 +320,7 @@ const recipes = (() => {
  *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
  * }> & {
  *   recipes: typeof recipes;
+ *   potions: typeof potions;
  *   makePotionItem: makePotionItem;
  * }}
  */
@@ -399,16 +400,32 @@ module.exports = {
                 throw `Ingredients disappeared`
             }
 
-            yield* wrap(window.takePotions())
-            if (window.ingredientItem()) {
-                yield* wrap(window.takeIngredient())
+            if (window.potions().some(Boolean) || window.ingredientItem()) {
+                if (!args.response) { throw `cancelled` }
+                const res = yield* wrap(args.response.askYesNo(`There are some stuff in a brewing stand. Can I take it out?`, 10000, null, q => {
+                    if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
+                        let detRes = ''
+                        for (const potion of window.potions().filter(Boolean)) {
+                            detRes += `${potion.count > 1 ? potion.count : ''}${stringifyItem(potion)}\n`
+                        }
+                        if (window.ingredientItem()) {
+                            detRes += `${window.ingredientItem().count > 1 ? window.ingredientItem().count : ''}${stringifyItem(window.ingredientItem())}\n`
+                        }
+                        return detRes
+                    }
+                    return null
+                }))
+                if (res?.message) {
+                    if (window.potions().some(Boolean)) yield* wrap(window.takePotions())
+                    if (window.ingredientItem()) yield* wrap(window.takeIngredient())
+                } else {
+                    throw `cancelled`
+                }
             }
 
-            if (!window.fuel) {
+            if (!window.fuel && !window.fuelItem()) {
                 const fuelItem = bot.searchInventoryItem(window, 'blaze_powder')
-                if (!fuelItem) {
-                    throw `I have no blaze powder`
-                }
+                if (!fuelItem) { throw `I have no blaze powder` }
                 yield* wrap(window.putFuel(fuelItem.type, fuelItem.metadata, 1))
             }
 
@@ -438,22 +455,14 @@ module.exports = {
                 bot.bot.clickWindow(slot, 0, 0)
             }
 
-            let isDone = false
-            window.once('brewingStopped', () => {
-                isDone = true
-            })
-            while (!isDone) {
-                yield
-            }
+            yield* waitForEvent(window, 'brewingStopped')
 
             const res = yield* wrap(window.takePotions())
             if (window.ingredientItem()) {
                 yield* wrap(window.takeIngredient())
             }
 
-            if (res.length !== args.count) {
-                throw `Something aint right`
-            }
+            if (res.length !== args.count) { throw `Something aint right` }
             return res
         } finally {
             yield
@@ -468,5 +477,6 @@ module.exports = {
     },
     definition: 'brew',
     recipes: recipes,
+    potions: potions,
     makePotionItem: makePotionItem,
 }

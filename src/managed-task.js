@@ -5,7 +5,11 @@
  *   args: NonNullable<object>;
  *   priority?: number | undefined;
  *   definition: import('./tasks').TaskId;
- * }} SavedManagedTask
+ * } & ({
+ *   byPlayer: string;
+ *   isWhispered: boolean;
+ * } | {
+ * })} SavedManagedTask
  */
 
 /**
@@ -55,6 +59,14 @@ class ManagedTask {
         return (typeof this._priority === 'number') ? this._priority : this._priority(this.args)
     }
 
+    get rawPriority() {
+        return this._priority
+    }
+
+    set rawPriority(value) {
+        this._priority = value
+    }
+
     /**
      * @readonly
      * @type {import('./task').CommonArgs<TArgs>}
@@ -62,7 +74,6 @@ class ManagedTask {
     args
 
     /**
-     * @readonly
      * @type {boolean}
      */
     save
@@ -105,7 +116,7 @@ class ManagedTask {
     _promise
 
     /**
-     * @private @readonly
+     * @readonly
      * @type {import('./task-manager').Priority<TArgs>}
      */
     _priority
@@ -128,6 +139,16 @@ class ManagedTask {
      */
     _def
 
+    /**
+     * @type {string | null}
+     */
+    _byPlayer
+
+    /**
+     * @type {boolean}
+     */
+    _isWhispered
+
     //#endregion
 
     /**
@@ -135,13 +156,18 @@ class ManagedTask {
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
      * @param {import('./task').TaskDef<TResult, TArgs>} def
+     * @param {boolean} save
+     * @param {string | null} byPlayer
+     * @param {boolean} isWhispered
      */
     constructor(
         priority,
         args,
         bot,
         def,
-        save = false
+        save,
+        byPlayer,
+        isWhispered
     ) {
         this._priority = priority
         this._status = 'queued'
@@ -154,6 +180,8 @@ class ManagedTask {
         this._resolve = null
         this._reject = null
         this.save = save
+        this._byPlayer = byPlayer
+        this._isWhispered = isWhispered
     }
 
     /**
@@ -272,22 +300,33 @@ class ManagedTask {
     toJSON() {
         if (!this._def.definition) { return undefined }
 
-        /**
-         * @type {any}
-         */
+        /** @type {import('./task').CommonArgs<TArgs>} */
         const _args = { ...this.args }
 
-        for (const key in _args) {
+        delete _args['response']
+
+        for (const key of /** @type {Array<keyof import('./task').CommonArgs<TArgs>>} */ (Object.keys(_args))) {
             const arg = _args[key]
             if (typeof arg === 'function') { delete _args[key] }
             if (typeof arg === 'symbol') { delete _args[key] }
         }
 
-        return this._def.definition ? {
+        /** @type {SavedManagedTask} */
+        let result = {
             args: _args,
             priority: (typeof this._priority === 'number') ? this._priority : undefined,
             definition: this._def.definition,
-        } : undefined
+        }
+
+        if (this._byPlayer) {
+            result = {
+                ...result,
+                byPlayer: this._byPlayer,
+                isWhispered: this._isWhispered,
+            }
+        }
+
+        return result
     }
 }
 

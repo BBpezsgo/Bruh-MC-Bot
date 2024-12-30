@@ -49,7 +49,7 @@ function findWater(bot, preferTreasure) {
             if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
                 return false
             }
-            if (water.getProperties()['level'] !== 0) {
+            if (Number(water.getProperties()['level']) !== 0) {
                 return false
             }
             return true
@@ -63,7 +63,7 @@ function findWater(bot, preferTreasure) {
             const neighbor = bot.bot.blockAt(neighborPosition)
             if (!neighbor) { continue }
             if (neighbor.name !== 'water') { continue }
-            if (neighbor.getProperties()['level'] !== 0) { continue }
+            if (Number(neighbor.getProperties()['level']) !== 0) { continue }
             waterScore++
         }
         if (preferTreasure) {
@@ -125,8 +125,13 @@ module.exports = {
     
             if (true) {
                 yield* goto.task(bot, {
-                    point: water.offset(0, 0, 0),
-                    distance: 16,
+                    goal: {
+                        heuristic: node => Math.sqrt(Math.pow(node.x - water.x, 2) + Math.pow(node.z - water.z, 2)) + Math.abs(node.y - water.y + 1),
+                        isEnd: node => node.distanceTo(water) <= 8 && node.y > water.y,
+                    },
+                    options: {
+                        searchRadius: 64,
+                    }
                 })
                 yield* goto.task(bot, {
                     hawkeye: water.offset(0.5, 0.5, 0.5),
