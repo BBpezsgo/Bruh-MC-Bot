@@ -13,9 +13,8 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) {
-            throw `Can't eat in quiet mode`
-        }
+        if (args.cancellationToken.isCancelled) { return }
+        if (bot.quietMode) { throw `Can't eat in quiet mode` }
 
         let food = null
         if ('food' in args) {
@@ -30,24 +29,25 @@ module.exports = {
             food.name !== 'chorus_fruit') { return 'full' }
 
         yield* wrap(bot.bot.equip(food, 'hand'))
-        bot.deactivateHand()
-        bot.activateHand('right')
 
         const eatStarted = performance.now()
         const eatTime = (food.name === 'dried_kelp') ? (900 /* 0.865 */) : (1700 /* 1610 */)
 
-        let isCancelled = false
-        args.cancel = function*() {
-            bot.deactivateHand()
-            isCancelled = true
-        }
+        const cancelEat = () => { bot.deactivateHand() }
+
+        bot.deactivateHand()
+        bot.activateHand('right')
+        args.cancellationToken.once(cancelEat)
+
         while (
             performance.now() - eatStarted < eatTime &&
-            bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === food.name
+            bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === food.name &&
+            !args.cancellationToken.isCancelled
         ) {
-            if (isCancelled) { throw `cancelled` }
             yield* sleepTicks()
         }
+
+        args.cancellationToken.off(cancelEat)
 
         return 'ok'
     },

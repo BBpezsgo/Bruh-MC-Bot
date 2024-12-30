@@ -592,6 +592,7 @@ module.exports = {
             //     console.log(`[Bot "${bot.username}"] No melee weapon found`)
             // }
 
+            // @ts-ignore
             cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : (1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4))
             cooldownEndAt = performance.now() + cooldown
         }
@@ -1117,6 +1118,7 @@ module.exports = {
                         movementState = 'none'
 
                         yield* wrap(bot.bot.equip(weapon.item, 'hand'))
+                        // @ts-ignore
                         cooldown = 1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4)
                         cooldownEndAt = performance.now() + cooldown
 

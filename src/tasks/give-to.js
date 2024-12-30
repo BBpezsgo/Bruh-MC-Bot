@@ -10,9 +10,10 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.inventoryItems().isEmpty()) {
-            throw `I don't have anything`
-        }
+        const tossedMap = new Freq(isItemEquals)
+
+        if (args.cancellationToken.isCancelled) { return tossedMap }
+        if (bot.inventoryItems().isEmpty()) { throw `I don't have anything` }
 
         let canGiveSomething = false
 
@@ -40,14 +41,19 @@ module.exports = {
         yield* goto.task(bot, {
             point: target,
             distance: 2,
+            cancellationToken: args.cancellationToken,
         })
+
+        if (args.cancellationToken.isCancelled) { return tossedMap }
 
         yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), true))
         yield* sleepG(100)
 
-        const tossedMap = new Freq(isItemEquals)
+        if (args.cancellationToken.isCancelled) { return tossedMap }
 
         for (const itemToGive of args.items) {
+            if (args.cancellationToken.isCancelled) { break }
+
             const has = bot.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }
             const countCanGive = Math.min(has, itemToGive.count)

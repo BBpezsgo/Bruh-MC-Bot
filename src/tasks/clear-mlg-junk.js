@@ -9,19 +9,18 @@ const dig = require('./dig')
  * @type {import('../task').TaskDef}
  */
 module.exports = {
-    task: function*(bot) {
+    task: function*(bot, args) {
         console.log(`[Bot "${bot.username}"] Clearing MLG junk ...`, bot.memory.mlgJunkBlocks)
         for (let i = bot.memory.mlgJunkBlocks.length - 1; i >= 0; i--) {
             yield
 
-            const junk = bot.memory.mlgJunkBlocks.pop()
+            if (args.cancellationToken.isCancelled) { break }
+
+            const junk = bot.memory.mlgJunkBlocks[i]
 
             switch (junk.type) {
                 case 'water': {
-                    if (junk.position.dimension !== bot.dimension) {
-                        bot.memory.mlgJunkBlocks.push(junk)
-                        break
-                    }
+                    if (junk.position.dimension !== bot.dimension) { break }
 
                     let junkBlock = null
                     let notFirst = false
@@ -44,17 +43,25 @@ module.exports = {
                         yield* goto.task(bot, {
                             block: junkBlock.position,
                             reach: 2,
+                            cancellationToken: args.cancellationToken,
                         })
+
+                        if (args.cancellationToken.isCancelled) { break }
 
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
                         const bucket = yield* bot.ensureItem('bucket')
                         if (!bucket) {
-                            console.warn(`[Bot "${bot.username}"] No bucket found`)
+                            console.warn(`[Bot "${bot.username}"] I have no bucket`)
                             break
                         }
+
+                        if (args.cancellationToken.isCancelled) { break }
+
                         yield* wrap(bot.bot.equip(bucket, 'hand'))
                         yield* wrap(bot.bot.lookAt(junkBlock.position, true))
                         bot.bot.activateItem(false)
+
+                        bot.memory.mlgJunkBlocks.pop()
                     }
 
                     if (!notFirst) {
@@ -64,10 +71,7 @@ module.exports = {
                     break
                 }
                 case 'block': {
-                    if (junk.position.dimension !== bot.dimension) {
-                        bot.memory.mlgJunkBlocks.push(junk)
-                        break
-                    }
+                    if (junk.position.dimension !== bot.dimension) { break }
 
                     const junkBlock = bot.bot.findBlock({
                         matching: [
@@ -86,13 +90,14 @@ module.exports = {
                         block: junkBlock,
                         alsoTheNeighbors: false,
                         pickUpItems: true,
+                        cancellationToken: args.cancellationToken,
                     })
+                    bot.memory.mlgJunkBlocks.pop()
                     break
                 }
                 case 'boat': {
                     const junkBoat = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === junk.id)
                     if (!junkBoat) {
-                        bot.memory.mlgJunkBlocks.push(junk)
                         console.warn(`[Bot "${bot.username}"] Junk boat not found`)
                         break
                     }
@@ -102,11 +107,14 @@ module.exports = {
                         useBow: false,
                         useMelee: true,
                         useMeleeWeapon: false,
+                        cancellationToken: args.cancellationToken,
                     })
+                    bot.memory.mlgJunkBlocks.pop()
                     break
                 }
                 default:
                     console.warn(`[Bot "${bot.username}"] Unknown MLG junk`)
+                    bot.memory.mlgJunkBlocks.pop()
                     break
             }
         }

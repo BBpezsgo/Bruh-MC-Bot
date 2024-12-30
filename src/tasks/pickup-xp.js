@@ -9,17 +9,20 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
+
         const nearest = bot.env.getClosestXp(bot, args)
-        if (!nearest) {
-            throw `No xps nearby`
-        }
+        if (!nearest) { throw `No xps nearby` }
 
         yield* goto.task(bot, {
             entity: nearest,
             distance: 2, // max: 7.25
+            cancellationToken: args.cancellationToken,
         })
 
         while (nearest && nearest.isValid) {
+            if (args.cancellationToken.isCancelled) { break }
+
             yield* sleepG(100)
         }
     },

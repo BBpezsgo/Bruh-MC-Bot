@@ -44,12 +44,17 @@ module.exports = {
         while (current) {
             yield
 
+            if (args.cancellationToken.isCancelled) { break }
+
             if (bot.bot.entity.position.floored().offset(0, -1, 0).equals(current.position.floored())) {
                 yield* goto.task(bot, {
                     flee: current.position.offset(0, 1, 0),
                     distance: 1,
+                    cancellationToken: args.cancellationToken,
                 })
             }
+
+            if (args.cancellationToken.isCancelled) { break }
 
             try {
                 if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
@@ -79,6 +84,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         block: current.position,
                         movements: bot.cutTreeMovements,
+                        cancellationToken: args.cancellationToken,
                     })
 
                     if (tool?.has) {
@@ -124,9 +130,14 @@ module.exports = {
 
         if (args.pickUpItems) {
             for (let i = digged.length - 1; i >= 0; i--) {
+                if (args.cancellationToken.isCancelled) { break }
+                
                 const position = digged[i]
                 while (true) {
                     yield
+
+                    if (args.cancellationToken.isCancelled) { break }
+
                     const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
                         if (entity.name !== 'item') { return false }
                         const item = entity.getDroppedItem()
@@ -145,6 +156,7 @@ module.exports = {
                             yield* pickupItem.task(bot, {
                                 item: nearestEntity,
                                 silent: true,
+                                cancellationToken: args.cancellationToken,
                             })
                         } catch (error) {
                             // console.warn(error)

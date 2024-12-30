@@ -7,6 +7,7 @@ const Minecraft = require('../minecraft')
 const { stringifyItem, isItemEquals } = require('../utils/other')
 const { Item } = require('prismarine-item')
 const eat = require('./eat')
+const CancellationToken = require('../utils/cancellationToken')
 
 /**
  * @typedef {{
@@ -60,16 +61,18 @@ module.exports = {
             if (chorusFruit) {
                 const eatStarted = performance.now()
 
-                /** @type {import('../task').CommonArgs<import('../managed-task').TaskArgs<eat>>} */
-                const eatArgs = { food: chorusFruit }
-                const eatTask = eat.task(bot, eatArgs)
+                const cancelEat = new CancellationToken()
+                const eatTask = eat.task(bot, {
+                    food: chorusFruit,
+                    cancellationToken: cancelEat,
+                })
 
                 while (true) {
                     const v = eatTask.next()
                     if (v.done) return 'ok'
                     if (performance.now() - eatStarted < 1600 &&
                         bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) {
-                        if (eatArgs.cancel) yield* eatArgs.cancel()
+                        yield* cancelEat.trigger()
                         console.warn(`[Bot "${bot.username}"] [MLG] There was not enough time to eat chorus fruit`)
                         return 'failed'
                     }

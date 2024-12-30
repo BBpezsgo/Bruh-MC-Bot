@@ -26,9 +26,8 @@ const animalFoods = {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.animals.length === 0) {
-            return 0
-        }
+        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.animals.length === 0) { return 0 }
 
         /**
          * @type {Record<string, Array<import('prismarine-entity').Entity>>}
@@ -38,9 +37,7 @@ module.exports = {
         }
 
         for (const animal of args.animals) {
-            if (animal.metadata[16]) {
-                continue
-            }
+            if (animal.metadata[16]) { continue }
             const breedTime = (bot.env.animalBreedTimes[animal.id] ?? 0)
             // 5 minutes
             if ((Date.now() - breedTime) < (1000 * 60 * 5)) {
@@ -118,9 +115,11 @@ module.exports = {
                 yield* goto.task(bot, {
                     entity: animal,
                     distance: 4,
+                    cancellationToken: args.cancellationToken,
                 })
                 foodItem = bot.searchInventoryItem(null, food)
                 if (!foodItem) { continue }
+                if (args.cancellationToken.isCancelled) { break }
                 yield* wrap(bot.bot.equip(foodItem, 'hand'))
                 yield* wrap(bot.bot.activateEntity(animal))
                 const distance = Math.entityDistance(bot.bot.entity.position, animal)

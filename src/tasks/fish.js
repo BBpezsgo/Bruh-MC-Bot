@@ -91,13 +91,8 @@ module.exports = {
          * @type {import('prismarine-entity').Entity | null}
          */
         let bobber = null
-        let isFishing = true
 
         const interval = new Interval(30000 + 2000)
-
-        args.cancel = function*() {
-            isFishing = false
-        }
 
         if (!bot.bot.hawkEye) {
             new Promise(resolve => {
@@ -107,8 +102,10 @@ module.exports = {
             })
         }
 
-        while (isFishing) {
+        while (true) {
             yield
+
+            if (args.cancellationToken.isCancelled) { break }
 
             const fishingRod = yield* bot.ensureItem('fishing_rod')
             if (!fishingRod) {
@@ -122,7 +119,7 @@ module.exports = {
                 if (n) { return n }
                 throw `There is no water`
             }
-    
+
             if (true) {
                 yield* goto.task(bot, {
                     goal: {
@@ -131,11 +128,13 @@ module.exports = {
                     },
                     options: {
                         searchRadius: 64,
-                    }
+                    },
+                    cancellationToken: args.cancellationToken,
                 })
                 yield* goto.task(bot, {
                     hawkeye: water.offset(0.5, 0.5, 0.5),
                     weapon: Weapons.bobber,
+                    cancellationToken: args.cancellationToken,
                 })
                 const grade = bot.bot.hawkEye.getMasterGrade({
                     position: water.offset(0.5, 0.5, 0.5),
@@ -201,7 +200,7 @@ module.exports = {
             while ((!splashHeard || performance.now() - splashHeard < 500) &&
                 bobber &&
                 bobber.isValid &&
-                isFishing) {
+                !args.cancellationToken.isCancelled) {
                 if (interval.done()) {
                     console.warn(`[Bot "${bot.username}"] Fishing timed out (${interval.time / 1000} sec)`)
                     break
@@ -209,7 +208,7 @@ module.exports = {
                 yield* sleepG(100)
             }
 
-            if (isFishing && !bot.holds('fishing_rod')) {
+            if (!args.cancellationToken.isCancelled && !bot.holds('fishing_rod')) {
                 if (n) { return n }
                 throw `I have no fishing rod`
             }

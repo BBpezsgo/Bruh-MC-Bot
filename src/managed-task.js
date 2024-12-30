@@ -1,5 +1,7 @@
 'use strict'
 
+const CancellationToken = require('./utils/cancellationToken')
+
 /**
  * @typedef {{
  *   args: NonNullable<object>;
@@ -69,7 +71,7 @@ class ManagedTask {
 
     /**
      * @readonly
-     * @type {import('./task').CommonArgs<TArgs>}
+     * @type {import('./task').RuntimeArgs<TArgs>}
      */
     args
 
@@ -94,12 +96,6 @@ class ManagedTask {
     _task
 
     /**
-     * @private
-     * @type {import('./task').Task<void> | null}
-     */
-    _cancellingTask
-
-    /**
      * @type {((value: TResult) => any) | null}
      */
     _resolve
@@ -116,7 +112,6 @@ class ManagedTask {
     _promise
 
     /**
-     * @readonly
      * @type {import('./task-manager').Priority<TArgs>}
      */
     _priority
@@ -171,11 +166,13 @@ class ManagedTask {
     ) {
         this._priority = priority
         this._status = 'queued'
-        this.args = args
+        this.args = {
+            ...args,
+            cancellationToken: new CancellationToken(),
+        }
         this._bot = bot
         this._def = def
         this._task = null
-        this._cancellingTask = null
         this._promise = null
         this._resolve = null
         this._reject = null
@@ -199,14 +196,12 @@ class ManagedTask {
     }
 
     cancel() {
-        this._status = 'cancelling'
-        if (!this._task) { return }
-        if (this._cancellingTask) { return }
-
-        if (this.args?.cancel) {
-            this._cancellingTask = this.args.cancel()
-        } else {
+        if (!this._task) {
             this._status = 'cancelled'
+        } else {
+            this._status = 'cancelling'
+            //@ts-ignore
+            this._task = this.args.cancellationToken.trigger()
         }
     }
 
@@ -219,40 +214,13 @@ class ManagedTask {
     }
 
     tick() {
-        if (this._cancellingTask) {
-            try {
-                const v = this._cancellingTask.next()
-                if (v.done) {
-                    if (this._task) {
-                        const v2 = this._task.next()
-                        if (!v2.done) {
-                            this._status = 'cancelling'
-                            return false
-                        }
-                    }
-                    this._status = 'cancelled'
-                    console.log(`[Tasks] Task "${this.id}" cancelled gracefully`)
-                    if (this._reject) { this._reject('cancelled') }
-                    return true
-                } else {
-                    this._status = 'cancelling'
-                    return false
-                }
-            } catch (error) {
-                this._status = 'failed'
-                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
-                if (this._reject) { this._reject(error) }
-                return true
-            }
-        }
-
         if (this._status === 'cancelled') {
             console.log(`[Tasks] Task "${this.id}" cancelled`)
             if (this._reject) { this._reject('cancelled') }
             return true
         }
 
-        if (!this._task) {
+        if (!this._task && this._status !== 'cancelling') {
             this._task = this._def.task(this._bot, this.args)
             this._status = 'running'
             if (!this.args.silent) {
@@ -263,15 +231,27 @@ class ManagedTask {
         try {
             const v = this._task.next()
             if (v.done) {
-                this._status = 'done'
-                if (!this.args.silent) {
-                    if (v.value === undefined) {
-                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
-                    } else {
-                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                if (this._status === 'cancelling') {
+                    this._status = 'cancelled'
+                    if (!this.args.silent) {
+                        if (v.value === undefined) {
+                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled gracefully`)
+                        } else {
+                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled gracefully with result`, v.value)
+                        }
                     }
+                    if (this._reject) { this._reject('cancelled') }
+                } else {
+                    this._status = 'done'
+                    if (!this.args.silent) {
+                        if (v.value === undefined) {
+                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
+                        } else {
+                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
+                        }
+                    }
+                    if (this._resolve) { this._resolve(v.value) }
                 }
-                if (this._resolve) { this._resolve(v.value) }
                 return true
             } else {
                 this._status = 'running'
@@ -279,16 +259,7 @@ class ManagedTask {
             }
         } catch (error) {
             this._status = 'failed'
-            if (error instanceof Error && (
-                error.name === 'NoPath' ||
-                error.name === 'GoalChanged' ||
-                error.name === 'Timeout' ||
-                error.name === 'PathStopped'
-            )) {
-                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error.message)
-            } else {
-                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
-            }
+            console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
             if (this._reject) { this._reject(error) }
             return true
         }

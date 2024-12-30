@@ -14,14 +14,7 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 module.exports = {
     task: function*(bot, args) {
-        /** @type {import('../utils/tasks').CancellationToken} */
-        const cancellationToken = { isCancelled: false }
-
-        args.cancel = function*() {
-            cancellationToken.isCancelled = true
-        }
-
-        while (!cancellationToken.isCancelled) {
+        while (!args.cancellationToken.isCancelled) {
             yield
 
             let target = bot.env.getPlayerPosition(args.player, config.followPlayer.playerPositionMaxAge)
@@ -57,14 +50,17 @@ module.exports = {
                     }
                 }())
 
-                const foundTarget = yield* withCancellation(race([askTask, foundTask]), cancellationToken)
+                const foundTarget = yield* withCancellation(race([askTask, foundTask]), args.cancellationToken)
                 if (foundTarget.cancelled) { break }
                 target = foundTarget.result
             }
 
             if (target.dimension &&
                 bot.dimension !== target.dimension) {
-                yield* goto.task(bot, { dimension: target.dimension })
+                yield* goto.task(bot, {
+                    dimension: target.dimension,
+                    cancellationToken: args.cancellationToken,
+                })
                 continue
             }
 
@@ -80,12 +76,14 @@ module.exports = {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
                         sprint: distance > 10,
+                        cancellationToken: args.cancellationToken,
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
                         sprint: distance > 10,
+                        cancellationToken: args.cancellationToken,
                     })
                 }
             } catch (error) {

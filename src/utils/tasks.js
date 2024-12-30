@@ -75,10 +75,6 @@ function* wrap(promise) {
 }
 
 /**
- * @typedef {{ isCancelled: boolean; }} CancellationToken
- */
-
-/**
  * @template TEvent
  * @template {{
  *   once: (event: TEvent, callback: (...args: Array<any>) => void) => void;
@@ -86,7 +82,7 @@ function* wrap(promise) {
  * }} TEmitter
  * @param {TEmitter} emitter
  * @param {Parameters<TEmitter['once']>[0]} event
- * @param {CancellationToken | null} [cancellationToken=null]
+ * @param {import('./cancellationToken') | null} [cancellationToken=null]
  * @returns {import('../task').Task<Parameters<Parameters<emitter['once']>[1]>>  | null}
  */
 function* waitForEvent(emitter, event, cancellationToken = null) {
@@ -207,14 +203,14 @@ function* race(tasks) {
 /**
  * @template T
  * @param {import('../task').Task<T>} task
- * @param {CancellationToken} cancellationToken
+ * @param {import('./cancellationToken')} cancellationToken
  * @returns {import('../task').Task<{ cancelled: true; result: undefined; } | { cancelled: false; result: T; }>}
  */
 function* withCancellation(task, cancellationToken) {
     while (true) {
         const v = task.next()
         if (v.done) return { cancelled: false, result: v.value }
-        if (cancellationToken.isCancelled) { return { cancelled: true, result: v.value } }
+        if (cancellationToken.isCancelled) { return { cancelled: true, result: undefined } }
 
         yield
     }

@@ -14,12 +14,14 @@ const config = require('../config')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) {
-            throw `Can't harvest in quiet mode`
-        }
+        if (args.cancellationToken.isCancelled) { return 0 }
+        if (bot.quietMode) { throw `Can't harvest in quiet mode` }
 
         if (args.farmPosition) {
-            yield* goto.task(bot, { dimension: args.farmPosition.dimension })
+            yield* goto.task(bot, {
+                dimension: args.farmPosition.dimension,
+                cancellationToken: args.cancellationToken,
+            })
         }
 
         let n = 0
@@ -36,6 +38,9 @@ module.exports = {
 
         while (true) {
             yield
+
+            if (args.cancellationToken.isCancelled) { break }
+
             let cropPositions = bot.env.getCrops(bot, farmPosition, true, 128, config.harvest.cropSearchradius).map(v => v.position).toArray()
             if (cropPositions.length === 0) { break }
             // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
@@ -43,6 +48,9 @@ module.exports = {
             // console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
             for (const cropPosition of basicRouteSearch(bot.bot.entity.position, cropPositions)) {
                 // yield
+
+                if (args.cancellationToken.isCancelled) { break }
+
                 const cropBlock = bot.bot.blockAt(cropPosition)
                 if (!cropBlock) { continue }
                 // console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
@@ -65,6 +73,7 @@ module.exports = {
                     try {
                         yield* goto.task(bot, {
                             block: cropPosition,
+                            cancellationToken: args.cancellationToken,
                         })
                         return true
                     } catch (error) {
@@ -110,6 +119,7 @@ module.exports = {
                         if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* goto.task(bot, {
                             block: fruitBlock.position,
+                            cancellationToken: args.cancellationToken,
                         })
                         yield* bot.dig(fruitBlock)
                         break
@@ -127,6 +137,7 @@ module.exports = {
                             block: cropBlock,
                             alsoTheNeighbors: true,
                             pickUpItems: true,
+                            cancellationToken: args.cancellationToken,
                         })
                         break
                     }
@@ -136,6 +147,7 @@ module.exports = {
                             block: cropBlock,
                             alsoTheNeighbors: false,
                             pickUpItems: true,
+                            cancellationToken: args.cancellationToken,
                         })
                         break
                     }
@@ -209,7 +221,7 @@ module.exports = {
 
                     // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
 
-                    yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed)
+                    yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed, args)
 
                     // console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
                 } catch (error) {
@@ -233,10 +245,15 @@ module.exports = {
             // }
         }
 
+        if (args.cancellationToken.isCancelled) { return n }
+
         yield* plantSeed.task(bot, {
             harvestedCrops: replantPositions,
             locks: [],
+            cancellationToken: args.cancellationToken,
         })
+
+        if (args.cancellationToken.isCancelled) { return n }
 
         /**
          * @type {Array<import('prismarine-entity').Entity>}
@@ -260,7 +277,10 @@ module.exports = {
             for (const item of basicRouteSearch(bot.bot.entity.position, items, v => v.position)) {
                 if (!item?.isValid) { continue }
                 try {
-                    yield* pickupItem.task(bot, { item: item })
+                    yield* pickupItem.task(bot, {
+                        item: item,
+                        cancellationToken: args.cancellationToken,
+                    })
                     const j = items.findIndex(v => v.id === item.id)
                     if (j !== -1) {
                         items.splice(j)

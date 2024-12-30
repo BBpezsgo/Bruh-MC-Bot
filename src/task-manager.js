@@ -23,6 +23,12 @@ module.exports = class TaskManager {
     get tasks() { return this._tasks }
 
     /**
+     * @private
+     * @type {number}
+     */
+    _previousTask
+
+    /**
      * @private @readonly
      * @type {Array<ManagedTask>}
      */
@@ -35,6 +41,7 @@ module.exports = class TaskManager {
     _isStopping
 
     constructor() {
+        this._previousTask = -1
         this._tasks = []
         this._isStopping = false
     }
@@ -89,6 +96,7 @@ module.exports = class TaskManager {
 
         if (this._tasks.length > 10) {
             this._tasks.shift()
+            this._previousTask--
             console.warn(`Too many tasks in _queue`)
         }
 
@@ -116,6 +124,8 @@ module.exports = class TaskManager {
             if (task.priority < 100 || task.id === 'mlg' || task.id === 'eat') {
                 console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
                 this._tasks.splice(i)
+                if (this._previousTask === i) this._previousTask = -1
+                else if (this._previousTask > i) this._previousTask--
             }
         }
     }
@@ -139,6 +149,9 @@ module.exports = class TaskManager {
         return index
     }
 
+    /**
+     * @param {string} id
+     */
     get(id) {
         if (id) {
             return this._tasks.find(v => v.id === id)
@@ -154,16 +167,24 @@ module.exports = class TaskManager {
 
         if (i === -1) { return null }
 
+        if (this._previousTask !== i && this._previousTask !== -1) {
+            console.warn(`Switching task, expect unexpected behavior!`)
+        }
+
+        this._previousTask = i
+
         if (this._isStopping && this._tasks[i].status === 'queued') {
             this._tasks.splice(i, 1)
+            this._previousTask = -1
             return null
         }
 
         let running = null
         for (let step = 0; step < 3; step++) {
             if (this._tasks[i].tick()) {
-                this._tasks.splice(i, 1)[0]
+                this._tasks.splice(i, 1)
                 running = null
+                this._previousTask = -1
                 break
             } else {
                 running = this._tasks[i]

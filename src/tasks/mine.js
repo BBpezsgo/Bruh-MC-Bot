@@ -44,6 +44,7 @@ function getStaircaseBlock(y) {
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
         // try {
         //     const movements = new Movements(bot.bot, bot.permissiveMovements)
         //     movements.liquidCost = Infinity
@@ -69,6 +70,9 @@ module.exports = {
                 for (const z of incrementalNeighbors(botPosition.z, config.mine.placeSearchRadius)) {
                     for (const y of incrementalNeighbors(botPosition.y, config.mine.placeSearchRadius)) {
                         yield
+
+                        if (args.cancellationToken.isCancelled) { return }
+
                         const point = new Vec3(x, y, z)
                         if (!checkMinePosition(bot, point)) {
                             bot.debug.drawPoint(point, [1, 1, 0])
@@ -103,6 +107,8 @@ module.exports = {
         let didSomethingSinceLastError = false
         let failStreak = 0
         while (true) {
+            if (args.cancellationToken.isCancelled) { break }
+
             yield
             const y = startY - (currentYOffset++)
             try {
@@ -115,6 +121,8 @@ module.exports = {
 
                 let segmentFailStreak = 0
                 while (digTasks.length > 0) {
+                    if (args.cancellationToken.isCancelled) { break }
+
                     yield
                     try {
                         const block = bot.bot.blockAt(digTasks[0])
@@ -129,6 +137,7 @@ module.exports = {
                             block: block,
                             alsoTheNeighbors: false,
                             pickUpItems: false,
+                            cancellationToken: args.cancellationToken,
                         })
                         digTasks.shift()
                         segmentFailStreak = 0
@@ -147,6 +156,7 @@ module.exports = {
                             yield* goto.task(bot, {
                                 point: shouldBeSolid.clone(),
                                 distance: 16,
+                                cancellationToken: args.cancellationToken,
                             })
                         } catch (error) {
                             console.warn(error)
@@ -154,6 +164,7 @@ module.exports = {
                         yield* placeBlock.task(bot, {
                             item: scaffoldingBlock,
                             position: shouldBeSolid,
+                            cancellationToken: args.cancellationToken,
                         })
                     } else {
                         throw `I dont have any scaffolding blocks`
@@ -180,6 +191,7 @@ module.exports = {
                 yield* goto.task(bot, {
                     point: originalMinePosition,
                     distance: 2,
+                    cancellationToken: args.cancellationToken,
                 })
                 didSomethingSinceLastError = false
             }

@@ -14,21 +14,21 @@ const Freq = require('../utils/freq')
  * @param {Block} placeOn
  * @param {Vec3} placeVector
  * @param {import('prismarine-item').Item} seedItem
+ * @param {import('../task').RuntimeArgs<{}>} args
  */
-function* plant(bot, placeOn, placeVector, seedItem) {
+function* plant(bot, placeOn, placeVector, seedItem, args) {
     const above = bot.bot.blockAt(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
 
-    if (bot.quietMode) {
-        throw `Can't plant in quiet mode`
-    }
+    if (bot.quietMode) { throw `Can't plant in quiet mode` }
 
-    if (above.name !== 'air') {
-        throw `Can't plant seed: block above is "${above.name}"`
-    }
+    if (above.name !== 'air') { throw `Can't plant seed: block above is "${above.name}"` }
 
     yield* goto.task(bot, {
         block: placeOn.position.clone().offset(0, 0.5, 0),
+        cancellationToken: args.cancellationToken,
     })
+
+    if (args.cancellationToken.isCancelled) { return }
 
     yield* bot.place(placeOn, placeVector, seedItem.name, true)
 }
@@ -49,6 +49,8 @@ module.exports = {
     task: function*(bot, args) {
         let plantedCount = 0
 
+        if (args.cancellationToken.isCancelled) { return plantedCount }
+
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
 
@@ -60,6 +62,8 @@ module.exports = {
             }
 
             for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
+                if (args.cancellationToken.isCancelled) { break }
+
                 // yield
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
@@ -96,12 +100,15 @@ module.exports = {
                         yield* hoeing.task(bot, {
                             block: new Vec3Dimension(placeOn.block.position, bot.dimension),
                             gatherTool: false,
+                            cancellationToken: args.cancellationToken,
                         })
                     } catch (error) {
                         console.error(`[Bot "${bot.username}"]`, error)
                         continue
                     }
                 }
+
+                if (args.cancellationToken.isCancelled) { break }
 
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
@@ -117,13 +124,15 @@ module.exports = {
                 }
 
                 // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
-                yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, args)
                 seedsNeed.set(crop.seed, -1)
                 plantedCount++
                 continue
             }
         } else {
             while (true) {
+                if (args.cancellationToken.isCancelled) { break }
+
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)
 
                 const seed = bot.searchInventoryItem(null, ...args.seedItems.map(v => bot.mc.registry.items[v].name))
@@ -138,7 +147,7 @@ module.exports = {
 
                 // console.log(`[Bot "${bot.username}"] Plant ${seed.displayName} on ${placeOn.block.name}`)
 
-                yield* plant(bot, placeOn.block, placeOn.faceVector, seed)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, args)
 
                 plantedCount++
             }

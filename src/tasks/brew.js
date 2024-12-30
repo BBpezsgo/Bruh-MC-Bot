@@ -326,6 +326,8 @@ const recipes = (() => {
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return [] }
+
         const recipe = (() => {
             if ('potion' in args) {
                 let potionName = args.potion.toLowerCase()
@@ -363,6 +365,7 @@ module.exports = {
             yield* goto.task(bot, {
                 point: args.brewingStand,
                 distance: 8,
+                cancellationToken: args.cancellationToken,
             })
         }
 
@@ -376,6 +379,7 @@ module.exports = {
 
         yield* goto.task(bot, {
             block: brewingStand.position,
+            cancellationToken: args.cancellationToken,
         })
 
         brewingStand = bot.bot.blockAt(brewingStand.position, true)

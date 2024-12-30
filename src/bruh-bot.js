@@ -33,6 +33,7 @@ const { Vec3 } = require('vec3')
 const Iterable = require('./iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
+const CancellationToken = require('./utils/cancellationToken')
 
 //#endregion
 
@@ -1084,7 +1085,10 @@ module.exports = class BruhBot {
                             }
                         }
                         for (const mobToKill of mobsToKill) {
-                            yield* tasks.kill.task(bot, { entity: mobToKill })
+                            yield* tasks.kill.task(bot, {
+                                entity: mobToKill,
+                                cancellationToken: args.cancellationToken,
+                            })
                         }
                         console.log(`[Bot "${bot.username}"] Mobs to kill`, mobsToKill)
                     },
@@ -1430,7 +1434,7 @@ module.exports = class BruhBot {
             match: 'scan chests',
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
-                    task: () => this.env.scanChests(this),
+                    task: (bot, args) => this.env.scanChests(bot, args),
                     id: `scan-chests`,
                     humanReadableId: `Scanning chests`,
                 }, {}, priorities.user, true, sender, isWhispered)
@@ -1449,7 +1453,7 @@ module.exports = class BruhBot {
             match: 'scan villagers',
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
-                    task: () => this.env.scanVillagers(this),
+                    task: (bot, args) => this.env.scanVillagers(bot, args),
                     id: `scan-villagers`,
                     humanReadableId: `Scanning villagers`,
                 }, {}, priorities.user, true, sender, isWhispered)
@@ -1732,6 +1736,7 @@ module.exports = class BruhBot {
                                             }
                                         }
                                     },
+                                    cancellationToken: args.cancellationToken,
                                 })
                             } catch (error) {
                                 if (error === 'bruh') {
@@ -2187,6 +2192,7 @@ module.exports = class BruhBot {
                                     searchRadius: 3,
                                     timeout: 300,
                                     sprint: true,
+                                    cancellationToken: args.cancellationToken,
                                 })
                             } else {
                                 yield* tasks.goto.task(bot, {
@@ -2195,6 +2201,7 @@ module.exports = class BruhBot {
                                     searchRadius: 3,
                                     timeout: 300,
                                     sprint: true,
+                                    cancellationToken: args.cancellationToken,
                                 })
                             }
                         } catch (error) {
@@ -2250,6 +2257,7 @@ module.exports = class BruhBot {
                                 searchRadius: 3,
                                 timeout: 500,
                                 sprint: true,
+                                cancellationToken: args.cancellationToken,
                             })
                         }
                     },
@@ -2384,6 +2392,7 @@ module.exports = class BruhBot {
                                 point: water.position,
                                 distance: 0,
                                 sprint: true,
+                                cancellationToken: args.cancellationToken,
                             })
                         }
                     },
@@ -2575,6 +2584,7 @@ module.exports = class BruhBot {
                                 searchRadius: 20,
                                 timeout: 1000,
                             },
+                            cancellationToken: args.cancellationToken,
                         })
                     },
                     id: `get-out-lava`,
@@ -2604,6 +2614,7 @@ module.exports = class BruhBot {
                                 searchRadius: 20,
                                 timeout: 1000,
                             },
+                            cancellationToken: args.cancellationToken,
                         })
                     },
                     id: `get-out-water`,
@@ -2841,7 +2852,7 @@ module.exports = class BruhBot {
 
         if (this.memory.myArrows.length > 0) {
             this.tasks.push(this, {
-                task: function*(bot) {
+                task: function*(bot, args) {
                     const myArrow = bot.memory.myArrows.shift()
                     if (!myArrow) {
                         return
@@ -2854,6 +2865,7 @@ module.exports = class BruhBot {
                     yield* tasks.goto.task(bot, {
                         point: entity.position,
                         distance: 1,
+                        cancellationToken: args.cancellationToken,
                     })
                     yield* taskUtils.sleepG(1000)
                     if (entity.isValid) {
@@ -2930,7 +2942,7 @@ module.exports = class BruhBot {
                         if (dumped.isEmpty) return
                         console.log(`Dumped ${dumped.keys.map(v => `${dumped.get(v)} ${stringifyItem(v)}`).join(', ')}`)
                     })
-                    .catch(v => v !== 'cancelled' && console.error(`[Bot "${this.bot.username}"]`, v))
+                    .catch(() => {})
             }
         }
 
@@ -3000,7 +3012,7 @@ module.exports = class BruhBot {
             if ((!this.tasks.isIdle || idleTime > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
                 this.tryUnequip()
                     .then(v => v ? console.log(`[Bot "${this.username}"] Hand cleared`) : console.log(`[Bot "${this.username}"] Failed to clear hand`))
-                    .catch(console.error)
+                    .catch(v => console.error(`[Bot "${this.username}"]`, v))
                 return
             }
         }
@@ -3054,7 +3066,7 @@ module.exports = class BruhBot {
     /**
      * @type {import('./task').SimpleTaskDef<void, { explicit: boolean }>}
      */
-    static *ensureEquipment(bot, options) {
+    static *ensureEquipment(bot, args) {
         const equipment = require('./equipment')
 
         let foodPointsInInventory = calculateFoodPoints(null)
@@ -3100,9 +3112,9 @@ module.exports = class BruhBot {
                         // console.warn(`[Bot "${bot.username}"] Low on food`)
                         const permissions = {
                             canCraft: true,
-                            canSmelt: item.priority === 'must' || options.explicit,
-                            canBrew: item.priority === 'must' || options.explicit,
-                            canDigGenerators: item.priority === 'must' || options.explicit,
+                            canSmelt: item.priority === 'must' || args.explicit,
+                            canBrew: item.priority === 'must' || args.explicit,
+                            canDigGenerators: item.priority === 'must' || args.explicit,
                             canDigEnvironment: false,
                             canKill: false,
                             canUseChests: true,
@@ -3125,6 +3137,7 @@ module.exports = class BruhBot {
                         const res = yield* tasks.gatherItem.task(bot, {
                             force: true,
                             plan: plans.flat(),
+                            cancellationToken: args.cancellationToken,
                             ...permissions,
                         })
                         // console.log(`[Bot \"${bot.username}\"] Food gathered`, res)
@@ -3141,9 +3154,9 @@ module.exports = class BruhBot {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
                             canCraft: true,
-                            canSmelt: item.priority === 'must' || options.explicit,
-                            canBrew: item.priority === 'must' || options.explicit,
-                            canDigGenerators: item.priority === 'must' || options.explicit,
+                            canSmelt: item.priority === 'must' || args.explicit,
+                            canBrew: item.priority === 'must' || args.explicit,
+                            canDigGenerators: item.priority === 'must' || args.explicit,
                             canDigEnvironment: false,
                             canKill: false,
                             canUseChests: true,
@@ -3152,6 +3165,7 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
+                            cancellationToken: args.cancellationToken,
                         })
                         // console.log(`[Bot \"${bot.username}\"] Equipment ${item.item} gathered`, res)
                     } catch (error) {
@@ -3167,9 +3181,9 @@ module.exports = class BruhBot {
                             item: item.prefer,
                             count: item.count === 'any' ? 1 : item.count,
                             canCraft: true,
-                            canSmelt: item.priority === 'must' || options.explicit,
-                            canBrew: item.priority === 'must' || options.explicit,
-                            canDigGenerators: item.priority === 'must' || options.explicit,
+                            canSmelt: item.priority === 'must' || args.explicit,
+                            canBrew: item.priority === 'must' || args.explicit,
+                            canDigGenerators: item.priority === 'must' || args.explicit,
                             canDigEnvironment: false,
                             canKill: false,
                             canUseChests: true,
@@ -3178,6 +3192,7 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
+                            cancellationToken: args.cancellationToken,
                         })
                         // console.log(`[Bot \"${bot.username}\"] Preferred equipment ${item.prefer} gathered`, res)
                         break
@@ -3190,9 +3205,9 @@ module.exports = class BruhBot {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
                             canCraft: true,
-                            canSmelt: item.priority === 'must' || options.explicit,
-                            canBrew: item.priority === 'must' || options.explicit,
-                            canDigGenerators: item.priority === 'must' || options.explicit,
+                            canSmelt: item.priority === 'must' || args.explicit,
+                            canBrew: item.priority === 'must' || args.explicit,
+                            canDigGenerators: item.priority === 'must' || args.explicit,
                             canDigEnvironment: false,
                             canKill: false,
                             canUseChests: true,
@@ -3201,6 +3216,7 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
+                            cancellationToken: args.cancellationToken,
                         })
                         // console.log(`[Bot \"${bot.username}\"] Equipment gathered`, res)
                         break
@@ -3218,7 +3234,7 @@ module.exports = class BruhBot {
     /**
      * @type {import('./task').SimpleTaskDef}
      */
-    static *tryRestoreCrops(bot) {
+    static *tryRestoreCrops(bot, args) {
         /** @type {Array<import('./environment').SavedCrop>} */
         const crops = []
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
@@ -3231,14 +3247,17 @@ module.exports = class BruhBot {
         yield* tasks.plantSeed.task(bot, {
             harvestedCrops: crops,
             locks: [],
+            cancellationToken: args.cancellationToken,
         })
     }
 
     /**
      * @type {import('./task').SimpleTaskDef<number>}
      */
-    static *tryHarvestCrops(bot) {
-        const harvested = yield* tasks.harvest.task(bot, {})
+    static *tryHarvestCrops(bot, args) {
+        const harvested = yield* tasks.harvest.task(bot, {
+            cancellationToken: args.cancellationToken,
+        })
 
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
             const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
@@ -3247,7 +3266,9 @@ module.exports = class BruhBot {
             return 0
         }
 
-        yield* tasks.compost.task(bot, {})
+        yield* tasks.compost.task(bot, {
+            cancellationToken: args.cancellationToken,
+        })
 
         return harvested
     }
@@ -3255,7 +3276,7 @@ module.exports = class BruhBot {
     /**
      * @type {import('./task').SimpleTaskDef<number>}
      */
-    static *breedAnimals(bot) {
+    static *breedAnimals(bot, args) {
         const fencings = yield* bot.env.scanFencings(bot)
         let n = 0
         let _error = null
@@ -3263,6 +3284,7 @@ module.exports = class BruhBot {
             try {
                 n += yield* tasks.breed.task(bot, {
                     animals: Object.values(fencing.mobs),
+                    cancellationToken: args.cancellationToken,
                 })
             } catch (error) {
                 console.error(error)
@@ -3274,13 +3296,13 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {import("./bruh-bot")} bot
-     * @returns {import('./task').Task<Freq<import('./utils/other').ItemId>>}
+     * @type {import('./task').SimpleTaskDef<Freq<import('./utils/other').ItemId>>}
      */
-    static *dumpTrash(bot) {
+    static *dumpTrash(bot, args) {
         const trashItems = bot.getTrashItems()
         return yield* tasks.dumpToChest.task(bot, {
-            items: trashItems
+            items: trashItems,
+            cancellationToken: args.cancellationToken,
         })
     }
 
@@ -4049,6 +4071,7 @@ module.exports = class BruhBot {
                 count: 1,
                 canUseInventory: true,
                 canUseChests: true,
+                cancellationToken: new CancellationToken(),
             })
             result = this.searchInventoryItem(null, ...item)
             if (result) { return result }
@@ -4080,6 +4103,7 @@ module.exports = class BruhBot {
                 count: count,
                 canUseInventory: true,
                 canUseChests: true,
+                cancellationToken: new CancellationToken(),
             })
             const result = this.searchInventoryItem(null, item)
             if (result) { return result }

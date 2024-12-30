@@ -501,10 +501,9 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import('./bruh-bot')} bot
-     * @returns {import('./task').Task<number>}
+     * @type {import('./task').SimpleTaskDef<number>}
      */
-    *scanChests(bot) {
+    *scanChests(bot, args) {
         let scannedChests = 0
 
         for (let i = this.chests.length - 1; i >= 0; i--) {
@@ -545,6 +544,7 @@ module.exports = class Environment {
             try {
                 yield* Tasks.goto.task(bot, {
                     block: chestPosition,
+                    cancellationToken: args.cancellationToken,
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -619,10 +619,9 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import('./bruh-bot')} bot
-     * @returns {import('./task').Task<number>}
+     * @type {import('./task').SimpleTaskDef<number>}
      */
-    *scanVillagers(bot) {
+    *scanVillagers(bot, args) {
         let scannedVillagers = 0
         console.log(`[Bot "${bot.username}"] Scanning villagers ...`)
         const villagers = Object.values(bot.bot.entities).filter(v => v.name === 'villager')
@@ -633,6 +632,7 @@ module.exports = class Environment {
                 yield* Tasks.goto.task(bot, {
                     point: villager.position,
                     distance: 2,
+                    cancellationToken: args.cancellationToken,
                 })
                 if (!villager.isValid) { continue }
 

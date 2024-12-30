@@ -8,32 +8,35 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
+
         let items = bot.bot.inventory.items()
-        if (items.length === 0) {
-            throw `I don't have anything`
-        }
+        if (items.length === 0) { throw `I don't have anything` }
 
         const target = bot.env.getPlayerPosition(args.player)
 
-        if (!target) {
-            throw `Can't find ${args.player}`
-        }
+        if (!target) { throw `Can't find ${args.player}` }
 
         yield* goto.task(bot, {
             point: target,
             distance: 2,
+            cancellationToken: args.cancellationToken,
         })
 
+        if (args.cancellationToken.isCancelled) { return }
+
         yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0)))
-        
+
         let tossedSomething = false
 
         {
             items = bot.bot.inventory.items()
             while (items.length > 0) {
                 yield
-                
+
                 for (const item of items) {
+                    if (args.cancellationToken.isCancelled) { return }
+
                     yield* wrap(bot.bot.tossStack(item))
                     tossedSomething = true
                     yield* sleepG(100)
@@ -51,8 +54,10 @@ module.exports = {
             'hand',
             'off-hand',
         ]
-        
+
         for (const specialSlot of specialSlots) {
+            if (args.cancellationToken.isCancelled) { return }
+
             const item = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot(specialSlot)]
             if (item) {
                 yield* wrap(bot.bot.unequip(specialSlot))
@@ -61,9 +66,7 @@ module.exports = {
             }
         }
 
-        if (!tossedSomething) {
-            throw `Don't have anything`
-        }
+        if (!tossedSomething) { throw `Don't have anything` }
     },
     id: function(args) {
         return `give-all-${args.player}`

@@ -229,6 +229,8 @@ function* findPosition(bot, blocks, confirmationCallback) {
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
+
         const blocks = args.blocks.filter(v => {
             if (v.name === 'air') { return false }
             if (v.properties &&
@@ -299,6 +301,9 @@ module.exports = {
 
         while (remainingBlocks.length > 0) {
             yield
+
+            if (args.cancellationToken.isCancelled) { break }
+
             const blockCountBefore = remainingBlocks.length
             let lastError = null
             for (let i = remainingBlocks.length - 1; i >= 0; i--) {
@@ -316,6 +321,7 @@ module.exports = {
                         position: block.position,
                         properties: block.properties,
                         cheat: true,
+                        cancellationToken: args.cancellationToken,
                     })
                     remainingBlocks.splice(i, 1)
                 } catch (error) {

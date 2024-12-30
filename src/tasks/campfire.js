@@ -7,7 +7,7 @@ const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 
 /**
- * @type {import('../task').TaskDef<Item, {
+ * @type {import('../task').TaskDef<Item | null, {
  *   recipes: ReadonlyArray<import('../local-minecraft-data').CookingRecipe>;
  *   count: 1 | 2 | 3 | 4;
  *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
@@ -15,6 +15,8 @@ const pickupItem = require('./pickup-item')
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return null }
+
         const recipes = args.recipes.filter(v => v.type === 'campfire')
         let campfire = bot.findBlocks({
             matching: 'campfire',
@@ -27,6 +29,7 @@ module.exports = {
 
         yield* goto.task(bot, {
             block: campfire.position,
+            cancellationToken: args.cancellationToken,
         })
 
         campfire = bot.bot.blockAt(campfire.position)
@@ -72,6 +75,8 @@ module.exports = {
         if (!campfire.getProperties()['lit']) { throw `This campfire is out` }
 
         for (let i = 0; i < args.count; i++) {
+            if (args.cancellationToken.isCancelled) { break }
+
             if (!('Items' in campfire.blockEntity)) { continue }
             if (!Array.isArray(campfire.blockEntity.Items)) { continue }
             if (campfire.blockEntity.Items.length >= 4 || placedCount >= 4) {
@@ -112,7 +117,13 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: campfire.position,
+                cancellationToken: args.cancellationToken,
             })
+
+            if (args.cancellationToken.isCancelled) {
+                bot.bot.removeListener('playerCollect', onPickUp)
+                break
+            }
 
             campfire = bot.bot.blockAt(campfire.position)
             if (!campfire) {
@@ -140,7 +151,10 @@ module.exports = {
             if (bot.env.getClosestItem(bot, null, itemFilter)) {
                 console.log(`[Bot "${bot.username}"] Picking up item`)
                 try {
-                    yield* pickupItem.task(bot, itemFilter)
+                    yield* pickupItem.task(bot, {
+                        ...itemFilter,
+                        cancellationToken: args.cancellationToken,
+                    })
                 } catch (error) {
                     console.log(`[Bot "${bot.username}"]`, error)
                 }

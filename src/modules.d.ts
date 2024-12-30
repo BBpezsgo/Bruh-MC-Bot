@@ -22,6 +22,8 @@ declare module 'mineflayer' {
 		    facing: number;
 		    headOffset: Vec3;
 		}
+
+		jumpQueued: boolean
     }
     
 	interface BotEvents {

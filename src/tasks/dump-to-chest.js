@@ -35,9 +35,10 @@ function getChest(bot, fullChests) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) { throw `Can't open chest in quiet mode` }
-
         const dumped = new Freq(isItemEquals)
+
+        if (args.cancellationToken) { return dumped }
+        if (bot.quietMode) { throw `Can't open chest in quiet mode` }
 
         if (args.items.length === 0) { return dumped }
 
@@ -45,6 +46,8 @@ module.exports = {
 
         while (true) {
             yield
+
+            if (args.cancellationToken.isCancelled) { break }
 
             if (!args.items.some(v => bot.inventoryItemCount(null, v.item))) { break }
 
@@ -56,6 +59,8 @@ module.exports = {
                     yield
                     tryCount++
 
+                    if (args.cancellationToken.isCancelled) { break }
+
                     chestBlock = getChest(bot, fullChests)
                     if (!chestBlock) {
                         if (tryCount > 5) { throw `There is no chest` }
@@ -65,10 +70,13 @@ module.exports = {
                     const chestPosition = chestBlock.position
                     yield* goto.task(bot, {
                         block: chestPosition,
+                        cancellationToken: args.cancellationToken,
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
             }
+
+            if (args.cancellationToken.isCancelled) { break }
 
             const chest = yield* bot.openChest(chestBlock)
 
@@ -90,9 +98,14 @@ module.exports = {
                 while (true) {
                     yield
 
+                    if (args.cancellationToken.isCancelled) { break }
+
                     let shouldBreak = true
                     for (const itemToDeposit of args.items) {
                         yield
+
+                        if (args.cancellationToken.isCancelled) { break }
+
                         if (bot.firstFreeContainerSlot(chest, itemToDeposit.item) === null) {
                             fullChests.push(chestBlock.position.clone())
                             shouldBreak = true

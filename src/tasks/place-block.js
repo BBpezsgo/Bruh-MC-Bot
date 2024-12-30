@@ -218,9 +218,8 @@ function getCorrectBlock(itemName) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) {
-            throw `Can't place block in quiet mode`
-        }
+        if (args.cancellationToken.isCancelled) { return }
+        if (bot.quietMode) { throw `Can't place block in quiet mode` }
 
         const item = ('item' in args) ? ((typeof args.item === 'string') ? args.item : args.item.name) : getCorrectItem(args.block)
         const block = ('block' in args) ? args.block : getCorrectBlock((typeof args.item === 'string') ? args.item : args.item.name)[0]
@@ -387,14 +386,10 @@ module.exports = {
                 }
             }
 
-            if (!position) {
-                throw `Couldn't find a place to place the block`
-            }
+            if (!position) { throw `Couldn't find a place to place the block` }
         }
 
-        if (!placeInfo) {
-            throw `Couldn't find a reference block`
-        }
+        if (!placeInfo) { throw `Couldn't find a reference block` }
 
         const referencePosition = position.offset(-placeInfo.faceVector.x, -placeInfo.faceVector.y, -placeInfo.faceVector.z)
         const blockPosition = new Vec3Dimension(position, bot.dimension)
@@ -403,7 +398,10 @@ module.exports = {
         while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
             yield* goto.task(bot, {
                 block: position,
+                cancellationToken: args.cancellationToken,
             })
+
+            if (args.cancellationToken.isCancelled) { return }
 
             if (!bot.env.allocateBlock(bot.username, blockPosition, 'dig')) {
                 console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
@@ -418,7 +416,10 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: position,
+                cancellationToken: args.cancellationToken,
             })
+
+            if (args.cancellationToken.isCancelled) { return }
 
             yield* wrap(bot.bot.dig(blockHere))
         }
@@ -432,6 +433,7 @@ module.exports = {
             for (let i = 3; i >= 0; i--) {
                 yield* goto.task(bot, {
                     block: position,
+                    cancellationToken: args.cancellationToken,
                 })
 
                 let imInTheWay = false
@@ -448,6 +450,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         flee: position,
                         distance: 1.9,
+                        cancellationToken: args.cancellationToken,
                     })
                 }
 
@@ -459,6 +462,8 @@ module.exports = {
                 if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
                     throw `Invalid reference block ${referenceBlock.name}`
                 }
+
+                if (args.cancellationToken.isCancelled) { return }
 
                 if (args.cheat) {
                     yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
@@ -474,6 +479,8 @@ module.exports = {
                         const pitch = Math.atan2(botFacing.y, groundDistance)
                         yield* wrap(bot.bot.look(yaw, pitch, true))
                     }
+
+                    if (args.cancellationToken.isCancelled) { return }
                     yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
                     break
                 } catch (error) {

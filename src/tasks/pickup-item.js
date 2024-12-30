@@ -15,24 +15,18 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
+
         const nearest = (() => {
             if ('item' in args) { return args.item }
             return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
-
-        if (!nearest) {
-            throw `No items nearby`
-        }
+        if (!nearest) { throw `No items nearby` }
 
         const item = nearest.getDroppedItem()
+        if (!item) { throw `This aint an item` }
 
-        if (!item) {
-            throw `This aint an item`
-        }
-
-        if (bot.isInventoryFull(item.name)) {
-            throw `Inventory is full`
-        }
+        if (bot.isInventoryFull(item.name)) { throw `Inventory is full` }
 
         let isCollected = false
         /**
@@ -53,15 +47,17 @@ module.exports = {
                 options: {
                     timeout: 5000,
                     savePathError: true,
-                }
+                },
+                cancellationToken: args.cancellationToken,
             })
         } catch (error) {
-            bot.bot.off('playerCollect', listener)
             if (isCollected) { return }
             throw error
-        }
-        if (!isCollected) {
+        } finally {
             bot.bot.off('playerCollect', listener)
+        }
+
+        if (!isCollected) {
             throw `Couldn't pick up the item`
         }
     },

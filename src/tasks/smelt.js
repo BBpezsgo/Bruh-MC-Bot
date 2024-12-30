@@ -81,19 +81,22 @@ function* findBestFurnace(bot, recipes) {
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return [] }
+
         const fuels = Minecraft.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
 
         const best = yield* findBestFurnace(bot, [args.recipe])
-
         if (!best) { throw `No furnaces found` }
 
         let furnaceBlock = best.furnaceBlock
-
         if (!furnaceBlock) { throw `No furnaces found` }
 
         yield* goto.task(bot, {
             block: furnaceBlock.position,
+            cancellationToken: args.cancellationToken,
         })
+
+        if (args.cancellationToken.isCancelled) { return [] }
 
         const recipe = best.recipes[0]
 
@@ -105,6 +108,7 @@ module.exports = {
 
         try {
             while (furnace.inputItem() && furnace.fuel > 0) {
+                if (args.cancellationToken.isCancelled) { return [] }
                 yield* sleepTicks()
             }
 
@@ -128,6 +132,8 @@ module.exports = {
             const outputs = []
 
             for (let i = 0; i < args.count; i++) {
+                if (args.cancellationToken.isCancelled) { return outputs }
+
                 for (const ingredient of recipe.ingredient) {
                     const actualIngredient = (ingredient.startsWith('#') ? bot.mc.local.resolveItemTag(ingredient.replace('#', '')) : [ingredient])
                     const ingredientItem = bot.searchInventoryItem(furnace, ...actualIngredient)
@@ -142,6 +148,8 @@ module.exports = {
 
                 while (!furnace.outputItem()) {
                     yield
+
+                    if (args.cancellationToken.isCancelled) { return outputs }
 
                     if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                         for (const fuel of fuels) {

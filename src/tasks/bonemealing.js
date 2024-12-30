@@ -1,5 +1,4 @@
-import Minecraft from '../minecraft'
-
+const Minecraft = require('../minecraft')
 const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
@@ -11,9 +10,8 @@ const config = require('../config')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) {
-            throw `Can't bonemeal in quiet mode`
-        }
+        if (args.cancellationToken.isCancelled) { return 0 }
+        if (bot.quietMode) { throw `Can't bonemeal in quiet mode` }
 
         let bonemeal = bot.searchInventoryItem(null, 'bonemeal')
         let n = 0
@@ -22,8 +20,13 @@ module.exports = {
             yield
 
             if (args.farmPosition) {
-                yield* goto.task(bot, { dimension: args.farmPosition.dimension })
+                yield* goto.task(bot, {
+                    dimension: args.farmPosition.dimension,
+                    cancellationToken: args.cancellationToken,
+                })
             }
+
+            if (args.cancellationToken.isCancelled) { break }
 
             const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
@@ -45,11 +48,14 @@ module.exports = {
 
                 yield* goto.task(bot, {
                     block: crop,
+                    cancellationToken: args.cancellationToken,
                 })
-                
+
+                if (args.cancellationToken.isCancelled) { break }
+
                 bonemeal = bot.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }
-                
+
                 bot.bot.equip(bonemeal, 'hand')
 
                 const cropBlock = bot.bot.blockAt(crop)

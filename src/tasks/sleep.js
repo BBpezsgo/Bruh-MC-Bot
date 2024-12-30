@@ -27,19 +27,28 @@ function can(bot) {
 }
 
 /**
- * @type {import('../task').TaskDef & { can: can }}
+ * @type {import('../task').TaskDef & {
+ *   can: can
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return }
+
         /**
          * @type {Block}
          */
         let bed = null
-        
+
         if (bot.memory.myBed) {
-            yield* goto.task(bot, { dimension: bot.memory.myBed.dimension })
+            yield* goto.task(bot, {
+                dimension: bot.memory.myBed.dimension,
+                cancellationToken: args.cancellationToken,
+            })
             bed = bot.bot.blockAt(bot.memory.myBed.xyz(bot.dimension))
         }
+
+        if (args.cancellationToken.isCancelled) { return }
 
         if (!bed ||
             !bot.bot.isABed(bed) ||
@@ -50,44 +59,39 @@ module.exports = {
                     if (!bot.bot.isABed(block)) {
                         return false
                     }
-        
+
                     const _bed = bot.bot.parseBedMetadata(block)
-        
+
                     if (_bed.occupied) {
                         return false
                     }
-        
+
                     if (block.getProperties()['part'] !== 'head') {
                         return false
                     }
-        
+
                     return true
                 },
             })
         }
 
-        if (!bed) {
-            throw `No beds found`
-        }
+        if (!bed) { throw `No beds found` }
 
         yield* goto.task(bot, {
             block: bed.position,
             timeout: 30000,
             reach: 3,
+            cancellationToken: args.cancellationToken,
         })
+
+        if (args.cancellationToken.isCancelled) { return }
 
         yield* wrap(bot.bot.sleep(bed))
 
         bot.memory.myBed = new Vec3Dimension(bed.position, bot.dimension)
 
-        let shouldWakeUp = false
-
-        args.cancel = function*() {
-            shouldWakeUp = true
-        }
-
         while (bot.bot.isSleeping) {
-            if (shouldWakeUp) {
+            if (args.cancellationToken.isCancelled) {
                 yield* wrap(bot.bot.wake())
                 break
             }

@@ -12,14 +12,18 @@ const config = require('../config')
 /**
  * @param {import('../bruh-bot')} bot
  * @param {Block} composter
+ * @param {import('../task').RuntimeArgs<{}>} args
  */
-const waitCompost = function*(bot, composter) {
+const waitCompost = function*(bot, composter, args) {
     if (Number(composter.getProperties()['level']) === 7) {
         const timeout = new Timeout(2000)
         while (!timeout.done() && Number(composter.getProperties()['level']) !== 8) {
+            if (args.cancellationToken.isCancelled) { return false }
             yield* sleepTicks()
         }
     }
+
+    if (args.cancellationToken.isCancelled) { return false }
 
     if (Number(composter.getProperties()['level']) === 8) {
         yield* wrap(bot.bot.unequip('hand'))
@@ -59,10 +63,9 @@ const getItem = function(bot, includeNono) {
  * @type {import('../task').TaskDef<number>}
  */
 module.exports = {
-    task: function*(bot) {
-        if (bot.quietMode) {
-            throw `Can't compost in quiet mode`
-        }
+    task: function*(bot, args) {
+        if (args.cancellationToken.isCancelled) { return 0 }
+        if (bot.quietMode) { throw `Can't compost in quiet mode` }
 
         let composted = 0
 
@@ -71,27 +74,31 @@ module.exports = {
             maxDistance: config.compost.composterSearchRadius,
         })
 
-        if (!composter) {
-            throw `There is no composter`
-        }
+        if (!composter) { throw `There is no composter` }
 
         while (true) {
             yield
+
+            if (args.cancellationToken.isCancelled) { break }
+
             const item = getItem(bot, false)
-            if (!item) {
-                break
-            }
+            if (!item) { break }
 
             yield* goto.task(bot, {
                 block: composter.position,
+                cancellationToken: args.cancellationToken,
             })
+
+            if (args.cancellationToken.isCancelled) { break }
 
             composter = bot.bot.blockAt(composter.position)
             if (composter.type !== bot.mc.registry.blocksByName['composter'].id) {
                 throw `Composter destroyed while I was trying to get there`
             }
 
-            yield* waitCompost(bot, composter)
+            yield* waitCompost(bot, composter, args)
+
+            if (args.cancellationToken.isCancelled) { break }
 
             yield* wrap(bot.bot.equip(item, 'hand'))
             if (!bot.bot.heldItem) { continue }
@@ -104,9 +111,10 @@ module.exports = {
             try {
                 yield* pickupItem.task(bot, {
                     point: composter.position,
-                    items: [ 'bonemeal' ],
+                    items: ['bonemeal'],
                     inAir: true,
                     maxDistance: 4,
+                    cancellationToken: args.cancellationToken,
                 })
             } catch (error) {
                 console.error(`[Bot \"${bot.username}\"]`, error)

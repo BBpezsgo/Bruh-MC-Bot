@@ -1614,8 +1614,8 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
 /**
  * @param {import('../bruh-bot')} bot
  * @param {OrganizedPlan} plan
- * @param {import('../task').CommonArgs<{
- *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+ * @param {import('../task').RuntimeArgs<{
+ *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>
  * }>} args
  * @returns {import('../task').Task<void>}
  */
@@ -2306,13 +2306,15 @@ const def = {
             bot.lockedItems.push(...locks)
             locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.locks).flat())
             const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
-            args.cancel = function*() { cleanup() }
+            args.cancellationToken.once(cleanup)
             try {
                 yield* evaluatePlan(bot, _organizedPlan, {
                     locks: locks,
                     response: args.response,
+                    cancellationToken: args.cancellationToken,
                 })
             } finally {
+                args.cancellationToken.off(cleanup)
                 cleanup()
             }
 
@@ -2385,13 +2387,15 @@ const def = {
             bot.lockedItems.push(...locks)
             locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.locks).flat())
             const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
-            args.cancel = function*() { cleanup() }
+            args.cancellationToken.once(cleanup)
             try {
                 yield* evaluatePlan(bot, _organizedPlan, {
                     locks: locks,
                     response: args.response,
+                    cancellationToken: args.cancellationToken,
                 })
             } finally {
+                args.cancellationToken.off(cleanup)
                 cleanup()
             }
 

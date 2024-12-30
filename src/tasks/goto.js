@@ -470,6 +470,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -490,6 +491,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -520,6 +522,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -540,6 +543,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -564,6 +568,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -587,6 +592,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
+                                            cancellationToken: args.cancellationToken,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -621,12 +627,12 @@ module.exports = {
                 for (let i = 0; i <= retryCount; i++) {
                     setOptions(bot, args.options)
 
-                    let isCancelled = false
-                    args.cancel = function*() {
+                    const performCancellation = () => {
                         bot.bot.pathfinder.stop()
-                        isCancelled = true
                     }
+                    args.cancellationToken.once(performCancellation)
                     try {
+
                         yield* wrap(bot.bot.pathfinder.goto(_goal))
                     } catch (error) {
                         lastError = error
@@ -635,13 +641,13 @@ module.exports = {
                         } else if (error.name === 'GoalChanged') {
                             retryCount++
                             console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
-                        } else if (error.name === 'PathStopped' && isCancelled) {
+                        } else if (error.name === 'PathStopped' && args.cancellationToken.isCancelled) {
                             console.log(`[Bot "${bot.username}"] Pathfinder stopped but that was expected`)
                         } else {
                             throw error
                         }
                     } finally {
-                        args.cancel = undefined
+                        args.cancellationToken.off(performCancellation)
                     }
 
                     if (_goal.isEnd(bot.bot.entity.position) ||
@@ -649,7 +655,7 @@ module.exports = {
                         return 'ok'
                     }
 
-                    if (isCancelled) {
+                    if (args.cancellationToken.isCancelled) {
                         throw `cancelled`
                     }
 
@@ -672,11 +678,15 @@ module.exports = {
                 let result
                 for (const _goal of getGoal(bot, args)) {
                     if ('dimension' in _goal) {
-                        result = yield* this.task(bot, _goal)
+                        result = yield* this.task(bot, {
+                            ..._goal,
+                            cancellationToken: args.cancellationToken,
+                        })
                     } else {
                         result = yield* this.task(bot, {
                             goal: _goal,
                             options: args,
+                            cancellationToken: args.cancellationToken,
                         })
                     }
                 }
