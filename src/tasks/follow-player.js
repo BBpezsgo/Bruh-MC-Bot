@@ -1,9 +1,8 @@
 'use strict'
 
-const { sleepG, wrap, parallel, race, withCancellation } = require('../utils/tasks')
+const { sleepG, wrap, race, withCancellation } = require('../utils/tasks')
 const goto = require('./goto')
 const config = require('../config')
-const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 
 /**
@@ -14,7 +13,7 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 module.exports = {
     task: function*(bot, args) {
-        while (!args.cancellationToken.isCancelled) {
+        while (!args.interrupt.isCancelled) {
             yield
 
             let target = bot.env.getPlayerPosition(args.player, config.followPlayer.playerPositionMaxAge)
@@ -50,7 +49,7 @@ module.exports = {
                     }
                 }())
 
-                const foundTarget = yield* withCancellation(race([askTask, foundTask]), args.cancellationToken)
+                const foundTarget = yield* withCancellation(race([askTask, foundTask]), args.interrupt)
                 if (foundTarget.cancelled) { break }
                 target = foundTarget.result
             }
@@ -59,7 +58,7 @@ module.exports = {
                 bot.dimension !== target.dimension) {
                 yield* goto.task(bot, {
                     dimension: target.dimension,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
                 continue
             }
@@ -76,14 +75,14 @@ module.exports = {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
                         sprint: distance > 10,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
                         sprint: distance > 10,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                 }
             } catch (error) {

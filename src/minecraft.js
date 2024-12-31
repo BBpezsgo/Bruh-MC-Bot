@@ -80,7 +80,31 @@ const LocalMinecraftData = require('./local-minecraft-data')
  * @typedef {GeneralCrop & {
  *   type: 'up';
  *   seed: string;
+ *   needsWater: boolean;
+ *   root?: string;
  * }} UpwardsCrop
+ */
+
+/**
+ * @typedef {number | { easy: number; normal: number; hard: number; }} Amount
+ */
+
+/**
+ * @typedef {{
+ *   type: 'physical';
+ *   amount: Amount | ((entity: import('prismarine-entity').Entity) => Amount);
+ * } | {
+ *   type: 'explosion';
+ *   level: Amount | ((entity: import('prismarine-entity').Entity) => Amount);
+ * } | {
+ *   type: 'effect';
+ *   effect: string;
+ *   time: Amount;
+ *   level: Amount;
+ * } | {
+ *   type: 'fire';
+ *   time: Amount;
+ * }} Damage
  */
 
 /**
@@ -153,264 +177,264 @@ module.exports = class Minecraft {
      * @type {Readonly<Record<string, Readonly<{ time: number; no: boolean; }>>>}
      */
     static fuels = Object.freeze({
-        "lava_bucket":              { "time": 1000, "no": true },
-        "coal_block":               { "time": 800, "no": false },
-        "dried_kelp_block":         { "time": 200, "no": false },
-        
-        "blaze_rod":                { "time": 120, "no": true },
-        "coal":                     { "time": 80, "no": true },
-        "charcoal":                 { "time": 80, "no": false },
-        
-        "oak_boat":                 { "time": 60, "no": true },
-        "spruce_boat":              { "time": 60, "no": true },
-        "birch_boat":               { "time": 60, "no": true },
-        "jungle_boat":              { "time": 60, "no": true },
-        "acacia_boat":              { "time": 60, "no": true },
-        "dark_oak_boat":            { "time": 60, "no": true },
-        "mangrove_boat":            { "time": 60, "no": true },
-        "cherry_boat":              { "time": 60, "no": true },
-        "bamboo_raft":              { "time": 60, "no": true },
-    
-        "oak_chest_boat":           { "time": 60, "no": true },
-        "spruce_chest_boat":        { "time": 60, "no": true },
-        "birch_chest_boat":         { "time": 60, "no": true },
-        "jungle_chest_boat":        { "time": 60, "no": true },
-        "acacia_chest_boat":        { "time": 60, "no": true },
-        "dark_oak_chest_boat":      { "time": 60, "no": true },
-        "mangrove_chest_boat":      { "time": 60, "no": true },
-        "cherry_chest_boat":        { "time": 60, "no": true },
-        "bamboo_chest_raft":        { "time": 60, "no": true },
-    
-        "oak_log":                  { "time": 15, "no": false },
-        "spruce_log":               { "time": 15, "no": false },
-        "birch_log":                { "time": 15, "no": false },
-        "jungle_log":               { "time": 15, "no": false },
-        "acacia_log":               { "time": 15, "no": false },
-        "dark_oak_log":             { "time": 15, "no": false },
-        "mangrove_log":             { "time": 15, "no": false },
-        "cherry_log":               { "time": 15, "no": false },
-        "bamboo_block":             { "time": 15, "no": false },
-    
-        "stripped_oak_log":         { "time": 15, "no": false },
-        "stripped_spruce_log":      { "time": 15, "no": false },
-        "stripped_birch_log":       { "time": 15, "no": false },
-        "stripped_jungle_log":      { "time": 15, "no": false },
-        "stripped_acacia_log":      { "time": 15, "no": false },
-        "stripped_dark_oak_log":    { "time": 15, "no": false },
-        "stripped_mangrove_log":    { "time": 15, "no": false },
-        "stripped_cherry_log":      { "time": 15, "no": false },
-        "stripped_bamboo_block":    { "time": 15, "no": false },
-    
-        "oak_planks":               { "time": 15, "no": false },
-        "spruce_planks":            { "time": 15, "no": false },
-        "birch_planks":             { "time": 15, "no": false },
-        "jungle_planks":            { "time": 15, "no": false },
-        "acacia_planks":            { "time": 15, "no": false },
-        "dark_oak_planks":          { "time": 15, "no": false },
-        "mangrove_planks":          { "time": 15, "no": false },
-        "cherry_planks":            { "time": 15, "no": false },
-        "bamboo_planks":            { "time": 15, "no": false },
-        "bamboo_mosaic":            { "time": 15, "no": false },
-        "bamboo_mosaic_slab":       { "time": 7.5, "no": false },
-        "bamboo_mosaic_stairs":     { "time": 15, "no": false },
-    
-        "chiseled_bookshelf":       { "time": 15, "no": false },
-    
-        "oak_slab":                 { "time": 7.5, "no": false },
-        "spruce_slab":              { "time": 7.5, "no": false },
-        "birch_slab":               { "time": 7.5, "no": false },
-        "jungle_slab":              { "time": 7.5, "no": false },
-        "acacia_slab":              { "time": 7.5, "no": false },
-        "dark_oak_slab":            { "time": 7.5, "no": false },
-        "mangrove_slab":            { "time": 7.5, "no": false },
-        "cherry_slab":              { "time": 7.5, "no": false },
-        "bamboo_slab":              { "time": 7.5, "no": false },
-    
-        "oak_stairs":               { "time": 15, "no": false },
-        "spruce_stairs":            { "time": 15, "no": false },
-        "birch_stairs":             { "time": 15, "no": false },
-        "jungle_stairs":            { "time": 15, "no": false },
-        "acacia_stairs":            { "time": 15, "no": false },
-        "dark_oak_stairs":          { "time": 15, "no": false },
-        "mangrove_stairs":          { "time": 15, "no": false },
-        "cherry_stairs":            { "time": 15, "no": false },
-        "bamboo_stairs":            { "time": 15, "no": false },
-    
-        "oak_pressure_plate":       { "time": 15, "no": false },
-        "spruce_pressure_plate":    { "time": 15, "no": false },
-        "birch_pressure_plate":     { "time": 15, "no": false },
-        "jungle_pressure_plate":    { "time": 15, "no": false },
-        "acacia_pressure_plate":    { "time": 15, "no": false },
-        "dark_oak_pressure_plate":  { "time": 15, "no": false },
-        "mangrove_pressure_plate":  { "time": 15, "no": false },
-        "cherry_pressure_plate":    { "time": 15, "no": false },
-        "bamboo_pressure_plate":    { "time": 15, "no": false },
-    
-        "oak_button":               { "time": 5, "no": false },
-        "spruce_button":            { "time": 5, "no": false },
-        "birch_button":             { "time": 5, "no": false },
-        "jungle_button":            { "time": 5, "no": false },
-        "acacia_button":            { "time": 5, "no": false },
-        "dark_oak_button":          { "time": 5, "no": false },
-        "mangrove_button":          { "time": 5, "no": false },
-        "cherry_button":            { "time": 5, "no": false },
-        "bamboo_button":            { "time": 5, "no": false },
-    
-        "oak_trapdoor":             { "time": 15, "no": false },
-        "spruce_trapdoor":          { "time": 15, "no": false },
-        "birch_trapdoor":           { "time": 15, "no": false },
-        "jungle_trapdoor":          { "time": 15, "no": false },
-        "acacia_trapdoor":          { "time": 15, "no": false },
-        "dark_oak_trapdoor":        { "time": 15, "no": false },
-        "mangrove_trapdoor":        { "time": 15, "no": false },
-        "cherry_trapdoor":          { "time": 15, "no": false },
-        "bamboo_trapdoor":          { "time": 15, "no": false },
-    
-        "oak_fence":                { "time": 15, "no": false },
-        "spruce_fence":             { "time": 15, "no": false },
-        "birch_fence":              { "time": 15, "no": false },
-        "jungle_fence":             { "time": 15, "no": false },
-        "acacia_fence":             { "time": 15, "no": false },
-        "dark_oak_fence":           { "time": 15, "no": false },
-        "mangrove_fence":           { "time": 15, "no": false },
-        "cherry_fence":             { "time": 15, "no": false },
-        "bamboo_fence":             { "time": 15, "no": false },
-    
-        "oak_fence_gate":           { "time": 15, "no": false },
-        "spruce_fence_gate":        { "time": 15, "no": false },
-        "birch_fence_gate":         { "time": 15, "no": false },
-        "jungle_fence_gate":        { "time": 15, "no": false },
-        "acacia_fence_gate":        { "time": 15, "no": false },
-        "dark_oak_fence_gate":      { "time": 15, "no": false },
-        "mangrove_fence_gate":      { "time": 15, "no": false },
-        "cherry_fence_gate":        { "time": 15, "no": false },
-        "bamboo_fence_gate":        { "time": 15, "no": false },
-    
-        "oak_door":                 { "time": 10, "no": false },
-        "spruce_door":              { "time": 10, "no": false },
-        "birch_door":               { "time": 10, "no": false },
-        "jungle_door":              { "time": 10, "no": false },
-        "acacia_door":              { "time": 10, "no": false },
-        "dark_oak_door":            { "time": 10, "no": false },
-        "mangrove_door":            { "time": 10, "no": false },
-        "cherry_door":              { "time": 10, "no": false },
-        "bamboo_door":              { "time": 10, "no": false },
-    
-        "oak_sign":                 { "time": 10, "no": false },
-        "spruce_sign":              { "time": 10, "no": false },
-        "birch_sign":               { "time": 10, "no": false },
-        "jungle_sign":              { "time": 10, "no": false },
-        "acacia_sign":              { "time": 10, "no": false },
-        "dark_oak_sign":            { "time": 10, "no": false },
-        "mangrove_sign":            { "time": 10, "no": false },
-        "cherry_sign":              { "time": 10, "no": false },
-        "bamboo_sign":              { "time": 10, "no": false },
-    
-        "oak_hanging_sign":         { "time": 10, "no": true },
-        "spruce_hanging_sign":      { "time": 10, "no": true },
-        "birch_hanging_sign":       { "time": 10, "no": true },
-        "jungle_hanging_sign":      { "time": 10, "no": true },
-        "acacia_hanging_sign":      { "time": 10, "no": true },
-        "dark_oak_hanging_sign":    { "time": 10, "no": true },
-        "mangrove_hanging_sign":    { "time": 10, "no": true },
-        "cherry_hanging_sign":      { "time": 10, "no": true },
-        "bamboo_hanging_sign":      { "time": 10, "no": true },
-    
-        "oak_sapling":              { "time": 5, "no": true },
-        "spruce_sapling":           { "time": 5, "no": true },
-        "birch_sapling":            { "time": 5, "no": true },
-        "jungle_sapling":           { "time": 5, "no": true },
-        "acacia_sapling":           { "time": 5, "no": true },
-        "dark_oak_sapling":         { "time": 5, "no": true },
-        "mangrove_propagule":       { "time": 5, "no": true },
-        "cherry_sapling":           { "time": 5, "no": true },
-        "azalea":                   { "time": 5, "no": true },
-        "flowering_azalea":         { "time": 5, "no": true },
-    
-        "wooden_sword":             { "time": 10, "no": false },
-        "wooden_axe":               { "time": 10, "no": false },
-        "wooden_hoe":               { "time": 10, "no": true },
-        "wooden_shovel":            { "time": 10, "no": false },
-        "wooden_pickaxe":           { "time": 10, "no": false },
-        "fishing_rod":              { "time": 15, "no": true },
-        "crossbow":                 { "time": 15, "no": true },
-        "bow":                      { "time": 15, "no": true },
-    
-        "bowl":                     { "time": 5, "no": false },
-        "stick":                    { "time": 5, "no": false },
-        "ladder":                   { "time": 15, "no": false },
-    
-        "mangrove_roots":           { "time": 15, "no": false },
-        "dead_bush":                { "time": 5, "no": false },
-    
-        "crafting_table":           { "time": 15, "no": false },
-        "cartography_table":        { "time": 15, "no": true },
-        "fletching_table":          { "time": 15, "no": true },
-        "smithing_table":           { "time": 15, "no": true },
-        "loom":                     { "time": 15, "no": true },
-        "bookshelf":                { "time": 15, "no": true },
-        "lectern":                  { "time": 15, "no": true },
-        "composter":                { "time": 15, "no": true },
-        "chest":                    { "time": 15, "no": true },
-        "trapped_chest":            { "time": 15, "no": true },
-        "barrel":                   { "time": 15, "no": true },
-        "daylight_detector":        { "time": 15, "no": true },
-        "jukebox":                  { "time": 15, "no": true },
-        "note_block":               { "time": 15, "no": true },
-        
-        "white_wool":               { "time": 5, "no": false },
-        "light_gray_wool":          { "time": 5, "no": false },
-        "gray_wool":                { "time": 5, "no": false },
-        "black_wool":               { "time": 5, "no": false },
-        "brown_wool":               { "time": 5, "no": false },
-        "red_wool":                 { "time": 5, "no": false },
-        "orange_wool":              { "time": 5, "no": false },
-        "yellow_wool":              { "time": 5, "no": false },
-        "lime_wool":                { "time": 5, "no": false },
-        "green_wool":               { "time": 5, "no": false },
-        "cyan_wool":                { "time": 5, "no": false },
-        "light_blue_wool":          { "time": 5, "no": false },
-        "blue_wool":                { "time": 5, "no": false },
-        "purple_wool":              { "time": 5, "no": false },
-        "magenta_wool":             { "time": 5, "no": false },
-        "pink_wool":                { "time": 5, "no": false },
-        
-        "white_banner":             { "time": 5, "no": false },
-        "light_gray_banner":        { "time": 5, "no": false },
-        "gray_banner":              { "time": 5, "no": false },
-        "black_banner":             { "time": 5, "no": false },
-        "brown_banner":             { "time": 5, "no": false },
-        "red_banner":               { "time": 5, "no": false },
-        "orange_banner":            { "time": 5, "no": false },
-        "yellow_banner":            { "time": 5, "no": false },
-        "lime_banner":              { "time": 5, "no": false },
-        "green_banner":             { "time": 5, "no": false },
-        "cyan_banner":              { "time": 5, "no": false },
-        "light_blue_banner":        { "time": 5, "no": false },
-        "blue_banner":              { "time": 5, "no": false },
-        "purple_banner":            { "time": 5, "no": false },
-        "magenta_banner":           { "time": 5, "no": false },
-        "pink_banner":              { "time": 5, "no": false },
-        
-        "white_carpet":             { "time": 3.35, "no": false },
-        "light_gray_carpet":        { "time": 3.35, "no": false },
-        "gray_carpet":              { "time": 3.35, "no": false },
-        "black_carpet":             { "time": 3.35, "no": false },
-        "brown_carpet":             { "time": 3.35, "no": false },
-        "red_carpet":               { "time": 3.35, "no": false },
-        "orange_carpet":            { "time": 3.35, "no": false },
-        "yellow_carpet":            { "time": 3.35, "no": false },
-        "lime_carpet":              { "time": 3.35, "no": false },
-        "green_carpet":             { "time": 3.35, "no": false },
-        "cyan_carpet":              { "time": 3.35, "no": false },
-        "light_blue_carpet":        { "time": 3.35, "no": false },
-        "blue_carpet":              { "time": 3.35, "no": false },
-        "purple_carpet":            { "time": 3.35, "no": false },
-        "magenta_carpet":           { "time": 3.35, "no": false },
-        "pink_carpet":              { "time": 3.35, "no": false },
-        
-        "bamboo":                   { "time": 2.5, "no": true },
-        "scaffolding":              { "time": 2.5, "no": true }
+        "lava_bucket": { "time": 1000, "no": true },
+        "coal_block": { "time": 800, "no": false },
+        "dried_kelp_block": { "time": 200, "no": false },
+
+        "blaze_rod": { "time": 120, "no": true },
+        "coal": { "time": 80, "no": true },
+        "charcoal": { "time": 80, "no": false },
+
+        "oak_boat": { "time": 60, "no": true },
+        "spruce_boat": { "time": 60, "no": true },
+        "birch_boat": { "time": 60, "no": true },
+        "jungle_boat": { "time": 60, "no": true },
+        "acacia_boat": { "time": 60, "no": true },
+        "dark_oak_boat": { "time": 60, "no": true },
+        "mangrove_boat": { "time": 60, "no": true },
+        "cherry_boat": { "time": 60, "no": true },
+        "bamboo_raft": { "time": 60, "no": true },
+
+        "oak_chest_boat": { "time": 60, "no": true },
+        "spruce_chest_boat": { "time": 60, "no": true },
+        "birch_chest_boat": { "time": 60, "no": true },
+        "jungle_chest_boat": { "time": 60, "no": true },
+        "acacia_chest_boat": { "time": 60, "no": true },
+        "dark_oak_chest_boat": { "time": 60, "no": true },
+        "mangrove_chest_boat": { "time": 60, "no": true },
+        "cherry_chest_boat": { "time": 60, "no": true },
+        "bamboo_chest_raft": { "time": 60, "no": true },
+
+        "oak_log": { "time": 15, "no": false },
+        "spruce_log": { "time": 15, "no": false },
+        "birch_log": { "time": 15, "no": false },
+        "jungle_log": { "time": 15, "no": false },
+        "acacia_log": { "time": 15, "no": false },
+        "dark_oak_log": { "time": 15, "no": false },
+        "mangrove_log": { "time": 15, "no": false },
+        "cherry_log": { "time": 15, "no": false },
+        "bamboo_block": { "time": 15, "no": false },
+
+        "stripped_oak_log": { "time": 15, "no": false },
+        "stripped_spruce_log": { "time": 15, "no": false },
+        "stripped_birch_log": { "time": 15, "no": false },
+        "stripped_jungle_log": { "time": 15, "no": false },
+        "stripped_acacia_log": { "time": 15, "no": false },
+        "stripped_dark_oak_log": { "time": 15, "no": false },
+        "stripped_mangrove_log": { "time": 15, "no": false },
+        "stripped_cherry_log": { "time": 15, "no": false },
+        "stripped_bamboo_block": { "time": 15, "no": false },
+
+        "oak_planks": { "time": 15, "no": false },
+        "spruce_planks": { "time": 15, "no": false },
+        "birch_planks": { "time": 15, "no": false },
+        "jungle_planks": { "time": 15, "no": false },
+        "acacia_planks": { "time": 15, "no": false },
+        "dark_oak_planks": { "time": 15, "no": false },
+        "mangrove_planks": { "time": 15, "no": false },
+        "cherry_planks": { "time": 15, "no": false },
+        "bamboo_planks": { "time": 15, "no": false },
+        "bamboo_mosaic": { "time": 15, "no": false },
+        "bamboo_mosaic_slab": { "time": 7.5, "no": false },
+        "bamboo_mosaic_stairs": { "time": 15, "no": false },
+
+        "chiseled_bookshelf": { "time": 15, "no": false },
+
+        "oak_slab": { "time": 7.5, "no": false },
+        "spruce_slab": { "time": 7.5, "no": false },
+        "birch_slab": { "time": 7.5, "no": false },
+        "jungle_slab": { "time": 7.5, "no": false },
+        "acacia_slab": { "time": 7.5, "no": false },
+        "dark_oak_slab": { "time": 7.5, "no": false },
+        "mangrove_slab": { "time": 7.5, "no": false },
+        "cherry_slab": { "time": 7.5, "no": false },
+        "bamboo_slab": { "time": 7.5, "no": false },
+
+        "oak_stairs": { "time": 15, "no": false },
+        "spruce_stairs": { "time": 15, "no": false },
+        "birch_stairs": { "time": 15, "no": false },
+        "jungle_stairs": { "time": 15, "no": false },
+        "acacia_stairs": { "time": 15, "no": false },
+        "dark_oak_stairs": { "time": 15, "no": false },
+        "mangrove_stairs": { "time": 15, "no": false },
+        "cherry_stairs": { "time": 15, "no": false },
+        "bamboo_stairs": { "time": 15, "no": false },
+
+        "oak_pressure_plate": { "time": 15, "no": false },
+        "spruce_pressure_plate": { "time": 15, "no": false },
+        "birch_pressure_plate": { "time": 15, "no": false },
+        "jungle_pressure_plate": { "time": 15, "no": false },
+        "acacia_pressure_plate": { "time": 15, "no": false },
+        "dark_oak_pressure_plate": { "time": 15, "no": false },
+        "mangrove_pressure_plate": { "time": 15, "no": false },
+        "cherry_pressure_plate": { "time": 15, "no": false },
+        "bamboo_pressure_plate": { "time": 15, "no": false },
+
+        "oak_button": { "time": 5, "no": false },
+        "spruce_button": { "time": 5, "no": false },
+        "birch_button": { "time": 5, "no": false },
+        "jungle_button": { "time": 5, "no": false },
+        "acacia_button": { "time": 5, "no": false },
+        "dark_oak_button": { "time": 5, "no": false },
+        "mangrove_button": { "time": 5, "no": false },
+        "cherry_button": { "time": 5, "no": false },
+        "bamboo_button": { "time": 5, "no": false },
+
+        "oak_trapdoor": { "time": 15, "no": false },
+        "spruce_trapdoor": { "time": 15, "no": false },
+        "birch_trapdoor": { "time": 15, "no": false },
+        "jungle_trapdoor": { "time": 15, "no": false },
+        "acacia_trapdoor": { "time": 15, "no": false },
+        "dark_oak_trapdoor": { "time": 15, "no": false },
+        "mangrove_trapdoor": { "time": 15, "no": false },
+        "cherry_trapdoor": { "time": 15, "no": false },
+        "bamboo_trapdoor": { "time": 15, "no": false },
+
+        "oak_fence": { "time": 15, "no": false },
+        "spruce_fence": { "time": 15, "no": false },
+        "birch_fence": { "time": 15, "no": false },
+        "jungle_fence": { "time": 15, "no": false },
+        "acacia_fence": { "time": 15, "no": false },
+        "dark_oak_fence": { "time": 15, "no": false },
+        "mangrove_fence": { "time": 15, "no": false },
+        "cherry_fence": { "time": 15, "no": false },
+        "bamboo_fence": { "time": 15, "no": false },
+
+        "oak_fence_gate": { "time": 15, "no": false },
+        "spruce_fence_gate": { "time": 15, "no": false },
+        "birch_fence_gate": { "time": 15, "no": false },
+        "jungle_fence_gate": { "time": 15, "no": false },
+        "acacia_fence_gate": { "time": 15, "no": false },
+        "dark_oak_fence_gate": { "time": 15, "no": false },
+        "mangrove_fence_gate": { "time": 15, "no": false },
+        "cherry_fence_gate": { "time": 15, "no": false },
+        "bamboo_fence_gate": { "time": 15, "no": false },
+
+        "oak_door": { "time": 10, "no": false },
+        "spruce_door": { "time": 10, "no": false },
+        "birch_door": { "time": 10, "no": false },
+        "jungle_door": { "time": 10, "no": false },
+        "acacia_door": { "time": 10, "no": false },
+        "dark_oak_door": { "time": 10, "no": false },
+        "mangrove_door": { "time": 10, "no": false },
+        "cherry_door": { "time": 10, "no": false },
+        "bamboo_door": { "time": 10, "no": false },
+
+        "oak_sign": { "time": 10, "no": false },
+        "spruce_sign": { "time": 10, "no": false },
+        "birch_sign": { "time": 10, "no": false },
+        "jungle_sign": { "time": 10, "no": false },
+        "acacia_sign": { "time": 10, "no": false },
+        "dark_oak_sign": { "time": 10, "no": false },
+        "mangrove_sign": { "time": 10, "no": false },
+        "cherry_sign": { "time": 10, "no": false },
+        "bamboo_sign": { "time": 10, "no": false },
+
+        "oak_hanging_sign": { "time": 10, "no": true },
+        "spruce_hanging_sign": { "time": 10, "no": true },
+        "birch_hanging_sign": { "time": 10, "no": true },
+        "jungle_hanging_sign": { "time": 10, "no": true },
+        "acacia_hanging_sign": { "time": 10, "no": true },
+        "dark_oak_hanging_sign": { "time": 10, "no": true },
+        "mangrove_hanging_sign": { "time": 10, "no": true },
+        "cherry_hanging_sign": { "time": 10, "no": true },
+        "bamboo_hanging_sign": { "time": 10, "no": true },
+
+        "oak_sapling": { "time": 5, "no": true },
+        "spruce_sapling": { "time": 5, "no": true },
+        "birch_sapling": { "time": 5, "no": true },
+        "jungle_sapling": { "time": 5, "no": true },
+        "acacia_sapling": { "time": 5, "no": true },
+        "dark_oak_sapling": { "time": 5, "no": true },
+        "mangrove_propagule": { "time": 5, "no": true },
+        "cherry_sapling": { "time": 5, "no": true },
+        "azalea": { "time": 5, "no": true },
+        "flowering_azalea": { "time": 5, "no": true },
+
+        "wooden_sword": { "time": 10, "no": false },
+        "wooden_axe": { "time": 10, "no": false },
+        "wooden_hoe": { "time": 10, "no": true },
+        "wooden_shovel": { "time": 10, "no": false },
+        "wooden_pickaxe": { "time": 10, "no": false },
+        "fishing_rod": { "time": 15, "no": true },
+        "crossbow": { "time": 15, "no": true },
+        "bow": { "time": 15, "no": true },
+
+        "bowl": { "time": 5, "no": false },
+        "stick": { "time": 5, "no": false },
+        "ladder": { "time": 15, "no": false },
+
+        "mangrove_roots": { "time": 15, "no": false },
+        "dead_bush": { "time": 5, "no": false },
+
+        "crafting_table": { "time": 15, "no": false },
+        "cartography_table": { "time": 15, "no": true },
+        "fletching_table": { "time": 15, "no": true },
+        "smithing_table": { "time": 15, "no": true },
+        "loom": { "time": 15, "no": true },
+        "bookshelf": { "time": 15, "no": true },
+        "lectern": { "time": 15, "no": true },
+        "composter": { "time": 15, "no": true },
+        "chest": { "time": 15, "no": true },
+        "trapped_chest": { "time": 15, "no": true },
+        "barrel": { "time": 15, "no": true },
+        "daylight_detector": { "time": 15, "no": true },
+        "jukebox": { "time": 15, "no": true },
+        "note_block": { "time": 15, "no": true },
+
+        "white_wool": { "time": 5, "no": false },
+        "light_gray_wool": { "time": 5, "no": false },
+        "gray_wool": { "time": 5, "no": false },
+        "black_wool": { "time": 5, "no": false },
+        "brown_wool": { "time": 5, "no": false },
+        "red_wool": { "time": 5, "no": false },
+        "orange_wool": { "time": 5, "no": false },
+        "yellow_wool": { "time": 5, "no": false },
+        "lime_wool": { "time": 5, "no": false },
+        "green_wool": { "time": 5, "no": false },
+        "cyan_wool": { "time": 5, "no": false },
+        "light_blue_wool": { "time": 5, "no": false },
+        "blue_wool": { "time": 5, "no": false },
+        "purple_wool": { "time": 5, "no": false },
+        "magenta_wool": { "time": 5, "no": false },
+        "pink_wool": { "time": 5, "no": false },
+
+        "white_banner": { "time": 5, "no": false },
+        "light_gray_banner": { "time": 5, "no": false },
+        "gray_banner": { "time": 5, "no": false },
+        "black_banner": { "time": 5, "no": false },
+        "brown_banner": { "time": 5, "no": false },
+        "red_banner": { "time": 5, "no": false },
+        "orange_banner": { "time": 5, "no": false },
+        "yellow_banner": { "time": 5, "no": false },
+        "lime_banner": { "time": 5, "no": false },
+        "green_banner": { "time": 5, "no": false },
+        "cyan_banner": { "time": 5, "no": false },
+        "light_blue_banner": { "time": 5, "no": false },
+        "blue_banner": { "time": 5, "no": false },
+        "purple_banner": { "time": 5, "no": false },
+        "magenta_banner": { "time": 5, "no": false },
+        "pink_banner": { "time": 5, "no": false },
+
+        "white_carpet": { "time": 3.35, "no": false },
+        "light_gray_carpet": { "time": 3.35, "no": false },
+        "gray_carpet": { "time": 3.35, "no": false },
+        "black_carpet": { "time": 3.35, "no": false },
+        "brown_carpet": { "time": 3.35, "no": false },
+        "red_carpet": { "time": 3.35, "no": false },
+        "orange_carpet": { "time": 3.35, "no": false },
+        "yellow_carpet": { "time": 3.35, "no": false },
+        "lime_carpet": { "time": 3.35, "no": false },
+        "green_carpet": { "time": 3.35, "no": false },
+        "cyan_carpet": { "time": 3.35, "no": false },
+        "light_blue_carpet": { "time": 3.35, "no": false },
+        "blue_carpet": { "time": 3.35, "no": false },
+        "purple_carpet": { "time": 3.35, "no": false },
+        "magenta_carpet": { "time": 3.35, "no": false },
+        "pink_carpet": { "time": 3.35, "no": false },
+
+        "bamboo": { "time": 2.5, "no": true },
+        "scaffolding": { "time": 2.5, "no": true }
     })
 
     /**
@@ -468,7 +492,7 @@ module.exports = class Minecraft {
         "sweet_berries": { "chance": 0.30, "no": true },
         "torchflower_seeds": { "chance": 0.30, "no": true },
         "wheat_seeds": { "chance": 0.30, "no": false },
-    
+
         "cactus": { "chance": 0.50, "no": false },
         "dried_kelp_block": { "chance": 0.50, "no": true },
         "flowering_azalea_leaves": { "chance": 0.50, "no": true },
@@ -480,7 +504,7 @@ module.exports = class Minecraft {
         "vine": { "chance": 0.50, "no": true },
         "twisting_vines": { "chance": 0.50, "no": true },
         "weeping_vines": { "chance": 0.50, "no": true },
-    
+
         "apple": { "chance": 0.65, "no": true },
         "azalea": { "chance": 0.65, "no": true },
         "beetroot": { "chance": 0.65, "no": true },
@@ -524,7 +548,7 @@ module.exports = class Minecraft {
         "shroomlight": { "chance": 0.65, "no": true },
         "spore_blossom": { "chance": 0.65, "no": true },
         "wheat": { "chance": 0.65, "no": true },
-    
+
         "baked_potato": { "chance": 0.85, "no": true },
         "bread": { "chance": 0.85, "no": true },
         "cookie": { "chance": 0.85, "no": true },
@@ -536,7 +560,7 @@ module.exports = class Minecraft {
         "pitcher_plant": { "chance": 0.85, "no": true },
         "torchflower": { "chance": 0.85, "no": true },
         "warped_wart_block": { "chance": 0.85, "no": true },
-    
+
         "cake": { "chance": 1.00, "no": true },
         "pumpkin_pie": { "chance": 1.00, "no": true }
     })
@@ -895,7 +919,47 @@ module.exports = class Minecraft {
                 'red_sand',
             ],
             growsOnSide: 'top',
+            needsWater: true,
             seed: 'sugar_cane',
+        },
+        'bamboo': {
+            type: 'up',
+            canUseBonemeal: true,
+            growsOnBlock: [
+                ...Minecraft.soilBlocks,
+                'sand',
+                'red_sand',
+                'gravel',
+            ],
+            growsOnSide: 'top',
+            needsWater: false,
+            seed: 'bamboo',
+            root: 'bamboo_sapling',
+        },
+        'bamboo_sapling': {
+            type: 'up',
+            canUseBonemeal: true,
+            growsOnBlock: [
+                ...Minecraft.soilBlocks,
+                'sand',
+                'red_sand',
+                'gravel',
+            ],
+            growsOnSide: 'top',
+            needsWater: false,
+            seed: 'bamboo',
+            root: 'bamboo_sapling',
+        },
+        'cactus': {
+            type: 'up',
+            canUseBonemeal: false,
+            growsOnBlock: [
+                'sand',
+                'red_sand',
+            ],
+            growsOnSide: 'top',
+            needsWater: false,
+            seed: 'cactus',
         },
     }
 
@@ -909,9 +973,13 @@ module.exports = class Minecraft {
         const crop = Minecraft.cropsByBlockName[block.name]
         if (!crop) return false
         if (crop.type === 'up') {
-            const below = bot.blockAt(block.position.offset(0, -1, 0))
-            if (!below) return null
-            return below.type !== block.type
+            if (crop.root && block.name === crop.root) {
+                return true
+            } else {
+                const below = bot.blockAt(block.position.offset(0, -1, 0))
+                if (!below) return null
+                return below.type !== block.type
+            }
         } else {
             return true
         }
@@ -923,23 +991,18 @@ module.exports = class Minecraft {
      */
     cropBlockIds
 
-
-    /**
-     * @typedef {number | { easy: number; normal: number; hard: number; }} DamageAmount
-     */
-
     /**
      * @readonly
      * @type {Readonly<Record<string, {
      *   rangeOfSight: number;
      *   meleeAttack?: {
      *     range: number;
-     *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *     damage: Damage | Array<Damage>;
      *     cooldown?: number;
      *   };
      *   rangeAttack?: {
      *     range: number;
-     *     damage: DamageAmount | ((entity: import('prismarine-entity').Entity) => DamageAmount);
+     *     damage: Damage | Array<Damage>;
      *     cooldown: number;
      *   };
      *   alwaysAngry: boolean;
@@ -949,7 +1012,7 @@ module.exports = class Minecraft {
         return ({
             'snow_golem': {
                 rangeAttack: {
-                    damage: 0,
+                    damage: { type: 'physical', amount: 0 },
                     cooldown: 1,
                     range: 16, // ?
                 },
@@ -958,7 +1021,7 @@ module.exports = class Minecraft {
             },
             'shulker_bullet': {
                 meleeAttack: {
-                    damage: 4,
+                    damage: { type: 'physical', amount: 4 },
                     range: 2,
                     cooldown: 1, // ?
                 },
@@ -967,12 +1030,12 @@ module.exports = class Minecraft {
             },
             'ender_dragon': {
                 meleeAttack: {
-                    damage: { easy: 6, normal: 10, hard: 15 },
+                    damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
                     range: 8, // ?
                     cooldown: 1, // ?
                 },
                 rangeAttack: {
-                    damage: 6,
+                    damage: { type: 'physical', amount: 12 },
                     cooldown: 6, // ?
                     range: 64,
                 },
@@ -981,7 +1044,7 @@ module.exports = class Minecraft {
             },
             'breeze': {
                 rangeAttack: {
-                    damage: 6,
+                    damage: { type: 'physical', amount: 6 },
                     cooldown: 3, // ?
                     range: 16, // ?
                 },
@@ -990,7 +1053,7 @@ module.exports = class Minecraft {
             },
             'evoker_fangs': {
                 meleeAttack: {
-                    damage: 6,
+                    damage: { type: 'physical', amount: 6 },
                     cooldown: 1, // ?
                     range: 1, // ?
                 },
@@ -998,26 +1061,26 @@ module.exports = class Minecraft {
                 rangeOfSight: 3, // ?
             },
             'elder_guardian': {
-                meleeAttack: {
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                rangeAttack: {
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                     cooldown: 3, // ?
-                    range: 15, // ?
+                    range: 15,
                 },
                 alwaysAngry: true,
                 rangeOfSight: 16, // ?
             },
             'guardian': {
-                meleeAttack: {
-                    damage: { easy: 4, normal: 6, hard: 9 },
-                    cooldown: 3, // ?
-                    range: 15, // ?
+                rangeAttack: {
+                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                    cooldown: 3 + 5,
+                    range: 15,
                 },
                 alwaysAngry: true,
                 rangeOfSight: 16, // ?
             },
             'panda': {
                 meleeAttack: {
-                    damage: { easy: 4, normal: 6, hard: 9 },
+                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
                     cooldown: 1, // ?
                     range: 2, // ?
                 },
@@ -1025,13 +1088,12 @@ module.exports = class Minecraft {
                 rangeOfSight: 16, // ?
             },
             'wither': {
-                meleeAttack: {
-                    damage: 15,
-                    cooldown: 1, // ?
-                    range: 2, // ?
-                },
                 rangeAttack: {
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: [
+                        { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                        // { type: 'explosion', amount: 5 },
+                        { type: 'effect', effect: 'wither', time: 40000, level: 2 },
+                    ],
                     range: 24, // ?
                     cooldown: 1, // ?
                 },
@@ -1040,7 +1102,7 @@ module.exports = class Minecraft {
             },
             'polar_bear': {
                 meleeAttack: {
-                    damage: { easy: 4, normal: 6, hard: 9 },
+                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
                     cooldown: 1, // ?
                     range: 2, // ?
                 },
@@ -1049,7 +1111,7 @@ module.exports = class Minecraft {
             },
             'iron_golem': {
                 meleeAttack: {
-                    damage: { easy: 11.75, normal: 21.5, hard: 32.25 },
+                    damage: { type: 'physical', amount: { easy: 11.75, normal: 21.5, hard: 32.25 } },
                     cooldown: 1, // ?
                     range: 3, // ?
                 },
@@ -1058,7 +1120,7 @@ module.exports = class Minecraft {
             },
             'trader_llama': {
                 rangeAttack: {
-                    damage: 1,
+                    damage: { type: 'physical', amount: 1 },
                     cooldown: 3, // ?
                     range: 4, // ?
                 },
@@ -1067,7 +1129,7 @@ module.exports = class Minecraft {
             },
             'llama': {
                 rangeAttack: {
-                    damage: 1,
+                    damage: { type: 'physical', amount: 1 },
                     cooldown: 3, // ?
                     range: 4, // ?
                 },
@@ -1077,7 +1139,7 @@ module.exports = class Minecraft {
             'vex': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5.5, normal: 9, hard: 13.5 },
+                    damage: { type: 'physical', amount: { easy: 5.5, normal: 9, hard: 13.5 } },
                     cooldown: 1, // ?
                 },
                 rangeOfSight: 16, // ?
@@ -1086,7 +1148,7 @@ module.exports = class Minecraft {
             'shulker': {
                 rangeAttack: {
                     range: 16,
-                    damage: 4,
+                    damage: { type: 'physical', amount: 4 },
                     cooldown: 1000, // 1000 - 5500
                 },
                 rangeOfSight: 16,
@@ -1095,12 +1157,15 @@ module.exports = class Minecraft {
             'blaze': {
                 meleeAttack: {
                     range: 1,
-                    damage: { easy: 4, normal: 6, hard: 9 },
+                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
                     cooldown: 1000,
                 },
                 rangeAttack: {
                     range: 48,
-                    damage: 5,
+                    damage: [
+                        { type: 'physical', amount: 5 },
+                        { type: 'fire', time: 5000 },
+                    ],
                     cooldown: 5000, // burstCooldown: 300
                 },
                 rangeOfSight: 48,
@@ -1109,11 +1174,11 @@ module.exports = class Minecraft {
             'drowned': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
                 },
                 rangeAttack: {
                     range: 20,
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                     cooldown: 1500,
                 },
                 rangeOfSight: 24,
@@ -1122,7 +1187,7 @@ module.exports = class Minecraft {
             'illusioner': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 5, hard: 5 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: true,
@@ -1130,7 +1195,7 @@ module.exports = class Minecraft {
             'phantom': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 },
+                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
                 },
                 rangeOfSight: 64,
                 alwaysAngry: true,
@@ -1138,12 +1203,12 @@ module.exports = class Minecraft {
             'warden': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 16, normal: 30, hard: 45 },
+                    damage: { type: 'physical', amount: { easy: 16, normal: 30, hard: 45 } },
                     cooldown: 900,
                 },
                 rangeAttack: {
                     range: 20,
-                    damage: { easy: 6, normal: 10, hard: 15 },
+                    damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
                     cooldown: 5,
                 },
                 rangeOfSight: 16,
@@ -1152,7 +1217,7 @@ module.exports = class Minecraft {
             'evoker': {
                 meleeAttack: {
                     range: 2,
-                    damage: 24,
+                    damage: { type: 'physical', amount: 24 },
                 },
                 rangeOfSight: 12,
                 alwaysAngry: true,
@@ -1160,7 +1225,7 @@ module.exports = class Minecraft {
             'creeper': {
                 meleeAttack: {
                     range: 3,
-                    damage: { easy: 22, normal: 43, hard: 64 },
+                    damage: { type: 'explosion', level: 7 },
                 },
                 rangeOfSight: 15,
                 alwaysAngry: true,
@@ -1168,11 +1233,11 @@ module.exports = class Minecraft {
             'skeleton': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 }
+                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } }
                 },
                 rangeAttack: {
                     range: 15,
-                    damage: { easy: 4, normal: 4, hard: 5 },
+                    damage: { type: 'physical', amount: { easy: 4, normal: 4, hard: 5 } },
                     cooldown: 2000, // hard: 1000
                 },
                 rangeOfSight: 16,
@@ -1181,7 +1246,10 @@ module.exports = class Minecraft {
             'cave_spider': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 },
+                    damage: [
+                        { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
+                        { type: 'effect', effect: 'poison', time: 15000, level: 1 },
+                    ],
                 },
                 rangeOfSight: 16,
                 alwaysAngry: false,
@@ -1189,7 +1257,7 @@ module.exports = class Minecraft {
             'endermite': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 },
+                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: true,
@@ -1197,7 +1265,7 @@ module.exports = class Minecraft {
             'hoglin': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: false,
@@ -1205,14 +1273,17 @@ module.exports = class Minecraft {
             'magma_cube': {
                 meleeAttack: {
                     range: 2,
-                    damage: function(entity) {
-                        const size = entity.metadata[16]
-                        switch (size) {
-                            case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
-                            case 1: return { easy: 3, normal: 5, hard: 6 }
-                            case 2: return { easy: 4, normal: 6, hard: 9 }
-                            default: return { easy: 4, normal: 6, hard: 9 }
-                        }
+                    damage: {
+                        type: 'physical',
+                        amount: function(entity) {
+                            const size = entity.metadata[16]
+                            switch (size) {
+                                case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
+                                case 1: return { easy: 3, normal: 5, hard: 6 }
+                                case 2: return { easy: 4, normal: 6, hard: 9 }
+                                default: return { easy: 4, normal: 6, hard: 9 }
+                            }
+                        },
                     },
                 },
                 rangeOfSight: 16,
@@ -1221,14 +1292,17 @@ module.exports = class Minecraft {
             'slime': {
                 meleeAttack: {
                     range: 2,
-                    damage: function(entity) {
-                        const size = entity.metadata[16]
-                        switch (size) {
-                            case 0: return { easy: 0, normal: 0, hard: 0 }
-                            case 1: return { easy: 2, normal: 2, hard: 3 }
-                            case 2: return { easy: 3, normal: 4, hard: 6 }
-                            default: return { easy: 3, normal: 4, hard: 6 }
-                        }
+                    damage: {
+                        type: 'physical',
+                        amount: function(entity) {
+                            const size = entity.metadata[16]
+                            switch (size) {
+                                case 0: return { easy: 0, normal: 0, hard: 0 }
+                                case 1: return { easy: 2, normal: 2, hard: 3 }
+                                case 2: return { easy: 3, normal: 4, hard: 6 }
+                                default: return { easy: 3, normal: 4, hard: 6 }
+                            }
+                        },
                     },
                 },
                 rangeOfSight: 16,
@@ -1237,8 +1311,13 @@ module.exports = class Minecraft {
             'wither_skeleton': {
                 meleeAttack: {
                     range: 2,
-                    // armed
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: [
+                        // armed
+                        { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                        // unarmed
+                        // { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
+                        { type: 'effect', effect: 'wither', time: 10000, level: 1 },
+                    ],
                 },
                 rangeOfSight: 16,
                 alwaysAngry: true,
@@ -1246,7 +1325,7 @@ module.exports = class Minecraft {
             'witch': {
                 rangeAttack: {
                     range: 8,
-                    damage: 6, // harming potion
+                    damage: { type: 'physical', amount: 6 }, // harming potion
                     cooldown: 3000,
                 },
                 rangeOfSight: 16,
@@ -1255,7 +1334,7 @@ module.exports = class Minecraft {
             'spider': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 },
+                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: false,
@@ -1263,22 +1342,23 @@ module.exports = class Minecraft {
             'stray': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2, normal: 2, hard: 3 },
+                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
                 },
                 rangeAttack: {
                     range: 15,
-                    // 3 - 5
-                    damage: { easy: 5, normal: 5, hard: 5 },
+                    damage: [
+                        { type: 'physical', amount: { easy: 4, normal: 5, hard: 8 } },
+                        { type: 'effect', effect: 'slowness', time: 30000, level: 1 },
+                    ],
                     cooldown: 2, // ?
                 },
-                // also has tipped arrows
                 rangeOfSight: 16,
                 alwaysAngry: true,
             },
             'ravager': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 7, normal: 12, hard: 18 },
+                    damage: { type: 'physical', amount: { easy: 7, normal: 12, hard: 18 } },
                 },
                 // roar: 6
                 rangeOfSight: 32,
@@ -1287,7 +1367,10 @@ module.exports = class Minecraft {
             'husk': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                    damage: [
+                        { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
+                        { type: 'effect', effect: 'hunger', level: 1, time: 7000 /* Regional */ },
+                    ],
                 },
                 rangeOfSight: 35,
                 alwaysAngry: true,
@@ -1295,7 +1378,7 @@ module.exports = class Minecraft {
             'zombie_villager': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
                 },
                 rangeOfSight: 35,
                 alwaysAngry: true,
@@ -1303,7 +1386,7 @@ module.exports = class Minecraft {
             'zombie': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 2.5, normal: 3, hard: 4.5 },
+                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
                 },
                 rangeOfSight: 35,
                 alwaysAngry: true,
@@ -1311,11 +1394,11 @@ module.exports = class Minecraft {
             'piglin': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                 },
                 rangeAttack: {
                     range: 16, // ?
-                    damage: { easy: 5, normal: 5, hard: 5 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
                     cooldown: 2,
                 },
                 rangeOfSight: 16,
@@ -1324,7 +1407,7 @@ module.exports = class Minecraft {
             'piglin_brute': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 7.5, normal: 13, hard: 19.5 },
+                    damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
                 },
                 // also can be unarmed
                 rangeOfSight: 16,
@@ -1333,7 +1416,7 @@ module.exports = class Minecraft {
             'pillager': {
                 rangeAttack: {
                     range: 8,
-                    damage: { easy: 3.5, normal: 4, hard: 4.5 },
+                    damage: { type: 'physical', amount: { easy: 3.5, normal: 4, hard: 4.5 } },
                     cooldown: 2, // ?
                 },
                 rangeOfSight: 64,
@@ -1342,7 +1425,7 @@ module.exports = class Minecraft {
             'silverfish': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 1, normal: 1, hard: 1.5 },
+                    damage: { type: 'physical', amount: { easy: 1, normal: 1, hard: 1.5 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: true,
@@ -1350,7 +1433,7 @@ module.exports = class Minecraft {
             'zoglin': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                 },
                 rangeOfSight: 16,
                 alwaysAngry: true,
@@ -1358,7 +1441,7 @@ module.exports = class Minecraft {
             'vindicator': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 7.5, normal: 13, hard: 19.5 },
+                    damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
                 },
                 // also can be unarmed
                 rangeOfSight: 16,
@@ -1367,7 +1450,7 @@ module.exports = class Minecraft {
             'enderman': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 4.5, normal: 7, hard: 10.5 },
+                    damage: { type: 'physical', amount: { easy: 4.5, normal: 7, hard: 10.5 } },
                 },
                 rangeOfSight: 64,
                 alwaysAngry: false,
@@ -1375,7 +1458,7 @@ module.exports = class Minecraft {
             'zombified_piglin': {
                 meleeAttack: {
                     range: 2,
-                    damage: { easy: 5, normal: 8, hard: 12 },
+                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
                 },
                 // also can be unarmed
                 rangeOfSight: 55,
@@ -1384,7 +1467,10 @@ module.exports = class Minecraft {
             'ghast': {
                 rangeAttack: {
                     range: 64,
-                    damage: 6, // + explosion
+                    damage: [
+                        { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                        { type: 'explosion', level: 1 },
+                    ],
                     cooldown: 3000
                 },
                 rangeOfSight: 64,
@@ -1739,10 +1825,8 @@ module.exports = class Minecraft {
         movements.canDig = true
         movements.digCost = 40
         movements.placeCost = 30
-        movements.entityCost = 10
         movements.allowParkour = true
         movements.allowSprinting = true
-        movements.allowEntityDetection = true
         movements.canOpenDoors = true
 
         // movements.exclusionAreasStep.push((block) => {

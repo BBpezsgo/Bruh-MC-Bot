@@ -95,17 +95,17 @@ module.exports = {
         const interval = new Interval(30000 + 2000)
 
         if (!bot.bot.hawkEye) {
-            new Promise(resolve => {
-                // @ts-ignore
-                bot.bot.loadPlugin(require('minecrafthawkeye').default)
-                resolve()
-            })
+            setTimeout(() => bot.bot.loadPlugin(require('minecrafthawkeye').default), 0)
+        }
+
+        const interrupt = () => {
+            bot.bot.activateItem(false)
         }
 
         while (true) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const fishingRod = yield* bot.ensureItem('fishing_rod')
             if (!fishingRod) {
@@ -120,58 +120,42 @@ module.exports = {
                 throw `There is no water`
             }
 
-            if (true) {
-                yield* goto.task(bot, {
-                    goal: {
-                        heuristic: node => Math.sqrt(Math.pow(node.x - water.x, 2) + Math.pow(node.z - water.z, 2)) + Math.abs(node.y - water.y + 1),
-                        isEnd: node => node.distanceTo(water) <= 8 && node.y > water.y,
-                    },
-                    options: {
-                        searchRadius: 64,
-                    },
-                    cancellationToken: args.cancellationToken,
-                })
-                yield* goto.task(bot, {
-                    hawkeye: water.offset(0.5, 0.5, 0.5),
-                    weapon: Weapons.bobber,
-                    cancellationToken: args.cancellationToken,
-                })
-                const grade = bot.bot.hawkEye.getMasterGrade({
-                    position: water.offset(0.5, 0.5, 0.5),
-                    isValid: false,
-                }, new Vec3(0, 0, 0), Weapons.bobber)
+            yield* goto.task(bot, {
+                goal: {
+                    heuristic: node => Math.sqrt(Math.pow(node.x - water.x, 2) + Math.pow(node.z - water.z, 2)) + Math.abs(node.y - water.y + 1),
+                    isEnd: node => node.distanceTo(water) <= 8 && node.y > water.y,
+                },
+                options: {
+                    searchRadius: 64,
+                },
+                interrupt: args.interrupt,
+            })
+            yield* goto.task(bot, {
+                hawkeye: water.offset(0.5, 0.5, 0.5),
+                weapon: Weapons.bobber,
+                interrupt: args.interrupt,
+            })
+            const grade = bot.bot.hawkEye.getMasterGrade({
+                position: water.offset(0.5, 0.5, 0.5),
+                isValid: false,
+            }, new Vec3(0, 0, 0), Weapons.bobber)
 
-                if (!grade) {
-                    throw `No`
-                }
+            if (!grade) { throw `No` }
 
-                // bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
+            // bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
 
-                if (grade.blockInTrayect) {
-                    throw `Block ${grade.blockInTrayect.displayName} is in the way`
-                }
-
-                yield* wrap(bot.bot.equip(fishingRod, 'hand'))
-                yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
-                yield* sleepG(500)
-                bot.bot.activateItem(false)
-                console.log(`[Bot "${bot.username}"] Bobber thrown`)
-                splashHeard = 0
-                n++
-            } else {
-                // yield* goto.task(bot, {
-                //     point: water.position,
-                //     distance: 1,
-                // })
-                // 
-                // yield* wrap(bot.bot.equip(fishingRod, 'hand'))
-                // yield* wrap(bot.bot.lookAt(water.position, true))
-                // yield* sleepG(500)
-                // bot.bot.activateItem(false)
-                // console.log(`[Bot "${bot.username}"] Bobber thrown`)
-                // splashHeard = 0
-                // n++
+            if (grade.blockInTrayect) {
+                throw `Block ${grade.blockInTrayect.displayName} is in the way`
             }
+
+            yield* wrap(bot.bot.equip(fishingRod, 'hand'))
+            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+            yield* sleepG(500)
+            args.interrupt.once(interrupt)
+            bot.bot.activateItem(false)
+            console.log(`[Bot "${bot.username}"] Bobber thrown`)
+            splashHeard = 0
+            n++
 
             yield* sleepG(100)
 
@@ -200,20 +184,21 @@ module.exports = {
             while ((!splashHeard || performance.now() - splashHeard < 500) &&
                 bobber &&
                 bobber.isValid &&
-                !args.cancellationToken.isCancelled) {
+                !args.interrupt.isCancelled) {
                 if (interval.done()) {
                     console.warn(`[Bot "${bot.username}"] Fishing timed out (${interval.time / 1000} sec)`)
                     break
                 }
                 yield* sleepG(100)
             }
-
-            if (!args.cancellationToken.isCancelled && !bot.holds('fishing_rod')) {
-                if (n) { return n }
-                throw `I have no fishing rod`
+            
+            args.interrupt.off(interrupt)
+            if (!bot.holds('fishing_rod')) { continue }
+            
+            if (bobber && bobber.isValid) {
+                bot.bot.activateItem(false)
+                console.log(`[Bot "${bot.username}"] Bobber retracted`)
             }
-
-            bot.bot.activateItem(false)
         }
 
         return n

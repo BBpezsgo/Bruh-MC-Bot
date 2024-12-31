@@ -1,3 +1,5 @@
+'use strict'
+
 /**
  * @template TKey
  * @template TValue

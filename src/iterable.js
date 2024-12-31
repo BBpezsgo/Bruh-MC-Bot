@@ -124,6 +124,27 @@ module.exports = class Iterable {
     }
 
     /**
+     * @template U
+     * @param {(value: T, index: number) => { [Symbol.iterator](): Iterator<U> }} callbackfn
+     * @returns {Iterable<U>}
+     */
+    mapMultiple(callbackfn) {
+        const iterator = this.iterator()
+        return new Iterable(function*() {
+            let i = 0
+
+            while (true) {
+                const v = iterator.next()
+                if (v.done === true) { break }
+                const mapped = callbackfn(v.value, i++)
+                for (const subv of mapped) {
+                    yield subv
+                }
+            }
+        })
+    }
+
+    /**
      * @param {number} length
      * @param {number} interval
      * @param {(index: number) => void} callback

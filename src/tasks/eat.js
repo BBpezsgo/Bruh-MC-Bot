@@ -13,7 +13,7 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
         if (bot.quietMode) { throw `Can't eat in quiet mode` }
 
         let food = null
@@ -25,6 +25,8 @@ module.exports = {
             food = foods[0]
         }
 
+        if (!food) { throw `No food` }
+
         if (bot.bot.food >= 20 &&
             food.name !== 'chorus_fruit') { return 'full' }
 
@@ -33,21 +35,36 @@ module.exports = {
         const eatStarted = performance.now()
         const eatTime = (food.name === 'dried_kelp') ? (900 /* 0.865 */) : (1700 /* 1610 */)
 
-        const cancelEat = () => { bot.deactivateHand() }
+        let isInterrupted = false
 
-        bot.deactivateHand()
-        bot.activateHand('right')
-        args.cancellationToken.once(cancelEat)
-
-        while (
-            performance.now() - eatStarted < eatTime &&
-            bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === food.name &&
-            !args.cancellationToken.isCancelled
-        ) {
-            yield* sleepTicks()
+        /**
+         * @param {'interrupt' | 'cancel'} type
+         */
+        const interruptEating = (type) => {
+            bot.deactivateHand()
+            if (type === 'interrupt') isInterrupted = true
         }
 
-        args.cancellationToken.off(cancelEat)
+        args.interrupt.on(interruptEating)
+
+        while (true) {
+            bot.deactivateHand()
+            bot.activateHand('right')
+            isInterrupted = false
+
+            while (
+                performance.now() - eatStarted < eatTime &&
+                bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === food.name &&
+                !args.interrupt.isCancelled
+            ) {
+                yield* sleepTicks()
+            }
+
+            if (isInterrupted) continue
+            else break
+        }
+
+        args.interrupt.off(interruptEating)
 
         return 'ok'
     },

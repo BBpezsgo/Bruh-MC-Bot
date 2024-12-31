@@ -5,11 +5,14 @@ const { sleepG } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<void, { maxDistance: number; point?: Vec3; }>}
+ * @type {import('../task').TaskDef<void, {
+ *   maxDistance: number;
+ *   point?: Vec3;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         const nearest = bot.env.getClosestXp(bot, args)
         if (!nearest) { throw `No xps nearby` }
@@ -17,11 +20,11 @@ module.exports = {
         yield* goto.task(bot, {
             entity: nearest,
             distance: 2, // max: 7.25
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         while (nearest && nearest.isValid) {
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             yield* sleepG(100)
         }

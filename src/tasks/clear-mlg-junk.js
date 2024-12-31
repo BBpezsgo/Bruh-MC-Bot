@@ -14,7 +14,7 @@ module.exports = {
         for (let i = bot.memory.mlgJunkBlocks.length - 1; i >= 0; i--) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const junk = bot.memory.mlgJunkBlocks[i]
 
@@ -43,10 +43,10 @@ module.exports = {
                         yield* goto.task(bot, {
                             block: junkBlock.position,
                             reach: 2,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
 
-                        if (args.cancellationToken.isCancelled) { break }
+                        if (args.interrupt.isCancelled) { break }
 
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
                         const bucket = yield* bot.ensureItem('bucket')
@@ -55,7 +55,7 @@ module.exports = {
                             break
                         }
 
-                        if (args.cancellationToken.isCancelled) { break }
+                        if (args.interrupt.isCancelled) { break }
 
                         yield* wrap(bot.bot.equip(bucket, 'hand'))
                         yield* wrap(bot.bot.lookAt(junkBlock.position, true))
@@ -90,7 +90,7 @@ module.exports = {
                         block: junkBlock,
                         alsoTheNeighbors: false,
                         pickUpItems: true,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                     bot.memory.mlgJunkBlocks.pop()
                     break
@@ -107,7 +107,7 @@ module.exports = {
                         useBow: false,
                         useMelee: true,
                         useMeleeWeapon: false,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                     bot.memory.mlgJunkBlocks.pop()
                     break

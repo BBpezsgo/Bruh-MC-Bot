@@ -1,6 +1,6 @@
 'use strict'
 
-const CancellationToken = require('./utils/cancellationToken')
+const Interrupt = require('./utils/interrupt')
 
 /**
  * @typedef {{
@@ -168,7 +168,7 @@ class ManagedTask {
         this._status = 'queued'
         this.args = {
             ...args,
-            cancellationToken: new CancellationToken(),
+            interrupt: new Interrupt(),
         }
         this._bot = bot
         this._def = def
@@ -195,13 +195,17 @@ class ManagedTask {
         return this._promise
     }
 
+    interrupt() {
+        this.args.interrupt.trigger('interrupt')
+        // console.log(`[Tasks] Task "${this.id}" interrupted`)
+    }
+
     cancel() {
         if (!this._task) {
             this._status = 'cancelled'
         } else {
-            this._status = 'cancelling'
-            //@ts-ignore
-            this._task = this.args.cancellationToken.trigger()
+            this._status = 'cancelled'
+            this.args.interrupt.trigger('cancel')
         }
     }
 

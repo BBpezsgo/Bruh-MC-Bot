@@ -1631,7 +1631,7 @@ function* evaluatePlan(bot, plan, args) {
         for (const step of plan) {
             yield
 
-            // console.log(`[Bot \"${bot.username}\"]`, step.type, step)
+            // console.log(`[Bot "${bot.username}"]`, step.type, step)
 
             if (openedChest) {
                 if (step.type !== 'chest') {
@@ -1657,11 +1657,12 @@ function* evaluatePlan(bot, plan, args) {
                         reach: 3,
                         ...args,
                     })
-                    if (!bot.searchInventoryItem(null, step.item)) { throw `I have no ${stringifyItem(step.item)}` }
+                    let itemToFill = bot.searchInventoryItem(null, step.item)
+                    if (!itemToFill) { throw `I have no ${stringifyItem(step.item)}` }
 
-                    yield* bot.equip(step.item)
+                    itemToFill = yield* bot.equip(itemToFill)
                     const block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
-                    if (!block) { throw `The chunk where I want to fill my ${stringifyItem(step.item)} aint loaded` }
+                    if (!block) { throw `The chunk where I want to fill my ${stringifyItem(itemToFill)} aint loaded` }
 
                     if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
 
@@ -1682,7 +1683,7 @@ function* evaluatePlan(bot, plan, args) {
 
                     const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
                     if (filledItemAfter <= filledItemBefore) {
-                        throw `Failed to fill my ${stringifyItem(step.item)}`
+                        throw `Failed to fill my ${stringifyItem(itemToFill)}`
                     }
                     continue
                 }
@@ -1817,7 +1818,7 @@ function* evaluatePlan(bot, plan, args) {
                     for (const lock of step.locks) {
                         const result = yield* bot.env.requestItem(lock, 60000)
                         if (!result) {
-                            throw `Failed to request item \"${lock.item}\"`
+                            throw `Failed to request item "${lock.item}"`
                         }
                         yield* sleepG(2000)
                         try {
@@ -1829,7 +1830,7 @@ function* evaluatePlan(bot, plan, args) {
                                 ...args,
                             })
                         } catch (error) {
-                            console.warn(`[Bot \"${bot.username}\"] Can't pick up the requested item:`, error)
+                            console.warn(`[Bot "${bot.username}"] Can't pick up the requested item:`, error)
                         }
                         yield* sleepTicks(1)
                     }
@@ -2011,14 +2012,14 @@ function* evaluatePlan(bot, plan, args) {
                                     ...args,
                                 })
 
-                                if (digResult.itemsDelta[step.loot.item] < step.loot.count) {
+                                if (digResult.itemsDelta.get(step.loot.item) < step.loot.count) {
                                     if (step.isGenerator) { continue }
-                                    throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta[step.loot.item]}`
+                                    throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta.get(step.loot.item)}`
                                 }
                                 break
                             } catch (error) {
                                 if (remainingRetries === 0) { throw error }
-                                console.warn(`[Bot "${bot.username}"]: ${error} (remaining retries: ${remainingRetries})`)
+                                console.warn(`[Bot "${bot.username}"] ${error} (remaining retries: ${remainingRetries})`)
                             }
                         }
                     }
@@ -2305,17 +2306,23 @@ const def = {
             const locks = lockPlanItems(bot, _organizedPlan)
             bot.lockedItems.push(...locks)
             locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.locks).flat())
-            const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
-            args.cancellationToken.once(cleanup)
+            /** @param {'interrupt' | 'cancel'} type */
+            const cleanup = (type) => {
+                if (type !== 'cancel') { return }
+                for (const lock of locks) {
+                    lock.isUnlocked = true
+                }
+            }
+            args.interrupt.on(cleanup)
             try {
                 yield* evaluatePlan(bot, _organizedPlan, {
                     locks: locks,
                     response: args.response,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
             } finally {
-                args.cancellationToken.off(cleanup)
-                cleanup()
+                args.interrupt.off(cleanup)
+                cleanup('cancel')
             }
 
             return {
@@ -2386,17 +2393,23 @@ const def = {
             locks.push(new ItemLock(bot.username, bestPlan.item, args.count))
             bot.lockedItems.push(...locks)
             locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.locks).flat())
-            const cleanup = () => { for (const lock of locks) { lock.isUnlocked = true } }
-            args.cancellationToken.once(cleanup)
+            /** @param {'interrupt' | 'cancel'} type */
+            const cleanup = (type) => {
+                if (type !== 'cancel') { return }
+                for (const lock of locks) {
+                    lock.isUnlocked = true
+                }
+            }
+            args.interrupt.on(cleanup)
             try {
                 yield* evaluatePlan(bot, _organizedPlan, {
                     locks: locks,
                     response: args.response,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
             } finally {
-                args.cancellationToken.off(cleanup)
-                cleanup()
+                args.interrupt.off(cleanup)
+                cleanup('cancel')
             }
 
             const itemsAfter = bot.inventoryItemCount(null, bestPlan.item)

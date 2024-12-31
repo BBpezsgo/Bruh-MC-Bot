@@ -336,7 +336,7 @@ module.exports = class LocalMinecraftData {
                     break
 
                 default:
-                    console.warn(`Unknown recipe type \"${rawRecipe['type']}\"`)
+                    console.warn(`Unknown recipe type "${rawRecipe['type']}"`)
                     break
             }
         }

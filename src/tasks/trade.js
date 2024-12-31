@@ -29,11 +29,13 @@ function tradeEquality(a, b) {
 }
 
 /**
- * @type {import('../task').TaskDef<number, Args> & { tradeEquality: tradeEquality }}
+ * @type {import('../task').TaskDef<number, Args> & {
+ *   tradeEquality: tradeEquality
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
 
         if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {
             throw `This aint a villager`
@@ -41,7 +43,7 @@ module.exports = {
 
         if (!args.villager) {
             for (const uuid in bot.env.villagers) {
-                if (args.cancellationToken.isCancelled) { return 0 }
+                if (args.interrupt.isCancelled) { return 0 }
 
                 yield
                 const villager = bot.env.villagers[uuid]
@@ -54,7 +56,7 @@ module.exports = {
                         yield* goto.task(bot, {
                             point: villager.position.clone(),
                             distance: 2,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                         entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
                         if (entity) {
@@ -73,9 +75,9 @@ module.exports = {
                 yield* goto.task(bot, {
                     point: entity.position,
                     distance: 2,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
                 if (!entity.isValid) { continue }
                 if (entity.name !== 'villager') { continue }
 
@@ -96,12 +98,12 @@ module.exports = {
             }
         }
 
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
 
         yield* goto.task(bot, {
             point: args.villager.position,
             distance: 2,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {
@@ -126,7 +128,7 @@ module.exports = {
 
             if (trade.tradeDisabled) { throw `This trade is disabled` }
             while (traded < args.numberOfTrades) {
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
                 const have = bot.inventoryItemCount(villager, trade.inputItem1)
                 if (have < trade.inputItem1.count) { break }
                 yield* wrap(bot.bot.trade(villager, tradeIndex, 1))

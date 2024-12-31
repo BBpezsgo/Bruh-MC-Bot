@@ -1,13 +1,13 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { wrap } = require('../utils/tasks')
+const { wrap, sleepG } = require('../utils/tasks')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
 
-const interactableBlocks = [
+const interactableBlocks = Object.freeze([
     'acacia_door',
     'acacia_fence_gate',
     'acacia_button',
@@ -141,14 +141,14 @@ const interactableBlocks = [
     'wood_button',
     'yellow_bed',
     'yellow_shulker_box'
-]
+])
 
 /** @type {Readonly<Record<string, string>>} */
-const blockToItem = {
+const blockToItem = Object.freeze({
     'wall_torch': 'torch',
-}
+})
 
-const mirroredBlocks = [
+const mirroredBlocks = Object.freeze([
     'chest',
     'furnace',
     'stone_button',
@@ -178,7 +178,7 @@ const mirroredBlocks = [
     'bamboo_button',
     'crimson_button',
     'warped_button',
-]
+])
 
 /**
  * @param {string} blockName
@@ -218,7 +218,7 @@ function getCorrectBlock(itemName) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
         if (bot.quietMode) { throw `Can't place block in quiet mode` }
 
         const item = ('item' in args) ? ((typeof args.item === 'string') ? args.item : args.item.name) : getCorrectItem(args.block)
@@ -343,8 +343,11 @@ module.exports = {
                         half = 'bottom'
                         break
                     default:
-                        debugger
                         break
+                }
+
+                if (args.properties.half === 'upper') {
+                    return
                 }
             }
         }
@@ -398,10 +401,10 @@ module.exports = {
         while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
             yield* goto.task(bot, {
                 block: position,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) { return }
+            if (args.interrupt.isCancelled) { return }
 
             if (!bot.env.allocateBlock(bot.username, blockPosition, 'dig')) {
                 console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
@@ -416,10 +419,10 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: position,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) { return }
+            if (args.interrupt.isCancelled) { return }
 
             yield* wrap(bot.bot.dig(blockHere))
         }
@@ -433,16 +436,14 @@ module.exports = {
             for (let i = 3; i >= 0; i--) {
                 yield* goto.task(bot, {
                     block: position,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
 
                 let imInTheWay = false
 
-                if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.6) {
+                if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.5) {
                     imInTheWay = true
-                }
-
-                if (position.offset(0.5, 0.5, 0.5).xzDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.6) {
+                } else if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.5) {
                     imInTheWay = true
                 }
 
@@ -450,7 +451,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         flee: position,
                         distance: 1.9,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                 }
 
@@ -463,12 +464,14 @@ module.exports = {
                     throw `Invalid reference block ${referenceBlock.name}`
                 }
 
-                if (args.cancellationToken.isCancelled) { return }
+                if (args.interrupt.isCancelled) { return }
 
-                if (args.cheat) {
-                    yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
-                } else {
-                    if (!bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
+                if (!bot.searchInventoryItem(null, item)) {
+                    if (args.cheat) {
+                        yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
+                    } else {
+                        throw `I don't have ${item}`
+                    }
                 }
 
                 try {
@@ -480,7 +483,7 @@ module.exports = {
                         yield* wrap(bot.bot.look(yaw, pitch, true))
                     }
 
-                    if (args.cancellationToken.isCancelled) { return }
+                    if (args.interrupt.isCancelled) { return }
                     yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
                     break
                 } catch (error) {

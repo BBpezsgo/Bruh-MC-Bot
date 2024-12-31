@@ -7,7 +7,7 @@ const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 
 /**
- * @type {import('../task').TaskDef<Item | null, {
+ * @type {import('../task').TaskDef<Array<Item>, {
  *   recipes: ReadonlyArray<import('../local-minecraft-data').CookingRecipe>;
  *   count: 1 | 2 | 3 | 4;
  *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
@@ -15,21 +15,21 @@ const pickupItem = require('./pickup-item')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return null }
+        if (args.interrupt.isCancelled) { return [] }
 
         const recipes = args.recipes.filter(v => v.type === 'campfire')
         let campfire = bot.findBlocks({
             matching: 'campfire',
             count: 1,
             maxDistance: 48,
-            filter: (campfire) => { return Boolean(campfire.getProperties()['lit']) },
+            filter: (campfire) => Boolean(campfire.getProperties()['lit']),
         }).filter(Boolean).first()
 
         if (!campfire) { throw `No campfire nearby` }
 
         yield* goto.task(bot, {
             block: campfire.position,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         campfire = bot.bot.blockAt(campfire.position)
@@ -75,7 +75,7 @@ module.exports = {
         if (!campfire.getProperties()['lit']) { throw `This campfire is out` }
 
         for (let i = 0; i < args.count; i++) {
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             if (!('Items' in campfire.blockEntity)) { continue }
             if (!Array.isArray(campfire.blockEntity.Items)) { continue }
@@ -117,10 +117,10 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: campfire.position,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) {
+            if (args.interrupt.isCancelled) {
                 bot.bot.removeListener('playerCollect', onPickUp)
                 break
             }
@@ -153,13 +153,15 @@ module.exports = {
                 try {
                     yield* pickupItem.task(bot, {
                         ...itemFilter,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                 } catch (error) {
                     console.log(`[Bot "${bot.username}"]`, error)
                 }
             }
         }
+
+        return pickedUp
     },
     id: function(args) {
         let result = `campfire`

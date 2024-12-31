@@ -1,7 +1,7 @@
 'use strict'
 
 const { Block } = require('prismarine-block')
-const { wrap } = require('../utils/tasks')
+const { wrap, sleepG } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
 const { incrementalNeighbors } = require('../utils/other')
@@ -87,7 +87,7 @@ function* findPosition(bot, blocks, confirmationCallback) {
             yield
             const position = block.position.offset(x, y, z)
             const blockAt = bot.bot.blockAt(position)
-            if (!blockAt || blockAt.name !== 'air') {
+            if (!blockAt || (blockAt.name !== 'air' && blockAt.name !== 'short_grass' && blockAt.name !== 'tall')) {
                 bot.debug.drawPoint(position, [1, 0, 0])
                 return false
             }
@@ -229,7 +229,7 @@ function* findPosition(bot, blocks, confirmationCallback) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         const blocks = args.blocks.filter(v => {
             if (v.name === 'air') { return false }
@@ -262,16 +262,19 @@ module.exports = {
             itemsToGive.add(itemToGive, 1)
         }
 
-        // yield* wrap(bot.commands.sendAsync(`/clear @p`))
-        // for (const itemName in itemsToGive) {
-        //     yield* wrap(bot.commands.sendAsync(`/give @p ${itemName} ${itemsToGive[itemName]}`))
-        // }
+        yield* wrap(bot.commands.sendAsync(`/clear @p`))
+        yield* sleepG(50)
+        for (const itemName of itemsToGive.keys) {
+            yield* wrap(bot.commands.sendAsync(`/give @p ${itemName} ${itemsToGive.get(itemName)}`))
+            yield* sleepG(50)
+        }
 
-        // for (const block of blocks) {
-        //     if (bot.bot.blockAt(block.position)?.name !== 'air') {
-        //         yield* wrap(bot.commands.sendAsync(`/setblock ${block.position.x} ${block.position.y} ${block.position.z} minecraft:air`))
-        //     }
-        // }
+        for (const block of blocks) {
+            if (bot.bot.blockAt(block.position)?.name !== 'air') {
+                yield* wrap(bot.commands.sendAsync(`/setblock ${block.position.x} ${block.position.y} ${block.position.z} minecraft:air`))
+                yield* sleepG(50)
+            }
+        }
 
         /**
          * @param {Block | { name: string; properties: any; }} a
@@ -302,7 +305,7 @@ module.exports = {
         while (remainingBlocks.length > 0) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const blockCountBefore = remainingBlocks.length
             let lastError = null
@@ -321,7 +324,7 @@ module.exports = {
                         position: block.position,
                         properties: block.properties,
                         cheat: true,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                     remainingBlocks.splice(i, 1)
                 } catch (error) {
@@ -337,7 +340,6 @@ module.exports = {
             const alreadyHere = bot.bot.blockAt(block.position)
             if (!alreadyHere) { continue }
             if (areBlockEqual(alreadyHere, block)) { continue }
-            debugger
             throw `Failed`
         }
     },

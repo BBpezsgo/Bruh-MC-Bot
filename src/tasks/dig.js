@@ -7,11 +7,13 @@ const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
 const { pickupItem } = require('../tasks')
+const Freq = require('../utils/freq')
+const { isItemEquals } = require('../utils/other')
 
 /**
  * @type {import('../task').TaskDef<{
  *   digged: Array<Vec3>;
- *   itemsDelta: Record<string, number>;
+ *   itemsDelta: Freq<import('../utils/other').ItemId>;
  * }, {
  *   block: Block;
  *   alsoTheNeighbors: boolean;
@@ -20,7 +22,7 @@ const { pickupItem } = require('../tasks')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (!args.block) { return { digged: [], itemsDelta: {} } }
+        if (!args.block) { return { digged: [], itemsDelta: new Freq(isItemEquals) } }
 
         if (bot.quietMode) { throw `Can't dig in quiet mode` }
 
@@ -34,27 +36,61 @@ module.exports = {
         let current = args.block
 
         const itemsBefore = bot.inventoryItems().toArray().reduce((map, item) => {
-            if (!map[item.name]) { map[item.name] = 0 }
-            map[item.name] -= item.count
+            map.add(item.name, -item.count)
             return map
-        }, /** @type {Record<string, number>} */({}))
+        }, new Freq(isItemEquals))
 
         let lastError = null
 
         while (current) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
-            if (bot.bot.entity.position.floored().offset(0, -1, 0).equals(current.position.floored())) {
-                yield* goto.task(bot, {
-                    flee: current.position.offset(0, 1, 0),
-                    distance: 1,
-                    cancellationToken: args.cancellationToken,
-                })
+            if (bot.bot.entity.position.floored().offset(0, -1, 0).equals(current.position)) {
+                const belowTargetBlock = bot.bot.blockAt(current.position.offset(0, -1, 0))
+                let shouldMoveAway = false
+                if (!belowTargetBlock) shouldMoveAway = true
+                else if (belowTargetBlock.name === 'air' ||
+                        belowTargetBlock.name === 'cave_air' ||
+                        belowTargetBlock.name === 'fire' ||
+                        belowTargetBlock.name === 'water' ||
+                        belowTargetBlock.name === 'lava' ||
+                        belowTargetBlock.name === 'powder_snow' ||
+                        belowTargetBlock.name === 'end_portal' ||
+                        belowTargetBlock.name === 'nether_portal' ||
+                        belowTargetBlock.name === 'magma_block' ||
+                        belowTargetBlock.name === 'campfire' ||
+                        belowTargetBlock.name === 'soul_campfire') {
+                    shouldMoveAway = true
+                } else {
+                    const [a, b, c, d] = [
+                        bot.bot.blockAt(current.position.offset(1, 1, 0)),
+                        bot.bot.blockAt(current.position.offset(-1, 1, 0)),
+                        bot.bot.blockAt(current.position.offset(0, 1, 1)),
+                        bot.bot.blockAt(current.position.offset(0, 1, -1)),
+                    ]
+                    if (!a && !b && !c && !d) {
+                        shouldMoveAway = true
+                    } else if (
+                        (a.name !== 'air' && a.name !== 'cave_air') &&
+                        (b.name !== 'air' && b.name !== 'cave_air') &&
+                        (c.name !== 'air' && c.name !== 'cave_air') &&
+                        (d.name !== 'air' && d.name !== 'cave_air')) {
+                        shouldMoveAway = true
+                    }
+                }
+
+                if (shouldMoveAway) {
+                    yield* goto.task(bot, {
+                        flee: current.position.offset(0, 1, 0),
+                        distance: 1,
+                        interrupt: args.interrupt,
+                    })
+                }
             }
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             try {
                 if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
@@ -63,19 +99,11 @@ module.exports = {
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
                     let tool = null
 
-                    if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                        console.warn(`[Bot "${bot.username}"] Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'} ...`)
-
+                    if (!current.canHarvest(null)) {
                         tool = bot.mc.getCorrectTool(current, bot.bot)
+                        if (!tool) { throw `I don't know any tool that can dig ${current.displayName}` }
 
-                        if (!tool) {
-                            throw `I don't know any tool that can dig ${current.displayName}`
-                        }
-
-                        if (!tool.has &&
-                            !current.canHarvest(null)) {
-                            throw 'No tool'
-                        }
+                        if (!tool.has) { throw 'No tool' }
                     }
 
                     // console.log(`[Bot "${bot.username}"] Tool:`, tool)
@@ -84,12 +112,14 @@ module.exports = {
                     yield* goto.task(bot, {
                         block: current.position,
                         movements: bot.cutTreeMovements,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
 
                     if (tool?.has) {
                         // console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
-                        yield* wrap(bot.bot.equip(tool.item.id, 'hand'))
+                        yield* bot.equip(tool.item.name, 'hand')
+                    } else {
+                        yield* wrap(bot.tryUnequip())
                     }
 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
@@ -99,7 +129,7 @@ module.exports = {
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
 
                     // console.log(`[Bot "${bot.username}"] Digging ...`)
-                    yield* wrap(bot.bot.dig(current))
+                    yield* wrap(bot.bot.dig(current, true))
                     digged.push({
                         position: current.position.clone(),
                         loot: loot,
@@ -130,13 +160,13 @@ module.exports = {
 
         if (args.pickUpItems) {
             for (let i = digged.length - 1; i >= 0; i--) {
-                if (args.cancellationToken.isCancelled) { break }
-                
+                if (args.interrupt.isCancelled) { break }
+
                 const position = digged[i]
                 while (true) {
                     yield
 
-                    if (args.cancellationToken.isCancelled) { break }
+                    if (args.interrupt.isCancelled) { break }
 
                     const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
                         if (entity.name !== 'item') { return false }
@@ -156,7 +186,7 @@ module.exports = {
                             yield* pickupItem.task(bot, {
                                 item: nearestEntity,
                                 silent: true,
-                                cancellationToken: args.cancellationToken,
+                                interrupt: args.interrupt,
                             })
                         } catch (error) {
                             // console.warn(error)
@@ -169,10 +199,9 @@ module.exports = {
         }
 
         const itemsDelta = args.pickUpItems ? bot.inventoryItems().toArray().reduce((map, item) => {
-            if (!map[item.name]) { map[item.name] = 0 }
-            map[item.name] += item.count
+            map.add(item.name, item.count)
             return map
-        }, itemsBefore) : {}
+        }, itemsBefore) : new Freq(isItemEquals)
 
         if (digged.length === 0 && lastError) {
             throw lastError

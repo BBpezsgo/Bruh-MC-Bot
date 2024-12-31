@@ -351,7 +351,7 @@ const meleeWeapons = (/** @type {Array<{ name: string; damage: number; speed: nu
 
 /**
  * @typedef {(typeof meleeWeapons)[0]} MeleeWeapon
-*/
+ */
 
 const undeadMobs = [
     'drowned',
@@ -576,37 +576,86 @@ module.exports = {
             meleeWeapon = searchMeleeWeapon(bot, targetEntity)
             const holds = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]
 
+            // @ts-ignore
+            cooldown = (meleeWeapon ? meleeWeapon.cooldown : (1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4))) * 1000
+
             if (meleeWeapon) {
                 if (!holds || holds.type !== meleeWeapon.item.type) {
                     yield* wrap(bot.bot.equip(meleeWeapon.item.type, 'hand'))
+                    cooldownEndAt = performance.now() + cooldown
                 }
             } else {
                 if (holds) {
                     yield* wrap(bot.bot.unequip('hand'))
+                    cooldownEndAt = performance.now() + cooldown
                 }
             }
-
-            // if (meleeWeapon) {
-            //     console.log(`[Bot "${bot.username}"] Melee weapon "${meleeWeapon.name}" equipped`)
-            // } else {
-            //     console.log(`[Bot "${bot.username}"] No melee weapon found`)
-            // }
-
-            // @ts-ignore
-            cooldown = meleeWeapon ? (meleeWeapon.cooldown * 1000) : (1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4))
-            cooldownEndAt = performance.now() + cooldown
         }
 
         /**
          * @param {Entity} entity
-         * @param {(number | { easy: number; normal: number; hard: number; }) | ((entity: import("prismarine-entity").Entity) => number | { easy: number; normal: number; hard: number; }) | ((entity: import("prismarine-entity").Entity) => number | { easy: number; normal: number; hard: number; })} attack
+         * @param {import('../minecraft').Amount | ((entity: import("prismarine-entity").Entity) => import('../minecraft').Amount)} amount
+         */
+        const resolveAmount = function(entity, amount) {
+            if (typeof amount === 'object') {
+                return amount[(bot.bot.game.difficulty === 'peaceful') ? 'easy' : bot.bot.game.difficulty]
+            } else if (typeof amount === 'number') {
+                return amount
+            }
+            return resolveAmount(entity, amount(entity))
+        }
+
+        /**
+         * @param {Entity} entity
+         * @param {import('../minecraft').Damage | import('../minecraft').Damage[]} attack
          */
         const resolveAttackDamage = function(entity, attack) {
-            if (typeof attack === 'number') { return attack }
-            if (typeof attack === 'object') {
-                return attack[(bot.bot.game.difficulty === 'peaceful') ? 'easy' : bot.bot.game.difficulty]
+            let result = 0
+            if ('length' in attack) {
+                for (const item of attack) {
+                    result += resolveAttackDamage(entity, item)
+                }
+            } else {
+                switch (attack.type) {
+                    case 'physical':
+                        result += resolveAmount(entity, attack.amount)
+                        break
+                    case 'explosion':
+                        const exposure = 1
+                        const power = resolveAmount(entity, attack.level)
+                        const blastProtectionLevel = 0
+                        const impact = 1 - (bot.bot.entity.position.distanceTo(entity.position) / (2 * power)) * exposure * (1 - (0.15 * blastProtectionLevel))
+                        const difficultyMultiplier = {
+                            peaceful: 3.4,
+                            easy: 3.4,
+                            normal: 7,
+                            hard: 10.5,
+                        }[bot.bot.game.difficulty]
+                        const explosionDamage = difficultyMultiplier * power * (impact + impact * impact) + 1
+                        result += explosionDamage
+                        break
+                    case 'fire':
+                        result += (resolveAmount(entity, attack.time) / 1000) * 0.5
+                        break
+                    case 'effect':
+                        switch (attack.effect) {
+                            case 'wither':
+                                // TODO
+                                result += (resolveAmount(entity, attack.time) / 1000) * resolveAmount(entity, attack.level)
+                                break
+                            case 'poison':
+                                // TODO
+                                result += (resolveAmount(entity, attack.time) / 1000) * resolveAmount(entity, attack.level)
+                                break
+                            default:
+                                break
+                        }
+                        break
+                    default:
+                        break
+                }
             }
-            return resolveAttackDamage(entity, attack(entity))
+            return result
         }
 
         /**
@@ -680,7 +729,8 @@ module.exports = {
             /** `0..(hurtAt.length)` */
             let dangerScore = 0
             const hurtByMemoryTime = 10000
-            for (const hurtAt of (bot.memory.hurtBy[entity.id] ?? [])) {
+            const hurtTimes = bot.memory.hurtBy[entity.id]?.times ?? []
+            for (const hurtAt of hurtTimes) {
                 const deltaTime = performance.now() - hurtAt
                 const hurtScore = Math.max(0, (hurtByMemoryTime - deltaTime) / hurtByMemoryTime)
                 dangerScore += hurtScore
@@ -917,7 +967,7 @@ module.exports = {
                     switch (movementState) {
                         case 'goto': {
                             const d = node.distanceTo(target.position)
-                            return d < 3.5
+                            return d < 8
                         }
                         case 'goto-melee': {
                             const d = node.distanceTo(target.position)
@@ -1061,15 +1111,16 @@ module.exports = {
                     }
 
                     if (now <= cooldownEndAt + extraCooldown) {
-                        // console.log(`Attack cooldown ...`)
+                        console.log(`Attack cooldown ...`)
                         continue
                     }
 
                     if (isEntityHurting(target)) {
-                        // console.log(`Target is hurting ...`)
+                        console.log(`Target is hurting ...`)
                         continue
                     }
 
+                    console.log(`[Bot "${bot.username}"] Attacking ${target.name ?? target.uuid ?? target.id}`)
                     bot.bot.attack(target)
                     bot.leftHand.isActivated = false
                     cooldownEndAt = now + cooldown

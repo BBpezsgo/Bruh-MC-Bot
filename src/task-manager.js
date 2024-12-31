@@ -97,7 +97,7 @@ module.exports = class TaskManager {
         if (this._tasks.length > 10) {
             this._tasks.shift()
             this._previousTask--
-            console.warn(`Too many tasks in _queue`)
+            console.warn(`Too many tasks in queue`)
         }
 
         /**
@@ -168,7 +168,11 @@ module.exports = class TaskManager {
         if (i === -1) { return null }
 
         if (this._previousTask !== i && this._previousTask !== -1) {
-            console.warn(`Switching task, expect unexpected behavior!`)
+            const prev = this._tasks[this._previousTask]
+            if (prev) {
+                prev.interrupt()
+                // console.warn(`Switching task, expect unexpected behavior! ${prev.id} ---> ${this._tasks[i].id}`)
+            }
         }
 
         this._previousTask = i

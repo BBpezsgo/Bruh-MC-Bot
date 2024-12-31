@@ -25,10 +25,10 @@ function* plant(bot, placeOn, placeVector, seedItem, args) {
 
     yield* goto.task(bot, {
         block: placeOn.position.clone().offset(0, 0.5, 0),
-        cancellationToken: args.cancellationToken,
+        interrupt: args.interrupt,
     })
 
-    if (args.cancellationToken.isCancelled) { return }
+    if (args.interrupt.isCancelled) { return }
 
     yield* bot.place(placeOn, placeVector, seedItem.name, true)
 }
@@ -49,7 +49,7 @@ module.exports = {
     task: function*(bot, args) {
         let plantedCount = 0
 
-        if (args.cancellationToken.isCancelled) { return plantedCount }
+        if (args.interrupt.isCancelled) { return plantedCount }
 
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
@@ -62,9 +62,9 @@ module.exports = {
             }
 
             for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
-                // yield
+                yield
                 const crop = Minecraft.cropsByBlockName[savedCrop.block]
                 if (!crop) { continue }
                 // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
@@ -100,7 +100,7 @@ module.exports = {
                         yield* hoeing.task(bot, {
                             block: new Vec3Dimension(placeOn.block.position, bot.dimension),
                             gatherTool: false,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                     } catch (error) {
                         console.error(`[Bot "${bot.username}"]`, error)
@@ -108,7 +108,7 @@ module.exports = {
                     }
                 }
 
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
@@ -131,7 +131,7 @@ module.exports = {
             }
         } else {
             while (true) {
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)
 

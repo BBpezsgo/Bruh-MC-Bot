@@ -22,7 +22,6 @@ require('./utils/math')
 const Environment = require('./environment')
 const Memory = require('./memory')
 const Debug = require('./debug')
-const TextDisplay = require('./text-display')
 const Commands = require('./commands')
 const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
@@ -33,7 +32,7 @@ const { Vec3 } = require('vec3')
 const Iterable = require('./iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
-const CancellationToken = require('./utils/cancellationToken')
+const Interrupt = require('./utils/interrupt')
 
 //#endregion
 
@@ -453,7 +452,6 @@ module.exports = class BruhBot {
                 'place_entity': false,
                 'pathfinder': require('mineflayer-pathfinder').pathfinder,
                 'armor_manager': require('mineflayer-armor-manager'),
-                // @ts-ignore
                 'hawkeye': require('minecrafthawkeye').default,
                 // 'elytra': require('mineflayer-elytrafly').elytrafly,
             }
@@ -481,9 +479,9 @@ module.exports = class BruhBot {
             // }
         })
 
-        this.bot.on('injected', (plugin) => {
-            console.log(`[Bot "${this.username}"] Plugin loaded: ${plugin.pluginName}`)
-        })
+        // this.bot.on('injected', (plugin) => {
+        //     console.log(`[Bot "${this.username}"] Plugin loaded: ${plugin.pluginName}`)
+        // })
 
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
         this.tasks = new TaskManager()
@@ -743,8 +741,11 @@ module.exports = class BruhBot {
                 while (this.env.entityOwners[indirectSource.id]) {
                     indirectSource = this.env.entityOwners[source.id]
                 }
-                this.memory.hurtBy[indirectSource.id] ??= []
-                this.memory.hurtBy[indirectSource.id].push(performance.now())
+                this.memory.hurtBy[indirectSource.id] ??= {
+                    entity: indirectSource,
+                    times: [],
+                }
+                this.memory.hurtBy[indirectSource.id].times.push(performance.now())
                 // console.log(`Damaged by ${indirectSource.username ?? indirectSource.displayName ?? indirectSource.name ?? 'someone'}`)
             }
         })
@@ -1050,7 +1051,9 @@ module.exports = class BruhBot {
                     },
                     id: 'test1',
                     humanReadableId: 'test1',
-                }, {}, priorities.user, true, sender, isWhispered)
+                }, {
+                    response: response
+                }, priorities.user, true, sender, isWhispered)
                     ?.wait()
                     .then(() => response.respond(`K`))
                     .catch(reason => reason === 'cancelled' || response.respond(reason))
@@ -1087,7 +1090,7 @@ module.exports = class BruhBot {
                         for (const mobToKill of mobsToKill) {
                             yield* tasks.kill.task(bot, {
                                 entity: mobToKill,
-                                cancellationToken: args.cancellationToken,
+                                interrupt: args.interrupt,
                             })
                         }
                         console.log(`[Bot "${bot.username}"] Mobs to kill`, mobsToKill)
@@ -1192,8 +1195,7 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: ['clear debug', 'cdebug', 'dispose debug', 'ddebug', 'ndebug'],
             command: (sender, message, response, isWhispered) => {
-                TextDisplay.disposeAll(this.commands)
-                BlockDisplay.disposeAll(this.commands)
+                this.debug.disposeAll()
             },
         }))
 
@@ -1242,7 +1244,7 @@ module.exports = class BruhBot {
                 const items = this.resolveItemInput(message[2])
 
                 if (items.length === 0) {
-                    response.respond(`I don't know what \"${message[2]}\" is`)
+                    response.respond(`I don't know what "${message[2]}" is`)
                     return
                 }
 
@@ -1302,7 +1304,7 @@ module.exports = class BruhBot {
                 const items = this.resolveItemInput(message[2])
 
                 if (items.length === 0) {
-                    response.respond(`I don't know what \"${message[2]}\" is`)
+                    response.respond(`I don't know what "${message[2]}" is`)
                     return
                 }
 
@@ -1481,10 +1483,14 @@ module.exports = class BruhBot {
                             if (!block) { continue }
                             if (savedCrop.block !== block.name) {
                                 bot.env.crops.splice(i, 1)
+                                bot.debug.label(block.position.offset(0.5, 1, 0.5), { text: `crop removed`, color: 'red' }, 10000)
                             }
                         }
                         const blocks = bot.findBlocks({
-                            matching: new Set(Object.keys(Minecraft.cropsByBlockName).map(v => bot.mc.registry.blocksByName[v].id)),
+                            matching: new Set(
+                                Object.keys(Minecraft.cropsByBlockName)
+                                    .map(v => bot.mc.registry.blocksByName[v].id)
+                            ),
                             count: Infinity,
                             maxDistance: config.scanCrops.radius,
                             force: true,
@@ -1495,6 +1501,7 @@ module.exports = class BruhBot {
                         for (const block of blocks) {
                             yield
                             if (!block) { continue }
+                            bot.debug.label(block.position.offset(0.5, 1, 0.5), block.name, 30000)
                             bot.env.crops.push({
                                 block: block.name,
                                 position: new Vec3Dimension(block.position, bot.dimension),
@@ -1736,7 +1743,7 @@ module.exports = class BruhBot {
                                             }
                                         }
                                     },
-                                    cancellationToken: args.cancellationToken,
+                                    interrupt: args.interrupt,
                                 })
                             } catch (error) {
                                 if (error === 'bruh') {
@@ -1765,9 +1772,6 @@ module.exports = class BruhBot {
                                     break
                                 case 'here':
                                     response.respond(`I'm already here`)
-                                    break
-                                case 'failed':
-                                    response.respond(`I can't get there`)
                                     break
                                 default:
                                     break
@@ -2083,9 +2087,6 @@ module.exports = class BruhBot {
             this.debug.tick()
         }
 
-        TextDisplay.tick(this)
-        BlockDisplay.tick(this)
-
         if (this.saveTasksInterval?.done()) {
             const json = this.tasks.toJSON()
             if (!fs.existsSync(this._config.worldPath)) { fs.mkdirSync(this._config.worldPath, { recursive: true }) }
@@ -2192,7 +2193,7 @@ module.exports = class BruhBot {
                                     searchRadius: 3,
                                     timeout: 300,
                                     sprint: true,
-                                    cancellationToken: args.cancellationToken,
+                                    interrupt: args.interrupt,
                                 })
                             } else {
                                 yield* tasks.goto.task(bot, {
@@ -2201,11 +2202,11 @@ module.exports = class BruhBot {
                                     searchRadius: 3,
                                     timeout: 300,
                                     sprint: true,
-                                    cancellationToken: args.cancellationToken,
+                                    interrupt: args.interrupt,
                                 })
                             }
                         } catch (error) {
-                            console.warn(error)
+                            console.warn(`[Bot "${bot.username}"]`, error)
                             const shield = bot.searchInventoryItem(null, 'shield')
                             if (shield) {
                                 if (!bot.holds(shield, true)) {
@@ -2257,7 +2258,7 @@ module.exports = class BruhBot {
                                 searchRadius: 3,
                                 timeout: 500,
                                 sprint: true,
-                                cancellationToken: args.cancellationToken,
+                                interrupt: args.interrupt,
                             })
                         }
                     },
@@ -2298,6 +2299,7 @@ module.exports = class BruhBot {
                         const pitch = Math.atan2(directionToGhast.y, groundDistance)
                         this.bot.look(yaw, pitch, true)
                     }
+                    console.log(`[Bot "${this.bot.username}"] Attacking ${e.name ?? e.uuid ?? e.id}`)
                     this.bot.attack(e)
                     return true
                 }
@@ -2365,8 +2367,7 @@ module.exports = class BruhBot {
                             }
                             refBlock = bot.bot.blockAt(bot.bot.entity.position)
                             if (refBlock.name === 'air') {
-                                yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
-                                yield
+                                yield* taskUtils.wrap(bot.bot.lookAt(refBlock.position.offset(0.5, 0.1, 0.5), true))
                                 yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
                                 bot.bot.activateItem(false)
                                 while (bot.bot.entity.metadata[0] & 0x01) {
@@ -2374,9 +2375,17 @@ module.exports = class BruhBot {
                                 }
                                 const bucketItem = bot.searchInventoryItem(null, 'bucket')
                                 if (bucketItem) {
-                                    yield* taskUtils.wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
-                                    yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
-                                    bot.bot.activateItem(false)
+                                    const water = bot.findBlocks({
+                                        matching: 'water',
+                                        count: 1,
+                                        force: true,
+                                        maxDistance: 2,
+                                    }).filter(Boolean).first()
+                                    if (water) {
+                                        yield* taskUtils.wrap(bot.bot.equip(bucketItem, 'hand'))
+                                        yield* taskUtils.wrap(bot.bot.lookAt(water.position.offset(0.5, 0.1, 0.5), true))
+                                        bot.bot.activateItem(false)
+                                    }
                                 }
                                 return
                             }
@@ -2392,13 +2401,13 @@ module.exports = class BruhBot {
                                 point: water.position,
                                 distance: 0,
                                 sprint: true,
-                                cancellationToken: args.cancellationToken,
+                                interrupt: args.interrupt,
                             })
                         }
                     },
                     id: `extinguish-myself`,
                     humanReadableId: `Extinguish myself`,
-                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1, false, null, false)
+                }, {}, priorities.critical - 4, false, null, false)
             } else {
                 if (blockAt.name === 'fire') {
                     this.tasks.push(this, {
@@ -2407,7 +2416,7 @@ module.exports = class BruhBot {
                         },
                         id: `extinguish-myself`,
                         humanReadableId: `Extinguish myself`,
-                    }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 1, false, null, false)
+                    }, {}, priorities.critical - 3, false, null, false)
                 }
             }
         }
@@ -2474,7 +2483,7 @@ module.exports = class BruhBot {
                                     yield* taskUtils.wrap(bot.bot.consume())
                                 },
                                 id: 'consume-milk',
-                            }, {}, priorities.critical, false, null, false)
+                            }, {}, priorities.critical - 5, false, null, false)
                         }
                     }
                 }
@@ -2584,13 +2593,13 @@ module.exports = class BruhBot {
                                 searchRadius: 20,
                                 timeout: 1000,
                             },
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                     },
                     id: `get-out-lava`,
                     humanReadableId: `Getting out of lava`,
                 }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 2, false, null, false)
-            } else if (this.bot.oxygenLevel < 18 &&
+            } else if (this.bot.oxygenLevel < 20 &&
                 (this.bot.blockAt(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
                     this.bot.blockAt(this.bot.entity.position.offset(0, 0, 0))?.name === 'water')) {
                 this.tasks.push(this, {
@@ -2614,12 +2623,12 @@ module.exports = class BruhBot {
                                 searchRadius: 20,
                                 timeout: 1000,
                             },
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                     },
                     id: `get-out-water`,
                     humanReadableId: `Getting out of water`,
-                }, {}, this.bot.oxygenLevel < 18 ? priorities.surviving + 1 : priorities.low, false, null, false)
+                }, {}, this.bot.oxygenLevel < 20 ? priorities.surviving + 1 : priorities.low, false, null, false)
 
                 if (!this.bot.pathfinder.goal) {
                     if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
@@ -2691,72 +2700,41 @@ module.exports = class BruhBot {
         //#region Someone attacking me!
         {
             const now = performance.now()
-            for (const by in this.memory.hurtBy) {
-                for (let i = 0; i < this.memory.hurtBy[by].length; i++) {
-                    const at = this.memory.hurtBy[by][i]
-                    if (now - at > config.hurtByMemory) {
-                        this.memory.hurtBy[by].splice(i, 1)
+            for (const _by of Object.keys(this.memory.hurtBy)) {
+                const entityId = Number(_by)
+                const by = this.memory.hurtBy[entityId]
+
+                for (let i = by.times.length - 1; i >= 0; i--) {
+                    if (now - by.times[i] > config.hurtByMemory) {
+                        by.times.splice(i, 1)
                     }
                 }
 
-                if (!this.memory.hurtBy[by] ||
-                    this.memory.hurtBy[by].length === 0) { continue }
-
-                {
-                    const entity = this.bot.entities[by]
-                    if (entity &&
-                        entity.isValid) {
-                        let canAttack = true
-                        const player = Object.values(this.bot.players).find(v => v && v.entity && Number(v.entity.id) === Number(by))
-                        if (player && (
-                            player.gamemode === 1 ||
-                            player.gamemode === 3
-                        )) {
-                            canAttack = false
-                        }
-                        if (!canAttack) {
-                            console.warn(`[Bot "${this.username}"]: Can't attack ${entity.name}`)
-                            delete this.memory.hurtBy[by]
-                            continue
-                        }
-
-                        if (!player && (entity.type === 'hostile' || entity.type === 'mob')) {
-                            this.defendAgainst(entity)
-                        } else if (Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), entity) < 4) {
-                            this.bot.attack(entity)
-                        }
-                    }
+                if (by.times.length === 0 || !by.entity || !by.entity.isValid) {
+                    delete this.memory.hurtBy[entityId]
+                    continue
                 }
 
-                /*
-                if (!this.memory.hurtBy[by] ||
-                    this.memory.hurtBy[by].length === 0) { continue }
+                const player = by.entity.type === 'player'
+                    ? Object.values(this.bot.players).find(v => v && v.entity && Number(v.entity.id) === Number(by.entity.id))
+                    : null
 
-                {
-                    this.tasks.push(this, {
-                        task: function*(bot, args) {
-                            if (!args.by || !args.by.isValid) {
-                                throw `Entity disappeared`
-                            }
-                            yield* goto.task(bot, {
-                                point: args.by.position,
-                                distance: 4,
-                            })
-                            if (!args.by || !args.by.isValid) {
-                                throw `Entity disappeared`
-                            }
-                            bot.bot.attack(args.by)
-                        },
-                        id: function(args) {
-                            return `punch-${args.by?.displayName ?? args.by?.name ?? 'null'}`
-                        },
-                        humanReadableId: function(args) {
-                            return `Punch ${args.by?.displayName ?? args.by?.name ?? 'someone'}`
-                        },
-                    }, { by: this.bot.entities[by] }, 0)
-                    delete this.memory.hurtBy[by]
+                if (player && (
+                    player.gamemode === 1 ||
+                    player.gamemode === 3
+                )) {
+                    console.warn(`[Bot "${this.username}"] Can't attack ${by.entity.name}`)
+                    delete this.memory.hurtBy[entityId]
+                    continue
                 }
-                */
+
+                if (!player && (by.entity.type === 'hostile' || by.entity.type === 'mob')) {
+                    this.defendAgainst(by.entity)
+                } else if (Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), by.entity) < 4 && (by.entity.type === 'player')) {
+                    console.log(`[Bot "${this.bot.username}"] Attacking ${by.entity.name ?? by.entity.uuid ?? by.entity.id}`)
+                    this.bot.attack(by.entity)
+                    delete this.memory.hurtBy[entityId]
+                }
             }
         }
         //#endregion
@@ -2865,7 +2843,7 @@ module.exports = class BruhBot {
                     yield* tasks.goto.task(bot, {
                         point: entity.position,
                         distance: 1,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                     yield* taskUtils.sleepG(1000)
                     if (entity.isValid) {
@@ -2897,7 +2875,7 @@ module.exports = class BruhBot {
                 maxDistance: config.boredom.pickupXpRadius,
             }
             if (this.env.getClosestXp(this, filter)) {
-                this.tasks.push(this, tasks.pickupXp, filter,priorities.low, false, null, false)
+                this.tasks.push(this, tasks.pickupXp, filter, priorities.low, false, null, false)
             }
         }
     }
@@ -2942,7 +2920,7 @@ module.exports = class BruhBot {
                         if (dumped.isEmpty) return
                         console.log(`Dumped ${dumped.keys.map(v => `${dumped.get(v)} ${stringifyItem(v)}`).join(', ')}`)
                     })
-                    .catch(() => {})
+                    .catch(() => { })
             }
         }
 
@@ -3044,7 +3022,12 @@ module.exports = class BruhBot {
 
         if (result.length === 0) {
             if (itemInput.endsWith(' potion')) {
-                const potionType = itemInput.substring(0, itemInput.length - ' potion'.length)
+                let potionType = itemInput.substring(0, itemInput.length - ' potion'.length)
+                switch (potionType) {
+                    case 'speed':
+                        potionType = 'swiftness'
+                        break
+                }
                 for (const recipe of tasks.brew.recipes) {
                     if (recipe.result.potion.replace('minecraft:', '') === potionType) {
                         result.push(recipe.result)
@@ -3107,7 +3090,7 @@ module.exports = class BruhBot {
                 case 'food': {
                     try {
                         if (foodPointsInInventory >= item.food) { break }
-                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const foods = bot.mc.getGoodFoods(false).map(v => v.name)
                         // console.warn(`[Bot "${bot.username}"] Low on food`)
                         const permissions = {
@@ -3137,19 +3120,19 @@ module.exports = class BruhBot {
                         const res = yield* tasks.gatherItem.task(bot, {
                             force: true,
                             plan: plans.flat(),
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                             ...permissions,
                         })
-                        // console.log(`[Bot \"${bot.username}\"] Food gathered`, res)
+                        // console.log(`[Bot "${bot.username}"] Food gathered`, res)
                     } catch (error) {
-                        console.error(`[Bot \"${bot.username}\"]`, error)
+                        console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
                 case 'single': {
                     try {
                         if (bot.inventoryItemCount(null, item.item) > 0) { break }
-                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
@@ -3165,18 +3148,18 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
-                        // console.log(`[Bot \"${bot.username}\"] Equipment ${item.item} gathered`, res)
+                        // console.log(`[Bot "${bot.username}"] Equipment ${item.item} gathered`, res)
                     } catch (error) {
-                        console.error(`[Bot \"${bot.username}\"]`, error)
+                        console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
                 case 'any': {
                     if (item.item.find(v => bot.inventoryItemCount(null, v) > 0)) { break }
                     try {
-                        // console.log(`[Bot \"${bot.username}\"]`, item.type, item)
+                        // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.prefer,
                             count: item.count === 'any' ? 1 : item.count,
@@ -3192,12 +3175,12 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
-                        // console.log(`[Bot \"${bot.username}\"] Preferred equipment ${item.prefer} gathered`, res)
+                        // console.log(`[Bot "${bot.username}"] Preferred equipment ${item.prefer} gathered`, res)
                         break
                     } catch (error) {
-                        console.error(`[Bot \"${bot.username}\"]`, error)
+                        console.error(`[Bot "${bot.username}"]`, error)
                     }
 
                     try {
@@ -3216,12 +3199,12 @@ module.exports = class BruhBot {
                             canRequestFromBots: true,
                             canTrade: true,
                             canHarvestMobs: true,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
-                        // console.log(`[Bot \"${bot.username}\"] Equipment gathered`, res)
+                        // console.log(`[Bot "${bot.username}"] Equipment gathered`, res)
                         break
                     } catch (error) {
-                        console.error(`[Bot \"${bot.username}\"]`, error)
+                        console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
@@ -3247,7 +3230,7 @@ module.exports = class BruhBot {
         yield* tasks.plantSeed.task(bot, {
             harvestedCrops: crops,
             locks: [],
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
     }
 
@@ -3256,7 +3239,7 @@ module.exports = class BruhBot {
      */
     static *tryHarvestCrops(bot, args) {
         const harvested = yield* tasks.harvest.task(bot, {
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
@@ -3267,7 +3250,7 @@ module.exports = class BruhBot {
         }
 
         yield* tasks.compost.task(bot, {
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         return harvested
@@ -3284,7 +3267,7 @@ module.exports = class BruhBot {
             try {
                 n += yield* tasks.breed.task(bot, {
                     animals: Object.values(fencing.mobs),
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
             } catch (error) {
                 console.error(error)
@@ -3302,7 +3285,7 @@ module.exports = class BruhBot {
         const trashItems = bot.getTrashItems()
         return yield* tasks.dumpToChest.task(bot, {
             items: trashItems,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
     }
 
@@ -3567,11 +3550,8 @@ module.exports = class BruhBot {
      * @param {MineFlayer.EquipmentDestination} destination
      */
     *equip(item, destination = 'hand') {
-        const _item = this.searchInventoryItem(null, item)
-
-        if (!_item) {
-            throw `Item ${stringifyItem(item)} not found to equip`
-        }
+        const _item = (typeof item === 'object' && 'slot' in item) ? item : this.searchInventoryItem(null, item)
+        if (!_item) { throw `Item ${stringifyItem(item)} not found to equip` }
 
         const sourceSlot = _item.slot
         const destSlot = this.bot.getEquipmentDestSlot(destination)
@@ -3816,12 +3796,12 @@ module.exports = class BruhBot {
         window ??= this.bot.inventory
 
         const specialSlotIds = hasWindow ? [] : [
-            this.bot.getEquipmentDestSlot('head'),
-            this.bot.getEquipmentDestSlot('torso'),
-            this.bot.getEquipmentDestSlot('legs'),
-            this.bot.getEquipmentDestSlot('feet'),
+            // this.bot.getEquipmentDestSlot('head'),
+            // this.bot.getEquipmentDestSlot('torso'),
+            // this.bot.getEquipmentDestSlot('legs'),
+            // this.bot.getEquipmentDestSlot('feet'),
             this.bot.getEquipmentDestSlot('hand'),
-            this.bot.getEquipmentDestSlot('off-hand'),
+            // this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
         if (item) {
@@ -3938,9 +3918,7 @@ module.exports = class BruhBot {
      */
     *chestDeposit(chest, chestBlock, item, count) {
         const depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
-        if (depositCount === 0) {
-            return 0
-        }
+        if (depositCount === 0) return 0
 
         const stackSize = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].stackSize
 
@@ -3948,24 +3926,19 @@ module.exports = class BruhBot {
             .filter(v => isItemEquals(v, item) && v.count > 0)
             .toArray()
 
-        if (botItems.length === 0) {
-            return 0
-        }
+        if (botItems.length === 0) return 0
 
-        if (!botItems[0]) {
-            return 0
-        }
+        if (!botItems[0]) return 0
+
+        const destinationSlot = this.firstFreeContainerSlot(chest, item)
+        if (destinationSlot === null) return 0
 
         const actualCount = Math.min(
             depositCount,
             botItems[0].count,
-            stackSize
+            stackSize,
+            stackSize - (chest.slots[destinationSlot] ? chest.slots[destinationSlot].count : 0)
         )
-
-        const destinationSlot = this.firstFreeContainerSlot(chest, item)
-        if (destinationSlot === null) {
-            return 0
-        }
 
         const sourceSlot = botItems[0].slot
 
@@ -4071,7 +4044,7 @@ module.exports = class BruhBot {
                 count: 1,
                 canUseInventory: true,
                 canUseChests: true,
-                cancellationToken: new CancellationToken(),
+                interrupt: new Interrupt(),
             })
             result = this.searchInventoryItem(null, ...item)
             if (result) { return result }
@@ -4103,7 +4076,7 @@ module.exports = class BruhBot {
                 count: count,
                 canUseInventory: true,
                 canUseChests: true,
-                cancellationToken: new CancellationToken(),
+                interrupt: new Interrupt(),
             })
             const result = this.searchInventoryItem(null, item)
             if (result) { return result }
@@ -4569,7 +4542,7 @@ module.exports = class BruhBot {
      * @param {import('prismarine-block').Block} block
      * @param {Vec3} [eye]
      */
-    async lookAtBlock(block, eye = null) {
+    async lookAtBlock(block, eye = undefined) {
         const { validFaces, closerBlocks } = this._blockVisibility(block, eye)
 
         if (validFaces.length > 0) {

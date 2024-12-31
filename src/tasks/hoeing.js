@@ -33,7 +33,7 @@ const hoes = Object.freeze([
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
         if (bot.quietMode) { throw `Can't hoe in quiet mode` }
 
         let n = 0
@@ -75,7 +75,7 @@ module.exports = {
         if ('water' in args) {
             yield* goto.task(bot, {
                 dimension: args.water.dimension,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
             water = args.water.xyz(bot.dimension)
         } else if ('nearPlayer' in args) {
@@ -95,10 +95,10 @@ module.exports = {
         } else if ('block' in args) {
             yield* goto.task(bot, {
                 dimension: args.block.dimension,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) { return 0 }
+            if (args.interrupt.isCancelled) { return 0 }
 
             const dirt = bot.bot.blockAt(args.block.xyz(bot.dimension))
 
@@ -119,16 +119,16 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: args.block,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) { return 0 }
+            if (args.interrupt.isCancelled) { return 0 }
 
             if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
                 yield* wrap(bot.bot.dig(above, true))
             }
 
-            if (args.cancellationToken.isCancelled) { return 0 }
+            if (args.interrupt.isCancelled) { return 0 }
 
             yield* equipHoe()
             yield
@@ -140,7 +140,7 @@ module.exports = {
         }
 
         while (true) {
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             yield* equipHoe()
 
@@ -185,20 +185,20 @@ module.exports = {
 
                 yield* goto.task(bot, {
                     block: dirt.clone(),
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
 
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 if (Minecraft.replaceableBlocks[above.name] === 'break') {
                     yield* wrap(bot.bot.dig(above, true))
                 }
 
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 yield* equipHoe()
 
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 yield* sleepG(100)
                 yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, true))

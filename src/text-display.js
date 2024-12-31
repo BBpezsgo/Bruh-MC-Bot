@@ -1,64 +1,7 @@
 'use strict'
 
-/**
- * @typedef {"black" |
-*   'dark_blue' |
-*   'dark_green' |
-*   'dark_aqua' |
-*   'dark_red' |
-*   'dark_purple' |
-*   'gold' |
-*   'gray' |
-*   'dark_gray' |
-*   'blue' |
-*   'green' |
-*   'aqua' |
-*   'red' |
-*   'light_purple' |
-*   'yellow' |
-*   'white'
-* } NamedColor
-*/
-
 const { Vec3 } = require('vec3')
 const Commands = require('./commands')
-
-/**
-* @typedef {`#${string}`} HexColor
-*/
-
-/**
-* @typedef {{
-*   color?: NamedColor | HexColor;
-*   font?: string;
-*   bold?: boolean;
-*   italic?: boolean;
-*   underlined?: boolean;
-*   strikethrough?: boolean;
-*   obfuscated?: boolean;
-* }} JsonTextFormat
-*/
-
-/**
-* @typedef {{ extra?: unknown } & JsonTextFormat & ({
-*   text: string;
-* } | {
-*   translate: string;
-*   fallback?: string;
-*   with?: Array<JsonTextComponent>;
-* } | {
-*   score: {
-*     name: string;
-*     objective: string;
-*     value?: string;
-*   }
-* } | {
-*   selector: string;
-*   separator: JsonTextComponent;
-* } | {
-*   keybind: string;
-* })} JsonTextComponent
-*/
 
 module.exports = class TextDisplay {
     /**
@@ -66,11 +9,6 @@ module.exports = class TextDisplay {
      * @type {Record<string, TextDisplay>}
      */
     static _registry = {}
-    /**
-     * @private
-     * @type {boolean}
-     */
-    static _isFirstTick = true
 
     /**
      * @readonly
@@ -82,14 +20,9 @@ module.exports = class TextDisplay {
      * @param {import('./bruh-bot')} bot
      */
     static tick(bot) {
-        if (this._isFirstTick) {
-            this._isFirstTick = false
-            this.disposeAll(bot.commands)
-        }
-
         for (const uuid in this._registry) {
             const element = this._registry[uuid]
-            if (!element || element.isDead) {
+            if (!element || (performance.now() - element._lastEvent) > element._maxIdleTime) {
                 element.dispose()
                 delete this._registry[uuid]
                 continue
@@ -133,34 +66,70 @@ module.exports = class TextDisplay {
      * @type {number}
      */
     _lastEvent
-
-    get isDead() { return (performance.now() - this._lastEvent) > 2000 }
+    /**
+     * @readonly @private
+     * @type {number}
+     */
+    _maxIdleTime
 
     /**
      * @param {Commands} commands
      * @param {string} uuid
      */
     static ensure(commands, uuid) {
-        if (!this.registry[uuid]) {
-            return new TextDisplay(commands, uuid)
+        if (!this._registry[uuid]) {
+            return new TextDisplay(commands, {
+                uuid: uuid,
+                data: {
+
+                },
+            })
         }
-        return this.registry[uuid]
+        return this._registry[uuid]
     }
 
     /**
      * @param {Commands} commands
-     * @param {string} [uuid = null]
+     * @param {{
+     *   uuid?: string;
+     *   position?: Point3;
+     *   maxIdleTime?: number;
+     *   tags?: Array<string>;
+     *   data: import('./debug').TextDisplayEntityData;
+     * }} [options]
      */
-    constructor(commands, uuid = null) {
+    constructor(commands, options = { data: { } }) {
         this._commands = commands
-        this._nonce = uuid ?? Math.nonce(8)
+        this._nonce = options.uuid ?? Math.nonce(8)
         this._lastEvent = performance.now()
         this._lockOn = null
 
         TextDisplay._registry[this._nonce] = this
 
-        this._commands.sendAsync(`/summon minecraft:text_display ~ ~2 ~ {billboard:"center",Tags:["debug","${this._nonce}"],text:'{"text":""}'}`).catch(() => { })
+        const tags = ['debug', this._nonce]
+        if (options.tags) { tags.push(...options.tags) }
+
+        this._position = options.position ? new Vec3(options.position.x, options.position.y, options.position.z) : new Vec3(0, 0, 0)
+
+        options.data.text ??= { text: '' }
+        options.data.billboard ??= 'center'
+
+        this._text = JSON.stringify(options.data.text)
+
+        let command = `/summon minecraft:text_display`
+        command += ' '
+        command += `${this._position.x.toFixed(2)} ${this._position.y.toFixed(2)} ${this._position.z.toFixed(2)}`
+        command += ' '
+        command += JSON.stringify({
+            Tags: tags,
+            ...options.data,
+            text: JSON.stringify(options.data.text),
+        })
+
+        this._commands.sendAsync(command).catch(() => { })
+
         this._selector = `@e[type=minecraft:text_display,limit=1,nbt={Tags:["debug","${this._nonce}"]}]`
+        this._maxIdleTime = options.maxIdleTime ?? 2000
     }
 
     /**
@@ -175,15 +144,15 @@ module.exports = class TextDisplay {
      */
     _text
     /**
-     * @type {Readonly<JsonTextComponent>}
+     * @type {Readonly<import('./debug').JsonTextComponent>}
      */
     get text() {
         this._lastEvent = performance.now()
-        return this._text ? JSON.parse(this._text.replace(/\\\'/g, '\'')) : ''
+        return this._text ? JSON.parse(this._text) : ''
     }
     set text(value) {
         this._lastEvent = performance.now()
-        const json = JSON.stringify(value).replace(/\'/g, '\\\'')
+        const json = JSON.stringify(value)
         if (this._text && this._text === json) { return }
         this._text = json
         this._commands.sendAsync(`/data modify entity ${this._selector} text set value '${json}'`).catch(() => { })

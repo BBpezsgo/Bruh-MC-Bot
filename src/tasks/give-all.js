@@ -4,11 +4,13 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<void, { player: string; }>}
+ * @type {import('../task').TaskDef<void, {
+ *   player: string;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         let items = bot.bot.inventory.items()
         if (items.length === 0) { throw `I don't have anything` }
@@ -20,10 +22,10 @@ module.exports = {
         yield* goto.task(bot, {
             point: target,
             distance: 2,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0)))
 
@@ -35,7 +37,7 @@ module.exports = {
                 yield
 
                 for (const item of items) {
-                    if (args.cancellationToken.isCancelled) { return }
+                    if (args.interrupt.isCancelled) { return }
 
                     yield* wrap(bot.bot.tossStack(item))
                     tossedSomething = true
@@ -56,7 +58,7 @@ module.exports = {
         ]
 
         for (const specialSlot of specialSlots) {
-            if (args.cancellationToken.isCancelled) { return }
+            if (args.interrupt.isCancelled) { return }
 
             const item = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot(specialSlot)]
             if (item) {

@@ -33,7 +33,7 @@ function can(bot) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         /**
          * @type {Block}
@@ -43,12 +43,12 @@ module.exports = {
         if (bot.memory.myBed) {
             yield* goto.task(bot, {
                 dimension: bot.memory.myBed.dimension,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
             bed = bot.bot.blockAt(bot.memory.myBed.xyz(bot.dimension))
         }
 
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         if (!bed ||
             !bot.bot.isABed(bed) ||
@@ -81,17 +81,17 @@ module.exports = {
             block: bed.position,
             timeout: 30000,
             reach: 3,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         yield* wrap(bot.bot.sleep(bed))
 
         bot.memory.myBed = new Vec3Dimension(bed.position, bot.dimension)
 
         while (bot.bot.isSleeping) {
-            if (args.cancellationToken.isCancelled) {
+            if (args.interrupt.isCancelled) {
                 yield* wrap(bot.bot.wake())
                 break
             }

@@ -18,12 +18,12 @@ const waitCompost = function*(bot, composter, args) {
     if (Number(composter.getProperties()['level']) === 7) {
         const timeout = new Timeout(2000)
         while (!timeout.done() && Number(composter.getProperties()['level']) !== 8) {
-            if (args.cancellationToken.isCancelled) { return false }
+            if (args.interrupt.isCancelled) { return false }
             yield* sleepTicks()
         }
     }
 
-    if (args.cancellationToken.isCancelled) { return false }
+    if (args.interrupt.isCancelled) { return false }
 
     if (Number(composter.getProperties()['level']) === 8) {
         yield* wrap(bot.bot.unequip('hand'))
@@ -64,7 +64,7 @@ const getItem = function(bot, includeNono) {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
         if (bot.quietMode) { throw `Can't compost in quiet mode` }
 
         let composted = 0
@@ -79,17 +79,17 @@ module.exports = {
         while (true) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const item = getItem(bot, false)
             if (!item) { break }
 
             yield* goto.task(bot, {
                 block: composter.position,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             composter = bot.bot.blockAt(composter.position)
             if (composter.type !== bot.mc.registry.blocksByName['composter'].id) {
@@ -98,7 +98,7 @@ module.exports = {
 
             yield* waitCompost(bot, composter, args)
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             yield* wrap(bot.bot.equip(item, 'hand'))
             if (!bot.bot.heldItem) { continue }
@@ -114,10 +114,10 @@ module.exports = {
                     items: ['bonemeal'],
                     inAir: true,
                     maxDistance: 4,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
             } catch (error) {
-                console.error(`[Bot \"${bot.username}\"]`, error)
+                console.error(`[Bot "${bot.username}"]`, error)
             }
         }
 

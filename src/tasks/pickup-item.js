@@ -4,7 +4,15 @@ const { isItemEquals } = require('../utils/other')
 const goto = require('./goto')
 
 /**
- * @typedef {{ inAir?: boolean; maxDistance: number; point?: import('vec3').Vec3; minLifetime?: number; items?: ReadonlyArray<import('../utils/other').ItemId>; } | { item: import('prismarine-entity').Entity }} Args
+ * @typedef {{
+ *   inAir?: boolean;
+ *   maxDistance: number;
+ *   point?: import('vec3').Vec3;
+ *   minLifetime?: number;
+ *   items?: ReadonlyArray<import('../utils/other').ItemId>;
+ * } | {
+ *   item: import('prismarine-entity').Entity;
+ * }} Args
  */
 
 /**
@@ -15,7 +23,7 @@ const goto = require('./goto')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return }
+        if (args.interrupt.isCancelled) { return }
 
         const nearest = (() => {
             if ('item' in args) { return args.item }
@@ -48,7 +56,7 @@ module.exports = {
                     timeout: 5000,
                     savePathError: true,
                 },
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
         } catch (error) {
             if (isCollected) { return }

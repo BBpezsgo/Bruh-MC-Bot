@@ -33,7 +33,7 @@ module.exports = {
             useBow: true,
             useMelee: true,
             useMeleeWeapon: true,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         if (!result) {

@@ -544,7 +544,7 @@ module.exports = class Environment {
             try {
                 yield* Tasks.goto.task(bot, {
                     block: chestPosition,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -632,7 +632,7 @@ module.exports = class Environment {
                 yield* Tasks.goto.task(bot, {
                     point: villager.position,
                     distance: 2,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
                 if (!villager.isValid) { continue }
 
@@ -815,6 +815,16 @@ module.exports = class Environment {
                         return false
                     }
                 }
+                if (plant.type === 'up' && plant.needsWater) {
+                    let hasWater = false
+                    for (const neighbor of directBlockNeighbors(bestBlock.position, 'side')) {
+                        if (bot.bot.blockAt(neighbor)?.name === 'water') {
+                            hasWater = true
+                            break
+                        }
+                    }
+                    if (!hasWater) return false
+                }
                 const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
                 for (const neighbor of neighbors) {
                     const neighborBlock = bot.bot.blockAt(neighbor)
@@ -879,13 +889,17 @@ module.exports = class Environment {
                 break
             }
             case 'up': {
-                const below1 = bot.bot.blockAt(block.position.offset(0, -1, 0))
-                const below2 = bot.bot.blockAt(block.position.offset(0, -2, 0))
-                if (block.type === below1.type && block.type === below2.type) return false
-                if (below1.type !== block.type) {
+                if (cropInfo.root && block.name === cropInfo.root) {
                     isGrown = false
                 } else {
-                    isGrown = true
+                    const below1 = bot.bot.blockAt(block.position.offset(0, -1, 0))
+                    const below2 = bot.bot.blockAt(block.position.offset(0, -2, 0))
+                    if (block.type === below1.type && block.type === below2.type) return false
+                    if (below1.type !== block.type) {
+                        isGrown = false
+                    } else {
+                        isGrown = true
+                    }
                 }
                 break
             }

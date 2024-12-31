@@ -6,13 +6,16 @@ const { sleepG, wrap } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
- * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, { player: string; items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
+ * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, {
+ *   player: string;
+ *   items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number;
+ * }> }>}
  */
 module.exports = {
     task: function*(bot, args) {
         const tossedMap = new Freq(isItemEquals)
 
-        if (args.cancellationToken.isCancelled) { return tossedMap }
+        if (args.interrupt.isCancelled) { return tossedMap }
         if (bot.inventoryItems().isEmpty()) { throw `I don't have anything` }
 
         let canGiveSomething = false
@@ -41,18 +44,18 @@ module.exports = {
         yield* goto.task(bot, {
             point: target,
             distance: 2,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
-        if (args.cancellationToken.isCancelled) { return tossedMap }
+        if (args.interrupt.isCancelled) { return tossedMap }
 
         yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), true))
         yield* sleepG(100)
 
-        if (args.cancellationToken.isCancelled) { return tossedMap }
+        if (args.interrupt.isCancelled) { return tossedMap }
 
         for (const itemToGive of args.items) {
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const has = bot.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }

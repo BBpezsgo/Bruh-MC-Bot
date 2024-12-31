@@ -26,20 +26,16 @@ module.exports = {
         }
 
         if (!bot.bot.hawkEye) {
-            new Promise(resolve => {
-                // @ts-ignore
-                bot.bot.loadPlugin(require('minecrafthawkeye').default)
-                resolve()
-            })
+            setTimeout(() => bot.bot.loadPlugin(require('minecrafthawkeye').default), 0)
         }
 
         yield* goto.task(bot, {
             hawkeye: args.destination,
             weapon: Weapons.ender_pearl,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
-        if (args.cancellationToken.isCancelled) { throw `cancelled` }
+        if (args.interrupt.isCancelled) { throw `cancelled` }
 
         const grade = bot.bot.hawkEye.getMasterGrade({
             position: args.destination,
@@ -56,7 +52,7 @@ module.exports = {
         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
         yield* sleepG(100)
 
-        if (args.cancellationToken.isCancelled) { throw `cancelled` }
+        if (args.interrupt.isCancelled) { throw `cancelled` }
 
         yield* wrap(bot.bot.equip(enderpearl, 'hand'))
         bot.bot.activateItem(false)
@@ -66,7 +62,7 @@ module.exports = {
         const time = trajectoryTime(grade.arrowTrajectoryPoints, 20) * 1000
         const predictedImpactAt = performance.now() + time
         while (true) {
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
             yield* sleepG(100)
 
             if (predictedImpactAt - performance.now() < 0 &&
@@ -75,7 +71,7 @@ module.exports = {
             }
         }
 
-        if (args.cancellationToken.isCancelled) { return 'ok' }
+        if (args.interrupt.isCancelled) { return 'ok' }
 
         yield* sleepG(1000)
 

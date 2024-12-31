@@ -3,10 +3,11 @@
 const { basicRouteSearch } = require('../utils/other')
 const { wrap } = require('../utils/tasks')
 const goto = require('./goto')
+
 /**
  * @type {Readonly<Record<string, ReadonlyArray<string>>>}
  */
-const animalFoods = {
+const animalFoods = Object.freeze({
     'cow': ['wheat'],
     'sheep': ['wheat'],
     'moshroom': ['wheat'],
@@ -17,7 +18,7 @@ const animalFoods = {
     'rabbit': ['dandelion', 'carrot'],
     'turtle': ['seagrass'],
     'panda': ['bamboo'],
-}
+})
 
 /**
  * @type {import('../task').TaskDef<number, {
@@ -26,15 +27,13 @@ const animalFoods = {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
         if (args.animals.length === 0) { return 0 }
 
         /**
          * @type {Record<string, Array<import('prismarine-entity').Entity>>}
          */
-        const grouped = {
-
-        }
+        const grouped = { }
 
         for (const animal of args.animals) {
             if (animal.metadata[16]) { continue }
@@ -115,11 +114,11 @@ module.exports = {
                 yield* goto.task(bot, {
                     entity: animal,
                     distance: 4,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
                 foodItem = bot.searchInventoryItem(null, food)
                 if (!foodItem) { continue }
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
                 yield* wrap(bot.bot.equip(foodItem, 'hand'))
                 yield* wrap(bot.bot.activateEntity(animal))
                 const distance = Math.entityDistance(bot.bot.entity.position, animal)
@@ -139,6 +138,6 @@ module.exports = {
             return `breed-${args.animals.map(v => v.name).join('-')}`
         }
     },
-    humanReadableId: function(args) { return `Breed` },
+    humanReadableId: `Breed`,
     definition: 'breed',
 }

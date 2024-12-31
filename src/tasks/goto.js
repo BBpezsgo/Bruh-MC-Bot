@@ -282,6 +282,8 @@ function* getGoal(bot, args) {
         })
     } else if ('dimension' in args) {
         throw new Error(`There is not a concrete goal for traveling between dimensions`)
+    } else if ('path' in args) {
+        throw new Error(`There is not a concrete goal for replicating movements`)
     } else if ('point' in args) {
         if ('dimension' in args.point) {
             yield { dimension: args.point.dimension }
@@ -419,7 +421,7 @@ function getTime(movements, path) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'here' | 'failed',
+ * @type {import('../task').TaskDef<'ok' | 'here',
  * (
  *   (
  *     (
@@ -470,7 +472,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -491,7 +493,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -522,7 +524,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -543,7 +545,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -568,7 +570,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -592,7 +594,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            cancellationToken: args.cancellationToken,
+                                            interrupt: args.interrupt,
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -619,7 +621,7 @@ module.exports = {
                     return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
                 }
 
-                if (bot.memory.isGoalUnreachable(_goal)) { throw `If I remember correctly I can't get there` }
+                if (args.options.savePathError && bot.memory.isGoalUnreachable(_goal)) { throw `If I remember correctly I can't get there` }
 
                 let retryCount = ('retryCount' in args.options) ? args.options.retryCount : 3
                 let lastError = null
@@ -627,27 +629,26 @@ module.exports = {
                 for (let i = 0; i <= retryCount; i++) {
                     setOptions(bot, args.options)
 
-                    const performCancellation = () => {
-                        bot.bot.pathfinder.stop()
+                    /**
+                     * @param {'interrupt' | 'cancel'} type
+                     */
+                    const interrupt = (type) => {
+                        if (type === 'cancel') bot.bot.pathfinder.stop()
                     }
-                    args.cancellationToken.once(performCancellation)
+                    args.interrupt.on(interrupt)
                     try {
-
                         yield* wrap(bot.bot.pathfinder.goto(_goal))
                     } catch (error) {
                         lastError = error
                         if (error.name === 'NoPath') {
-                            if (args.options.savePathError) bot.memory.theGoalIsUnreachable(_goal)
                         } else if (error.name === 'GoalChanged') {
                             retryCount++
                             console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
-                        } else if (error.name === 'PathStopped' && args.cancellationToken.isCancelled) {
+                        } else if (error.name === 'PathStopped' && args.interrupt.isCancelled) {
                             console.log(`[Bot "${bot.username}"] Pathfinder stopped but that was expected`)
-                        } else {
-                            throw error
                         }
                     } finally {
-                        args.cancellationToken.off(performCancellation)
+                        args.interrupt.off(interrupt)
                     }
 
                     if (_goal.isEnd(bot.bot.entity.position) ||
@@ -655,16 +656,15 @@ module.exports = {
                         return 'ok'
                     }
 
-                    if (args.cancellationToken.isCancelled) {
+                    if (args.interrupt.isCancelled) {
                         throw `cancelled`
                     }
 
                     if (i === retryCount - 1) {
-                        // console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
+                        console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
                         bot.bot.pathfinder.stop()
                         if (args.options.savePathError) bot.memory.theGoalIsUnreachable(_goal)
                         throw `I can't get there`
-                        // return 'failed'
                     } else {
                         bot.bot.pathfinder.stop()
                         // console.log(`[Bot "${bot.username}"] Goal not reached, retrying (${i}/${retryCount}) ...`, lastError)
@@ -680,13 +680,13 @@ module.exports = {
                     if ('dimension' in _goal) {
                         result = yield* this.task(bot, {
                             ..._goal,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                     } else {
                         result = yield* this.task(bot, {
                             goal: _goal,
                             options: args,
-                            cancellationToken: args.cancellationToken,
+                            interrupt: args.interrupt,
                         })
                     }
                 }
@@ -738,6 +738,8 @@ module.exports = {
             }
         } else if ('dimension' in args) {
             return `Goto ${args.dimension}`
+        } else if ('path' in args) {
+            return `Replicating someone`
         } else if ('entity' in args) {
             return `Goto ${args.entity.name}`
         } else if ('hawkeye' in args) {

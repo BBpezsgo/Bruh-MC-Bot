@@ -31,13 +31,15 @@ function getChest(bot, fullChests) {
 }
 
 /**
- * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, { items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }> }>}
+ * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, {
+ *   items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; }>
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
         const dumped = new Freq(isItemEquals)
 
-        if (args.cancellationToken) { return dumped }
+        if (args.interrupt.isCancelled) { return dumped }
         if (bot.quietMode) { throw `Can't open chest in quiet mode` }
 
         if (args.items.length === 0) { return dumped }
@@ -47,7 +49,7 @@ module.exports = {
         while (true) {
             yield
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             if (!args.items.some(v => bot.inventoryItemCount(null, v.item))) { break }
 
@@ -59,7 +61,7 @@ module.exports = {
                     yield
                     tryCount++
 
-                    if (args.cancellationToken.isCancelled) { break }
+                    if (args.interrupt.isCancelled) { break }
 
                     chestBlock = getChest(bot, fullChests)
                     if (!chestBlock) {
@@ -70,13 +72,13 @@ module.exports = {
                     const chestPosition = chestBlock.position
                     yield* goto.task(bot, {
                         block: chestPosition,
-                        cancellationToken: args.cancellationToken,
+                        interrupt: args.interrupt,
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }
             }
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const chest = yield* bot.openChest(chestBlock)
 
@@ -98,13 +100,13 @@ module.exports = {
                 while (true) {
                     yield
 
-                    if (args.cancellationToken.isCancelled) { break }
+                    if (args.interrupt.isCancelled) { break }
 
                     let shouldBreak = true
                     for (const itemToDeposit of args.items) {
                         yield
 
-                        if (args.cancellationToken.isCancelled) { break }
+                        if (args.interrupt.isCancelled) { break }
 
                         if (bot.firstFreeContainerSlot(chest, itemToDeposit.item) === null) {
                             fullChests.push(chestBlock.position.clone())
@@ -122,9 +124,9 @@ module.exports = {
                         shouldBreak = !deposited
                         // } catch (error) {
                         //     if (error instanceof Error) {
-                        //         console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
+                        //         console.warn(`[Bot "${bot.username}"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
                         //     } else {
-                        //         console.warn(`[Bot \"${bot.username}\"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
+                        //         console.warn(`[Bot "${bot.username}"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
                         //     }
                         // }
                     }

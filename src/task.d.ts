@@ -1,6 +1,6 @@
 import { Vec3 } from 'vec3'
 import BruhBot from './bruh-bot'
-import CancellationToken from './utils/cancellationToken'
+import Interrupt from './utils/interrupt'
 
 export type Task<TResult> = Generator<void, TResult, void>
 
@@ -19,5 +19,5 @@ export type CommonArgs<TArgs extends {}> = TArgs & {
 }
 
 export type RuntimeArgs<TArgs extends {}> = CommonArgs<TArgs> & {
-    cancellationToken: CancellationToken
+    interrupt: Interrupt
 }

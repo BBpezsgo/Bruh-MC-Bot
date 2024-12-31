@@ -42,6 +42,15 @@ function backNForthSort(blocks) {
  * @param {Vec3} start
  * @param {ReadonlyArray<T>} points
  * @param {(element: T) => Vec3} [mapper]
+ * @overload
+ * @param {Vec3} start
+ * @param {ReadonlyArray<Vec3>} points
+ * @param {undefined} [mapper]
+ * @returns {Generator<Vec3>}
+ * @overload
+ * @param {Vec3} start
+ * @param {ReadonlyArray<T>} points
+ * @param {(element: T) => Vec3} mapper
  * @returns {Generator<T>}
  */
 function* basicRouteSearch(start, points, mapper) {
@@ -374,7 +383,7 @@ function stringifyItem(item) {
         return item
     } else {
         let result = 'displayName' in item ? item.displayName : item.name
-        
+
         if (item.name === 'bundle') {
             const content = require('./bundle').content(item.nbt)
             if (content.length) {
@@ -510,6 +519,32 @@ function incrementalNeighbors(origin, d) {
 }
 
 /**
+ * @param {Point3} origin
+ * @param {number} minDistance
+ * @param {number} maxDistance
+ * @returns {Iterable<Vec3>}
+ */
+function spiralIterator(origin, minDistance, maxDistance) {
+    return new Iterable(function*() {
+        for (let d = minDistance; d <= maxDistance; d++) {
+            let wh = d * 2 + 1
+            for (let i = 0; i < wh; i++) {
+                yield new Vec3(origin.x - d, origin.y, origin.z - d + i)
+            }
+            for (let i = 1; i < wh; i++) {
+                yield new Vec3(origin.x - d + i, origin.y, origin.z - d + wh - 1)
+            }
+            for (let i = wh - 2; i >= 0; i--) {
+                yield new Vec3(origin.x - d + wh - 1, origin.y, origin.z - d + i)
+            }
+            for (let i = wh - 2; i >= 1; i--) {
+                yield new Vec3(origin.x - d + i, origin.y, origin.z - d)
+            }
+        }
+    })
+}
+
+/**
  * @overload
  * @param {ReadonlyArray<{ equals: (other: T) => void; }>} a
  * @param {ReadonlyArray<{ equals: (other: T) => void; }>} b
@@ -591,6 +626,7 @@ module.exports = {
     NBT2JSON,
     isNBTEquals,
     incrementalNeighbors,
+    spiralIterator,
     sequenceEquals,
     stringifyItem,
     isItemEquals,

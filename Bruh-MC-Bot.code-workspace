@@ -17,11 +17,6 @@
 		}
 	],
 	"settings": {
-		"typescript.tsserver.experimental.enableProjectDiagnostics": true,
-		"typescript.tsserver.web.projectWideIntellisense.enabled": false,
-		"typescript.tsserver.web.projectWideIntellisense.suppressSemanticErrors": false,
-		"javascript.referencesCodeLens.enabled": true,
-		"javascript.referencesCodeLens.showOnAllFunctions": true,
 		"files.watcherExclude": {
 			"**/.git**": true,
 			"**/node_modules/*/**": true,
@@ -30,21 +25,9 @@
 		"files.exclude": {
 			"node_modules": true,
 		},
-		"material-icon-theme.files.associations": {
-			"template.js": "template",
-		},
-		"material-icon-theme.folders.associations": {
-			"worlds": "environment"
-		},
-		"files.readonlyInclude": {
-			"node_modules/**": true
-		},
+		"typescript.tsserver.experimental.enableProjectDiagnostics": true,
+
 		"javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
-		"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": false,
-		"javascript.preferences.quoteStyle": "single",
-		"javascript.preferGoToSourceDefinition": true,
-		"javascript.suggest.jsdoc.generateReturns": false,
-		"javascript.suggest.names": false,
 	},
 	"launch": {
 		"version": "0.2.0",

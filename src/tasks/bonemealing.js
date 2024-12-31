@@ -1,3 +1,5 @@
+'use strict'
+
 const Minecraft = require('../minecraft')
 const { wrap } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
@@ -6,11 +8,13 @@ const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
 
 /**
- * @type {import('../task').TaskDef<number, { farmPosition?: Vec3Dimension }>}
+ * @type {import('../task').TaskDef<number, {
+ *   farmPosition?: Vec3Dimension;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return 0 }
+        if (args.interrupt.isCancelled) { return 0 }
         if (bot.quietMode) { throw `Can't bonemeal in quiet mode` }
 
         let bonemeal = bot.searchInventoryItem(null, 'bonemeal')
@@ -22,11 +26,11 @@ module.exports = {
             if (args.farmPosition) {
                 yield* goto.task(bot, {
                     dimension: args.farmPosition.dimension,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
             }
 
-            if (args.cancellationToken.isCancelled) { break }
+            if (args.interrupt.isCancelled) { break }
 
             const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
@@ -48,10 +52,10 @@ module.exports = {
 
                 yield* goto.task(bot, {
                     block: crop,
-                    cancellationToken: args.cancellationToken,
+                    interrupt: args.interrupt,
                 })
 
-                if (args.cancellationToken.isCancelled) { break }
+                if (args.interrupt.isCancelled) { break }
 
                 bonemeal = bot.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }

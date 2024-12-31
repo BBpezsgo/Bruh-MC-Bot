@@ -140,7 +140,6 @@ function makePotionItem(potion, item = 'potion') {
     return {
         name: item,
         nbt: { type: 'compound', value: { 'Potion': { type: 'string', value: potion } } },
-        // @ts-ignore
         potion: potion,
     }
 }
@@ -326,7 +325,7 @@ const recipes = (() => {
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.cancellationToken.isCancelled) { return [] }
+        if (args.interrupt.isCancelled) { return [] }
 
         const recipe = (() => {
             if ('potion' in args) {
@@ -337,7 +336,7 @@ module.exports = {
                 const goodRecipes = recipes.filter(v => v.result.potion === potionName)
 
                 if (!goodRecipes.length) {
-                    throw `I don't know what potion \"${args.potion}\" is`
+                    throw `I don't know what potion "${args.potion}" is`
                 }
 
                 return goodRecipes[0]
@@ -350,7 +349,7 @@ module.exports = {
         let ingredientItem = bot.inventoryItems(null).filter(v => v.name === recipe.ingredient).first()
 
         if (!bottleItem && !ingredientItem) {
-            throw `I don't have \"${recipe.ingredient}\" and the bottle`
+            throw `I don't have "${recipe.ingredient}" and the bottle`
         }
 
         if (!bottleItem) {
@@ -358,14 +357,14 @@ module.exports = {
         }
 
         if (!ingredientItem) {
-            throw `I don't have \"${recipe.ingredient}\"`
+            throw `I don't have "${recipe.ingredient}"`
         }
 
         if (args.brewingStand) {
             yield* goto.task(bot, {
                 point: args.brewingStand,
                 distance: 8,
-                cancellationToken: args.cancellationToken,
+                interrupt: args.interrupt,
             })
         }
 
@@ -379,7 +378,7 @@ module.exports = {
 
         yield* goto.task(bot, {
             block: brewingStand.position,
-            cancellationToken: args.cancellationToken,
+            interrupt: args.interrupt,
         })
 
         brewingStand = bot.bot.blockAt(brewingStand.position, true)

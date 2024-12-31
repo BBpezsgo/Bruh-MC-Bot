@@ -6,13 +6,10 @@ const { sleepG } = require('./utils/tasks')
 
 /**
  * @typedef {{
- *   block: {
- *     name: string;
- *     properties?: NonNullable<object>;
- *   };
+ *   data: import('./debug').BlockDisplayEntityData;
  *   uuid?: string;
- *   position?: Vec3;
- *   maxAge?: number;
+ *   position?: Point3;
+ *   maxIdleTime?: number;
  *   tags?: ReadonlyArray<string>;
  * }} Options
  */
@@ -23,11 +20,6 @@ module.exports = class BlockDisplay {
      * @type {Record<string, BlockDisplay>}
      */
     static _registry = {}
-    /**
-     * @private
-     * @type {boolean}
-     */
-    static _isFirstTick = true
 
     /**
      * @readonly
@@ -39,14 +31,9 @@ module.exports = class BlockDisplay {
      * @param {import('./bruh-bot')} bot
      */
     static tick(bot) {
-        if (this._isFirstTick) {
-            this._isFirstTick = false
-            this.disposeAll(bot.commands)
-        }
-
         for (const uuid in this._registry) {
             const element = this._registry[uuid]
-            if (!element || element.isDead) {
+            if (!element || (performance.now() - element._lastEvent) > element._maxIdleTime) {
                 element.dispose()
                 delete this._registry[uuid]
                 continue
@@ -86,19 +73,17 @@ module.exports = class BlockDisplay {
      * @private @readonly
      * @type {number}
      */
-    _maxAge
-
-    get isDead() { return (performance.now() - this._lastEvent) > this._maxAge }
+    _maxIdleTime
 
     /**
      * @param {Commands} commands
      * @param {Options & { uuid: string; }} options
      */
     static ensure(commands, options) {
-        if (!this.registry[options.uuid]) {
+        if (!this._registry[options.uuid]) {
             return new BlockDisplay(commands, options)
         }
-        return this.registry[options.uuid]
+        return this._registry[options.uuid]
     }
 
     /**
@@ -114,16 +99,21 @@ module.exports = class BlockDisplay {
 
         const tags = ['debug', this._nonce]
         if (options.tags) { tags.push(...options.tags) }
-        let command
-        if (options.block.properties) {
-            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toFixed(2)} ${(options.position?.y ?? 0).toFixed(2)} ${(options.position?.z ?? 0).toFixed(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}",Properties:${JSON.stringify(options.block.properties)}}}`
-        } else {
-            command = `/summon minecraft:block_display ${(options.position?.x ?? 0).toFixed(2)} ${(options.position?.y ?? 0).toFixed(2)} ${(options.position?.z ?? 0).toFixed(2)} {Tags:${JSON.stringify(tags)},block_state:{Name:"${options.block.name}"}}`
-        }
+
+        this._position = options.position ? new Vec3(options.position.x, options.position.y, options.position.z) : new Vec3(0, 0, 0)
+
+        let command = `/summon minecraft:block_display`
+        command += ' '
+        command += `${this._position.x.toFixed(2)} ${this._position.y.toFixed(2)} ${this._position.z.toFixed(2)}`
+        command += ' '
+        command += JSON.stringify({
+            Tags: tags,
+            ...options.data,
+        })
         this._commands.sendAsync(command).catch(() => { })
+
         this._selector = `@e[type=minecraft:block_display,limit=1,nbt={Tags:${JSON.stringify(tags)}}]`
-        this._position = options.position ?? new Vec3(0, 0, 0)
-        this._maxAge = options.maxAge ?? 5000
+        this._maxIdleTime = options.maxIdleTime ?? 5000
     }
 
     /**
@@ -196,7 +186,7 @@ module.exports = class BlockDisplay {
 
     /**
      * @private
-     * @type {boolean}
+     * @type {boolean | undefined}
      */
     _disposed
     dispose() {

@@ -82,10 +82,10 @@ function* wrap(promise) {
  * }} TEmitter
  * @param {TEmitter} emitter
  * @param {Parameters<TEmitter['once']>[0]} event
- * @param {import('./cancellationToken') | null} [cancellationToken=null]
+ * @param {import('./interrupt') | null} [interrupt=null]
  * @returns {import('../task').Task<Parameters<Parameters<emitter['once']>[1]>>  | null}
  */
-function* waitForEvent(emitter, event, cancellationToken = null) {
+function* waitForEvent(emitter, event, interrupt = null) {
     let emitted = false
     let args = null
     const onEmitted = (/** @type {Array<any>} */ ..._args) => {
@@ -93,11 +93,9 @@ function* waitForEvent(emitter, event, cancellationToken = null) {
         args = _args
     }
     emitter.once(event, onEmitted)
+    interrupt?.once(() => emitter.off(event, onEmitted))
     while (!emitted) {
-        if (cancellationToken?.isCancelled) {
-            emitter.off(event, onEmitted)
-            return null
-        }
+        if (interrupt?.isCancelled) return null
         yield
     }
     return args
@@ -203,14 +201,14 @@ function* race(tasks) {
 /**
  * @template T
  * @param {import('../task').Task<T>} task
- * @param {import('./cancellationToken')} cancellationToken
+ * @param {import('./interrupt')} interrupt
  * @returns {import('../task').Task<{ cancelled: true; result: undefined; } | { cancelled: false; result: T; }>}
  */
-function* withCancellation(task, cancellationToken) {
+function* withInterruption(task, interrupt) {
     while (true) {
         const v = task.next()
         if (v.done) return { cancelled: false, result: v.value }
-        if (cancellationToken.isCancelled) { return { cancelled: true, result: undefined } }
+        if (interrupt.isCancelled) { return { cancelled: true, result: undefined } }
 
         yield
     }
@@ -227,5 +225,5 @@ module.exports = {
     parallelAll,
     parallel,
     race,
-    withCancellation,
+    withCancellation: withInterruption,
 }

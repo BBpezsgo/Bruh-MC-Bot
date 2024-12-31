@@ -20,7 +20,7 @@ module.exports = class Memory {
     myBed
 
     /**
-     * @type {Record<number, Array<number>>}
+     * @type {Record<number, { times: Array<number>; entity: import('prismarine-entity').Entity; }>}
      */
     hurtBy
 

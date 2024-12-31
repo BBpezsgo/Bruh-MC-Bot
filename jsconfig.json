@@ -1,35 +1,34 @@
 {
     "compilerOptions": {
-        "module": "ESNext",
-        "moduleResolution": "Node",
+        "module": "CommonJS",
+        "moduleResolution": "node",
         "target": "ESNext",
         "checkJs": true,
+
+        "assumeChangesOnlyAffectDirectDependencies": true,
+        "disableSolutionSearching": true,
+        "disableReferencedProjectLoad": true,
+        "disableSourceOfProjectReferenceRedirect": true,
         "skipDefaultLibCheck": true,
         "skipLibCheck": true,
-        "extendedDiagnostics": false,
-        "suppressExcessPropertyErrors": false,
-        "disableReferencedProjectLoad": true,
-        "disableSolutionSearching": true,
-
-        "noFallthroughCasesInSwitch": true,
-        "noImplicitAny": true,
-        "noImplicitOverride": true,
-        "noErrorTruncation": true,
-        "noImplicitReturns": true,
-        "noImplicitThis": true,
-        "noPropertyAccessFromIndexSignature": true,
-        "noUncheckedIndexedAccess": true,
-        "noUnusedLocals": true,
-        "noUnusedParameters": false,
-        "noStrictGenericChecks": false,
-        
-        "strictBindCallApply": true,
-        "strictFunctionTypes": true,
 
         "allowUnreachableCode": false,
         "allowUnusedLabels": false,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitAny": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noPropertyAccessFromIndexSignature": true,
+        "noStrictGenericChecks": false,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "strictBindCallApply": true,
+        "strictBuiltinIteratorReturn": true,
+        "strictFunctionTypes": true,
     },
-    "include": [
-        "src"
+    "exclude": [
+        "node_modules",
+        "**/node_modules/*"
     ]
 }
