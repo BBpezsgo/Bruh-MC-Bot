@@ -8,7 +8,7 @@ const Iterable = require('../iterable')
 const { Item } = require('prismarine-item')
 
 /**
- * @template {{ x: number; y: number; z: number; }} TPoint
+ * @template {Point3} TPoint
  * @param {ReadonlyArray<Readonly<TPoint>>} blocks
  * @returns {Array<TPoint>}
  */
@@ -306,8 +306,8 @@ function directBlockNeighbors(origin, ...sides) {
 }
 
 /**
- * @param {{ x: number; y: number; z: number; }} origin
- * @param {{ x: number; y: number; z: number; }} point
+ * @param {Point3} origin
+ * @param {Point3} point
  */
 function isDirectNeighbor(origin, point) {
     return (

@@ -1,7 +1,7 @@
 'use strict'
 
 const { basicRouteSearch } = require('../utils/other')
-const { wrap } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
@@ -80,7 +80,11 @@ module.exports = {
                     break
                 }
 
-                yield* bot.ensureItem(_food, animals.length)
+                yield* bot.ensureItem({
+                    ...runtimeArgs(args),
+                    item: _food,
+                    count: animals.length,
+                })
 
                 _foodCount = bot.inventoryItemCount(null, _food)
 

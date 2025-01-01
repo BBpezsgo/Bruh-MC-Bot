@@ -1,9 +1,7 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { sleepTicks } = require('../utils/tasks')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
 const Freq = require('../utils/freq')
 const { isItemEquals } = require('../utils/other')
 
@@ -13,13 +11,16 @@ const { isItemEquals } = require('../utils/other')
  * @returns {import('prismarine-block').Block | null}
  */
 function getChest(bot, fullChests) {
-    for (const myChest of bot.memory.myChests) {
-        if (myChest.dimension !== bot.dimension) { continue }
-        if (fullChests.some(v => v.equals(myChest.xyz(bot.dimension)))) { continue }
-        const myChestBlock = bot.bot.blockAt(myChest.xyz(bot.dimension), true)
-        if (myChestBlock && myChestBlock.type === bot.mc.registry.blocksByName['chest'].id) {
-            return myChestBlock
+    for (const chest of bot.env.chests) {
+        if (chest.position.dimension !== bot.dimension) { continue }
+        if (fullChests.some(v => v.equals(chest.position.xyz(bot.dimension)))) { continue }
+        const chestBlock = bot.bot.blockAt(chest.position.xyz(bot.dimension), true)
+        if (!chestBlock) { continue }
+        if (chestBlock.name !== 'chest') {
+            bot.env.deleteChest(chest.position)
+            continue
         }
+        return chestBlock
     }
     return bot.bot.findBlock({
         matching: bot.mc.registry.blocksByName['chest'].id,
@@ -78,65 +79,51 @@ module.exports = {
                 }
             }
 
+            const remainingItemsToDump = args.items.map(v => ({ item: v.item, count: v.count }))
+
             if (args.interrupt.isCancelled) { break }
 
             const chest = yield* bot.openChest(chestBlock)
 
             try {
-                {
-                    let isNewChest = true
-                    for (const myChest of bot.memory.myChests) {
-                        if (myChest.equals(chestBlock.position)) {
-                            isNewChest = false
-                            break
-                        }
-                    }
-
-                    if (isNewChest) {
-                        bot.memory.myChests.push(new Vec3Dimension(chestBlock.position, bot.dimension))
-                    }
-                }
-
-                while (true) {
-                    yield
-
+                while (remainingItemsToDump.some(v => v.count > 0)) {
                     if (args.interrupt.isCancelled) { break }
 
-                    let shouldBreak = true
-                    for (const itemToDeposit of args.items) {
-                        yield
+                    let chestIsFull = false
+                    let notDeposited = true
+
+                    for (let i = 0; i < remainingItemsToDump.length; i++) {
+                        const itemToDump = remainingItemsToDump[i]
 
                         if (args.interrupt.isCancelled) { break }
 
-                        if (bot.firstFreeContainerSlot(chest, itemToDeposit.item) === null) {
+                        if (bot.firstFreeContainerSlot(chest, itemToDump.item) === null) {
                             fullChests.push(chestBlock.position.clone())
-                            shouldBreak = true
+                            chestIsFull = true
                             break
                         }
 
-                        // try {
                         const deposited = yield* bot.chestDeposit(
                             chest,
                             chestBlock.position,
-                            itemToDeposit.item,
-                            itemToDeposit.count)
-                        dumped.add(itemToDeposit.item, deposited)
-                        shouldBreak = !deposited
-                        // } catch (error) {
-                        //     if (error instanceof Error) {
-                        //         console.warn(`[Bot "${bot.username}"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error.message}`)
-                        //     } else {
-                        //         console.warn(`[Bot "${bot.username}"] Can't dump ${stringifyItem(itemToDeposit.item)}: ${error}`)
-                        //     }
-                        // }
+                            itemToDump.item,
+                            itemToDump.count)
+                        dumped.add(itemToDump.item, deposited)
+                        itemToDump.count -= deposited
+                        if (itemToDump.count <= 0) {
+                            if (itemToDump.count < 0) console.warn(`[Bot "${bot.username}"] More items was dumpted than had to`)
+                            remainingItemsToDump.splice(i, 1)
+                            i--
+                        }
+                        if (deposited === 0) { notDeposited = false }
                     }
 
-                    if (shouldBreak) { break }
+                    if (notDeposited || chestIsFull) { break }
+
+                    yield
                 }
             } finally {
-                yield* sleepTicks(1)
                 chest.close()
-                yield* sleepTicks(1)
             }
         }
 

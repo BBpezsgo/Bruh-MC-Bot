@@ -1,6 +1,6 @@
 'use strict'
 
-const { sleepG, wrap, race, withCancellation } = require('../utils/tasks')
+const { sleepG, wrap, race, withInterruption: withCancellation, sleepTicks } = require('../utils/tasks')
 const goto = require('./goto')
 const config = require('../config')
 const Vec3Dimension = require('../vec3-dimension')
@@ -13,6 +13,17 @@ const Vec3Dimension = require('../vec3-dimension')
  */
 module.exports = {
     task: function*(bot, args) {
+        const goal = {
+            'distance': bot.bot.movement.heuristic.new('distance'),
+            'danger': bot.bot.movement.heuristic.new('danger'),
+            'proximity': bot.bot.movement.heuristic.new('proximity'),
+            'conformity': bot.bot.movement.heuristic.new('conformity'),
+        }
+
+        args.interrupt.on((type) => {
+            if (type === 'cancel') bot.bot.clearControlStates()
+        })
+
         while (!args.interrupt.isCancelled) {
             yield
 
@@ -66,8 +77,33 @@ module.exports = {
             const distance = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
 
             if (distance <= args.range) {
-                yield* sleepG(300)
+                bot.bot.clearControlStates()
+                yield* sleepTicks()
+                continue
             }
+
+            goal.proximity
+                .target(target.xyz(bot.dimension))
+            bot.bot.movement.setGoal(goal)
+            const yaw = bot.bot.movement.getYaw(160, 15, 2)
+            const rotation = Math.rotationToVectorRad(0, yaw)
+            bot.bot.look(yaw, 0, true)
+            bot.bot.setControlState('forward', true)
+            bot.bot.setControlState('sprint', distance > 5)
+            bot.bot.setControlState('jump', distance > 8)
+
+            /** @type {import('prismarine-world').RaycastResult | null} */
+            const ray = bot.bot.world.raycast(
+                bot.bot.entity.position.offset(0, 0.6, 0),
+                rotation,
+                bot.bot.controlState.sprint ? 2 : 1)
+            if (ray) {
+                bot.bot.jumpQueued = true
+            }
+
+            yield
+
+            continue
 
             try {
                 if (bot.bot.players[args.player]?.entity) {

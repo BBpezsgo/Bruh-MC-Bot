@@ -16,13 +16,13 @@ module.exports = class Vec3Dimension {
      */
     z
     /**
-     * @type {import("mineflayer").Dimension}
+     * @type {import('mineflayer').Dimension}
      */
     dimension
 
     /**
-     * @param {Readonly<{ x: number; y: number; z: number; }>} point
-     * @param {import("mineflayer").Dimension} dimension
+     * @param {Readonly<Point3>} point
+     * @param {import('mineflayer').Dimension} dimension
      */
     constructor(point, dimension) {
         this.x = point.x
@@ -32,7 +32,7 @@ module.exports = class Vec3Dimension {
     }
 
     /**
-     * @param {Readonly<{ x: number; y: number; z: number; dimension?: string; }>} other
+     * @param {Readonly<Point3 & { dimension?: string; }>} other
      */
     equals(other) {
         if (this.x !== other.x) { return false }
@@ -47,7 +47,7 @@ module.exports = class Vec3Dimension {
     clone() { return new Vec3Dimension({ x: this.x, y: this.y, z: this.z }, this.dimension) }
 
     /**
-     * @param {import("mineflayer").Dimension} expectedDimension
+     * @param {import('mineflayer').Dimension} expectedDimension
      */
     xyz(expectedDimension) {
         if (expectedDimension !== this.dimension) {

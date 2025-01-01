@@ -1,20 +1,10 @@
 'use strict'
 
-const { Vec3 } = require('vec3')
-const Commands = require('./commands')
-const { sleepG } = require('./utils/tasks')
+const Commands = require('../commands')
+const { sleepG } = require('../utils/tasks')
+const DisplayEntity = require('./display-entity')
 
-/**
- * @typedef {{
- *   data: import('./debug').BlockDisplayEntityData;
- *   uuid?: string;
- *   position?: Point3;
- *   maxIdleTime?: number;
- *   tags?: ReadonlyArray<string>;
- * }} Options
- */
-
-module.exports = class BlockDisplay {
+module.exports = class BlockDisplay extends DisplayEntity {
     /**
      * @private @readonly
      * @type {Record<string, BlockDisplay>}
@@ -28,7 +18,7 @@ module.exports = class BlockDisplay {
     static get registry() { return this._registry }
 
     /**
-     * @param {import('./bruh-bot')} bot
+     * @param {import('../bruh-bot')} bot
      */
     static tick(bot) {
         for (const uuid in this._registry) {
@@ -38,6 +28,7 @@ module.exports = class BlockDisplay {
                 delete this._registry[uuid]
                 continue
             }
+            element.tick(bot)
         }
     }
 
@@ -54,30 +45,10 @@ module.exports = class BlockDisplay {
     }
 
     /**
-     * @private @readonly
-     * @type {Commands}
-     */
-    _commands
-    /**
-     * @private @readonly
-     * @type {string}
-     */
-    _nonce
-    /**
-     * @private
-     * @type {number}
-     */
-    _lastEvent
-
-    /**
-     * @private @readonly
-     * @type {number}
-     */
-    _maxIdleTime
-
-    /**
      * @param {Commands} commands
-     * @param {Options & { uuid: string; }} options
+     * @param {import('./display-entity').DisplayEntityOptions<import('./debug').BlockDisplayEntityData> & {
+     *   uuid: string;
+     * }} options
      */
     static ensure(commands, options) {
         if (!this._registry[options.uuid]) {
@@ -88,66 +59,15 @@ module.exports = class BlockDisplay {
 
     /**
      * @param {Commands} commands
-     * @param {Options} options
+     * @param {import('./display-entity').DisplayEntityOptions<import('./debug').BlockDisplayEntityData>} options
      */
     constructor(commands, options) {
-        this._commands = commands
-        this._nonce = options.uuid ?? Math.nonce(8)
-        this._lastEvent = performance.now()
-
+        super(commands, 'block_display', options)
         BlockDisplay._registry[this._nonce] = this
-
-        const tags = ['debug', this._nonce]
-        if (options.tags) { tags.push(...options.tags) }
-
-        this._position = options.position ? new Vec3(options.position.x, options.position.y, options.position.z) : new Vec3(0, 0, 0)
-
-        let command = `/summon minecraft:block_display`
-        command += ' '
-        command += `${this._position.x.toFixed(2)} ${this._position.y.toFixed(2)} ${this._position.z.toFixed(2)}`
-        command += ' '
-        command += JSON.stringify({
-            Tags: tags,
-            ...options.data,
-        })
-        this._commands.sendAsync(command).catch(() => { })
-
-        this._selector = `@e[type=minecraft:block_display,limit=1,nbt={Tags:${JSON.stringify(tags)}}]`
-        this._maxIdleTime = options.maxIdleTime ?? 5000
     }
 
     /**
-     * @private @readonly
-     * @type {string}
-     */
-    _selector
-
-    /**
-     * @type {Vec3}
-     */
-    _position
-
-    /**
-     * @param {Readonly<{ x: number; y: number; z: number; }>} position
-     * @returns {this}
-     */
-    setPosition(position) {
-        this._lastEvent = performance.now()
-
-        const precision = 10
-        const rounded = new Vec3(
-            Math.round(position.x * precision) / precision,
-            Math.round(position.y * precision) / precision,
-            Math.round(position.z * precision) / precision
-        )
-        if (this._position && this._position.equals(rounded)) { return this }
-        this._position = rounded
-        this._commands.sendAsync(`/tp ${this._selector} ${rounded.x.toFixed(1)} ${rounded.y.toFixed(1)} ${rounded.z.toFixed(1)}`)
-        return this
-    }
-
-    /**
-     * @param {Vec3} scale
+     * @param {Point3} scale
      * @param {number} time
      */
     *transformScale(scale, time) {
@@ -168,8 +88,8 @@ module.exports = class BlockDisplay {
      * @param {Commands} commands
      * @param {string} tag
      * @param {{
-     *   scale?: Vec3;
-     *   translation?: Vec3;
+     *   scale?: Point3;
+     *   translation?: Point3;
      * }} transformation
      * @param {number} time
      */
@@ -182,16 +102,5 @@ module.exports = class BlockDisplay {
             commands.sendAsync(`/execute as ${selector} run data merge entity @s {start_interpolation:0,interpolation_duration:20,transformation:{translation:[${transformation.translation.x}F,${transformation.translation.y}F,${transformation.translation.z}F]}}`)
         }
         yield* sleepG(time)
-    }
-
-    /**
-     * @private
-     * @type {boolean | undefined}
-     */
-    _disposed
-    dispose() {
-        if (this._disposed) { return }
-        this._commands.sendAsync(`/kill ${this._selector}`).catch(() => { })
-        this._disposed = true
     }
 }

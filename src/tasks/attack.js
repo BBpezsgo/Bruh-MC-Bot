@@ -8,8 +8,8 @@ const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Minecraft = require('../minecraft')
 const { EntityPose } = require('../entity-metadata')
-const TextDisplay = require('../text-display')
-const Debug = require('../debug')
+const TextDisplay = require('../debug/text-display')
+const Debug = require('../debug/debug')
 const { resolveEntityAttribute } = require('../utils/other')
 const config = require('../config')
 
@@ -991,6 +991,13 @@ module.exports = {
         }
         goal.lastEntityPositions = goal.getEntityPositions()
 
+        const movementGoal = {
+            'distance': bot.bot.movement.heuristic.new('distance'),
+            'danger': bot.bot.movement.heuristic.new('danger'),
+            'proximity': bot.bot.movement.heuristic.new('proximity'),
+            'conformity': bot.bot.movement.heuristic.new('conformity'),
+        }
+
         /**
          * @type {'none' | 'goto' | 'goto-melee' | 'goto-range'}
          */
@@ -1078,6 +1085,36 @@ module.exports = {
                         bot.bot.pathfinder.stop()
                     }
                     movementState = 'none'
+
+                    {
+                        const newGoal = {
+                            ...movementGoal,
+                        }
+                        if ('targets' in args) {
+                            for (const otherTarget of Object.entries(args.targets)) {
+                                if (String(otherTarget[0]) === String(target.id)) continue
+                                // @ts-ignore
+                                newGoal[`avoid-${otherTarget[0]}`] = bot.bot.movement.heuristic.new('proximity')
+                                    .target(otherTarget[1].position)
+                                    .avoid(true)
+                            }
+                        }
+
+                        movementGoal.proximity
+                            .target(target.position)
+                            .avoid(distance < 3)
+                        bot.bot.movement.setGoal(newGoal)
+                        const yaw = bot.bot.movement.getYaw(160, 15, 2)
+                        bot.bot.freemotion.moveTowards(yaw)
+                        bot.bot.setControlState('sprint', true)
+                        const rotation = Math.rotationToVectorRad(0, yaw)
+                        /** @type {import('prismarine-world').RaycastResult | null} */
+                        const ray = bot.bot.world.raycast(
+                            bot.bot.entity.position.offset(0, 0.6, 0),
+                            rotation,
+                            bot.bot.controlState.sprint ? 2 : 1)
+                        if (ray) { bot.bot.jumpQueued = true }
+                    }
 
                     if (reequipMeleeWeapon) {
                         // console.log(`[Bot "${bot.username}"] Equipping melee weapon ...`)

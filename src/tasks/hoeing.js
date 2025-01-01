@@ -56,7 +56,10 @@ module.exports = {
         }
 
         const equipHoe = function*() {
-            const hoeItem = yield* bot.ensureItems(...hoes)
+            const hoeItem = yield* bot.ensureItem({
+                item: hoes,
+                interrupt: args.interrupt,
+            })
             if (hoeItem) {
                 if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name !== hoeItem.name) {
                     yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[hoeItem.name].id, 'hand'))

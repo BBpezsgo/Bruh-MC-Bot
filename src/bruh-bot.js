@@ -9,6 +9,7 @@ const MineFlayer = require('mineflayer')
 const { Item } = require('prismarine-item')
 const path = require('path')
 const levenshtein = require('damerau-levenshtein')
+const MineFlayerMovement = require('mineflayer-movement')
 
 //#endregion
 
@@ -21,11 +22,10 @@ const taskUtils = require('./utils/tasks')
 require('./utils/math')
 const Environment = require('./environment')
 const Memory = require('./memory')
-const Debug = require('./debug')
+const Debug = require('./debug/debug')
 const Commands = require('./commands')
 const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
-const BlockDisplay = require('./block-display')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
 const Vec3Dimension = require('./vec3-dimension')
 const { Vec3 } = require('vec3')
@@ -296,18 +296,6 @@ module.exports = class BruhBot {
     get quietMode() { return this._quietMode || this.userQuiet }
 
     /**
-     * @private
-     * @type {Record<number, { time: number; entity: import('prismarine-entity').Entity; trajectory: ReadonlyArray<import('vec3').Vec3>; }>}
-     */
-    aimingEntities
-
-    /**
-     * @private
-     * @type {Record<number, { time: number; trajectory: ReadonlyArray<import('vec3').Vec3>; projectile: import('minecrafthawkeye').Projectil; }>}
-     */
-    incomingProjectiles
-
-    /**
      * @readonly
      * @type {{ isActivated: boolean; activatedTime: number; }}
      */
@@ -385,7 +373,7 @@ module.exports = class BruhBot {
 
     /**
      * @readonly
-     * @type {import('./debug')}
+     * @type {import('./debug/debug')}
      */
     debug
 
@@ -426,6 +414,7 @@ module.exports = class BruhBot {
         this.env = config.environment ?? new Environment(path.join(config.worldPath, 'environment.json'))
 
         console.log(`[Bot "${config.bot.username}"] Connecting ...`)
+        // @ts-ignore
         this.bot = MineFlayer.createBot({
             host: config.server.host,
             port: config.server.port,
@@ -453,6 +442,9 @@ module.exports = class BruhBot {
                 'pathfinder': require('mineflayer-pathfinder').pathfinder,
                 'armor_manager': require('mineflayer-armor-manager'),
                 'hawkeye': require('minecrafthawkeye').default,
+                // @ts-ignore
+                'movement': MineFlayerMovement.plugin,
+                'freemotion': require('../plugins/freemotion'),
                 // 'elytra': require('mineflayer-elytrafly').elytrafly,
             }
             // storageBuilder: (options) => {
@@ -636,8 +628,6 @@ module.exports = class BruhBot {
         this.rightHand = { isActivated: false, activatedTime: 0 }
         this.defendMyselfGoal = null
         this.onHeard = null
-        this.aimingEntities = {}
-        this.incomingProjectiles = {}
         this.lockedItems = []
         this.commands = new Commands(this.bot)
         this._currentPath = null
@@ -693,30 +683,192 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('target_aiming_at_you', (entity, trajectory) => {
-            if (!this.aimingEntities[entity.id]) {
-                this.aimingEntities[entity.id] = {
-                    time: performance.now(),
-                    entity: entity,
-                    trajectory: trajectory,
-                }
-            } else {
-                this.aimingEntities[entity.id].time = performance.now()
-                this.aimingEntities[entity.id].entity = entity
-            }
+            this.tasks.push(this, {
+                task: function*(bot, args) {
+                    const goal = {
+                        'distance': bot.bot.movement.heuristic.new('distance'),
+                        'danger': bot.bot.movement.heuristic.new('danger'),
+                        'proximity': bot.bot.movement.heuristic.new('proximity'),
+                        'conformity': bot.bot.movement.heuristic.new('conformity'),
+                    }
+                    while (true) {
+                        if (!args.entity.isValid) break
+                        if (!args.trajectory.length) break
+
+                        const directionToSelf = bot.bot.entity.position.clone().subtract(args.entity.position).normalize()
+                        const entityDirection = Math.rotationToVectorRad(args.entity.pitch, args.entity.yaw)
+
+                        const dot = directionToSelf.dot(entityDirection)
+
+                        if (dot < 0.5) break
+
+                        const a = args.entity.position.clone()
+                        const b = args.trajectory[args.trajectory.length - 1].clone()
+
+                        const d = new Vec3(
+                            b.x - a.x,
+                            b.y - a.y,
+                            b.z - a.z,
+                        ).normalize()
+                        const w = new Vec3(
+                            bot.bot.entity.position.x - a.x,
+                            bot.bot.entity.position.y + 1 - a.y,
+                            bot.bot.entity.position.z - a.z,
+                        )
+                        const p = d.scaled(w.dot(d)).add(a)
+
+                        if (bot.bot.entity.position.distanceTo(p) > 2) { break }
+
+                        a.y = bot.bot.entity.position.y
+                        b.y = bot.bot.entity.position.y
+                        p.y = bot.bot.entity.position.y
+
+                        if (bot.debug) {
+                            bot.debug.drawLine(a, b, [1, 0, 0])
+                            bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
+                        }
+
+                        bot.bot.movement.setGoal(goal)
+                        const yaw = bot.bot.movement.getYaw(360, 15, 2)
+                        const rotation = Math.rotationToVectorRad(0, yaw)
+
+                        bot.bot.freemotion.moveTowards(yaw)
+                        bot.bot.setControlState('sprint', true)
+
+                        /** @type {import('prismarine-world').RaycastResult | null} */
+                        const ray = bot.bot.world.raycast(
+                            bot.bot.entity.position.offset(0, 0.6, 0),
+                            rotation,
+                            bot.bot.controlState.sprint ? 2 : 1)
+                        if (ray) {
+                            bot.bot.jumpQueued = true
+                        }
+
+                        yield
+                    }
+                    bot.bot.clearControlStates()
+
+                    return
+
+                    const shield = bot.searchInventoryItem(null, 'shield')
+                    if (shield) {
+                        if (!bot.holds(shield, true)) {
+                            yield* bot.equip(shield, 'off-hand')
+                        }
+                        bot.bot.lookAt(args.entity.position.offset(0, 1.6, 0), true)
+                        bot.activateHand('left', 5000)
+                    }
+                },
+                id: `parry-aim-${entity.uuid ?? entity.id}`,
+            }, {
+                entity: entity,
+                trajectory: trajectory,
+            }, priorities.critical - 2, false, null, false)
         })
 
         this.bot.on('incoming_projectil', (projectile, trajectory) => {
-            if (!this.incomingProjectiles[projectile.entity.id]) {
-                this.incomingProjectiles[projectile.entity.id] = {
-                    time: performance.now(),
-                    projectile: projectile,
-                    trajectory: trajectory,
-                }
-            } else {
-                this.incomingProjectiles[projectile.entity.id].time = performance.now()
-                this.incomingProjectiles[projectile.entity.id].projectile = projectile
-                this.incomingProjectiles[projectile.entity.id].trajectory = trajectory
-            }
+            const projectileDirection = projectile.entity.velocity.clone().normalize()
+            const directionToSelf = this.bot.entity.position.clone().subtract(projectile.entity.position).normalize()
+            const dot = projectileDirection.dot(directionToSelf)
+            if (dot <= 0) { return }
+
+            this.tasks.push(this, {
+                task: function*(bot, args) {
+                    const goal = {
+                        'distance': bot.bot.movement.heuristic.new('distance'),
+                        'danger': bot.bot.movement.heuristic.new('danger'),
+                        'proximity': bot.bot.movement.heuristic.new('proximity'),
+                        'conformity': bot.bot.movement.heuristic.new('conformity'),
+                    }
+                    while (true) {
+                        if (!args.projectile.entity.isValid) break
+                        if (!args.trajectory.length) break
+                        if (!args.projectile.currentSpeed) break
+
+                        const projectileDirection = args.projectile.entity.velocity.clone().normalize()
+                        const directionToSelf = bot.bot.entity.position.clone().subtract(args.projectile.entity.position).normalize()
+                        const dot = projectileDirection.dot(directionToSelf)
+                        if (dot <= 0) { break }
+
+                        const a = args.projectile.entity.position.clone()
+                        const b = args.trajectory[args.trajectory.length - 1].clone()
+
+                        const d = new Vec3(
+                            b.x - a.x,
+                            b.y - a.y,
+                            b.z - a.z,
+                        ).normalize()
+                        const w = new Vec3(
+                            bot.bot.entity.position.x - a.x,
+                            bot.bot.entity.position.y + 1 - a.y,
+                            bot.bot.entity.position.z - a.z,
+                        )
+                        const p = d.scaled(w.dot(d)).add(a)
+
+                        if (bot.bot.entity.position.distanceTo(p) > 2) { break }
+
+                        a.y = bot.bot.entity.position.y
+                        b.y = bot.bot.entity.position.y
+                        p.y = bot.bot.entity.position.y
+
+                        if (bot.debug) {
+                            bot.debug.drawLine(a, b, [1, 0, 0])
+                            bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
+                        }
+
+                        goal.proximity
+                            .target(p)
+                            .avoid(true)
+                        bot.bot.movement.setGoal(goal)
+                        const yaw = bot.bot.movement.getYaw(360, 15, 2)
+                        const rotation = Math.rotationToVectorRad(0, yaw)
+
+                        bot.bot.freemotion.moveTowards(yaw)
+                        bot.bot.setControlState('sprint', true)
+
+                        /** @type {import('prismarine-world').RaycastResult | null} */
+                        const ray = bot.bot.world.raycast(
+                            bot.bot.entity.position.offset(0, 0.6, 0),
+                            rotation,
+                            bot.bot.controlState.sprint ? 2 : 1)
+                        if (ray) {
+                            bot.bot.jumpQueued = true
+                        }
+
+                        yield
+                    }
+                    bot.bot.clearControlStates()
+
+                    /*
+                    const shield = bot.searchInventoryItem(null, 'shield')
+
+                    if (shield) {
+                        if (!bot.holds('shield', true)) {
+                            bot.bot.equip(shield.type, 'off-hand')
+                        } else {
+                            bot.bot.lookAt(args.hazard.projectile.entity.position, true)
+                            bot.activateHand('left', 5000)
+                        }
+                    } else {
+                        console.log(`[Bot "${bot.username}"] Incoming projectile`)
+                        // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
+
+                        yield* tasks.goto.task(bot, {
+                            point: bot.bot.entity.position.offset(-args.directionToSelf.z * 1, 0, args.directionToSelf.x * 1),
+                            distance: 0,
+                            searchRadius: 3,
+                            timeout: 500,
+                            sprint: true,
+                            interrupt: args.interrupt,
+                        })
+                    }
+                    */
+                },
+                id: `parry-projectile-${projectile.uuid ?? projectile.entity.uuid ?? projectile.entity.id}`,
+            }, {
+                projectile: projectile,
+                trajectory: trajectory,
+            }, priorities.critical - 1, false, null, false)
         })
 
         this.bot.on('soundEffectHeard', (soundName) => {
@@ -803,7 +955,6 @@ module.exports = class BruhBot {
             this._currentPath = null
         })
         this.bot.on('path_stop', () => {
-            // console.log(`[Bot "${this.username}"] [Pathfinder] Stop`)
             this._currentPath = null
         })
 
@@ -914,8 +1065,6 @@ module.exports = class BruhBot {
 
         this.bot.on('end', (reason) => {
             this.env.removeBot(this)
-            // this.bot.webInventory?.stop?.()
-            // this.bot.viewer?.close()
 
             switch (reason) {
                 case 'socketClosed': {
@@ -935,24 +1084,6 @@ module.exports = class BruhBot {
             this.memory.save()
             this.env.save()
         })
-
-        // this.bot.on('path_update', (r) => {
-        //     if (this.bot.viewer) {
-        //         const path = [this.bot.entity.position.offset(0, 0.5, 0)]
-        //         for (const node of r.path) {
-        //             path.push(new Vec3(node.x, node.y + 0.5, node.z ))
-        //         }
-        //         this.bot.viewer.drawLine('path', path, 0xffffff)
-        //     }
-        // })
-
-        // this.bot.on('path_reset', (reason) => {
-        //     this.bot.viewer?.erase('path')
-        // })
-
-        // this.bot.on('path_stop', () => {
-        //     this.bot.viewer?.erase('path')
-        // })
     }
 
     /**
@@ -1173,6 +1304,23 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
+            match: 'dump all',
+            command: (sender, message, response, isWhispered) => {
+                const task = this.tasks.push(this, tasks.dumpToChest, {
+                    items: this.inventoryItems().map(v => ({ item: v, count: v.count })).toArray(),
+                }, priorities.user, false, sender, isWhispered)
+
+                if (task) {
+                    task.wait()
+                        .then(result => result.isEmpty ? response.respond(`I don't have anything`) : response.respond(`Done`))
+                        .catch(error => error === 'cancelled' || response.respond(error))
+                } else {
+                    response.respond(`I'm already dumping everything`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
             match: ['ensure equipment', 'prepare', 'prep'],
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
@@ -1314,10 +1462,7 @@ module.exports = class BruhBot {
 
                 this.tasks.push(this, {
                     task: function*(bot, args) {
-                        const plan = yield* tasks.gatherItem.planAny(bot, args.item, args.count, args, {
-                            depth: 0,
-                            recursiveItems: [],
-                        }, [])
+                        const plan = yield* tasks.gatherItem.planAny(bot, args.item, args.count, args)
                         const organizedPlan = plan.plan.flat()
                         const planResult = tasks.gatherItem.planResult(organizedPlan, plan.item)
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
@@ -1703,9 +1848,6 @@ module.exports = class BruhBot {
                             }
                         }
 
-                        // const startedAt = performance.now()
-                        // let accumulatedTime = 0
-
                         while (true) {
                             try {
                                 return yield* tasks.goto.task(bot, {
@@ -1718,31 +1860,9 @@ module.exports = class BruhBot {
                                     timeout: 30000,
                                     sprint: true,
                                     // onPathUpdated: (path) => {
-                                    //     const delta = performance.now() - startedAt
                                     //     const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
-                                    //     accumulatedTime += time
-                                    //     respond(`I'm here in ${Math.round((accumulatedTime - delta) / 100) / 10} seconds`)
+                                    //     response.respond(`I'm here in ${Math.round((time) / 1000).toFixed(2)} seconds`)
                                     // },
-                                    onPathReset: (reason) => {
-                                        switch (reason) {
-                                            case 'dig_error': {
-                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Dig error`)
-                                                break
-                                            }
-                                            case 'no_scaffolding_blocks': {
-                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] No scaffolding blocks`)
-                                                break
-                                            }
-                                            case 'place_error': {
-                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Place error`)
-                                                break
-                                            }
-                                            case 'stuck': {
-                                                console.warn(`[Bot "${bot.username}"] [Pathfinder] Stuck`)
-                                                break
-                                            }
-                                        }
-                                    },
                                     interrupt: args.interrupt,
                                 })
                             } catch (error) {
@@ -2153,122 +2273,6 @@ module.exports = class BruhBot {
                     sprint: true,
                 }, priorities.critical - 1, false, null, false)
                 return
-            }
-        }
-        //#endregion
-
-        //#region Projectiles
-        {
-            const now = performance.now()
-
-            for (const id in this.aimingEntities) {
-                const hazard = this.aimingEntities[id]
-                if (now - hazard.time > 100 || !hazard.entity.isValid || hazard.entity.type !== 'player') {
-                    delete this.aimingEntities[id]
-                    continue
-                }
-
-                // console.log(`[Bot "${this.username}"] ${hazard.entity.displayName ?? hazard.entity.name ?? 'Someone'} aiming at me`)
-                // this.debug.drawPoint(hazard.entity.position, [1, 1, 1])
-
-                this.tasks.push(this, {
-                    task: function*(bot, args) {
-                        const directionToSelf = bot.bot.entity.position.clone().subtract(args.hazard.entity.position).normalize()
-
-                        const entityDirection = Math.rotationToVector(args.hazard.entity.pitch, args.hazard.entity.yaw)
-
-                        const angle = Math.vectorAngle({
-                            x: directionToSelf.x,
-                            y: directionToSelf.z,
-                        }, {
-                            x: entityDirection.x,
-                            y: entityDirection.z,
-                        })
-
-                        try {
-                            if (angle < 0) {
-                                yield* tasks.goto.task(bot, {
-                                    point: bot.bot.entity.position.offset(-directionToSelf.z * 1, 0, directionToSelf.x * 1),
-                                    distance: 0,
-                                    searchRadius: 3,
-                                    timeout: 300,
-                                    sprint: true,
-                                    interrupt: args.interrupt,
-                                })
-                            } else {
-                                yield* tasks.goto.task(bot, {
-                                    point: bot.bot.entity.position.offset(directionToSelf.z * 1, 0, -directionToSelf.x * 1),
-                                    distance: 0,
-                                    searchRadius: 3,
-                                    timeout: 300,
-                                    sprint: true,
-                                    interrupt: args.interrupt,
-                                })
-                            }
-                        } catch (error) {
-                            console.warn(`[Bot "${bot.username}"]`, error)
-                            const shield = bot.searchInventoryItem(null, 'shield')
-                            if (shield) {
-                                if (!bot.holds(shield, true)) {
-                                    yield* bot.equip(shield, 'off-hand')
-                                }
-                                bot.bot.lookAt(args.hazard.entity.position.offset(0, 1.6, 0), true)
-                                bot.activateHand('left', 5000)
-                            }
-                        }
-                    },
-                    id: `parry-aim-${hazard.entity.uuid ?? hazard.entity.id}`,
-                }, {
-                    hazard: hazard,
-                }, priorities.critical - 2, false, null, false)
-
-                break
-            }
-
-            for (const id in this.incomingProjectiles) {
-                const hazard = this.incomingProjectiles[id]
-                if (now - hazard.time > 100 || !hazard.projectile.entity.isValid) {
-                    delete this.incomingProjectiles[id]
-                    continue
-                }
-
-                const projectileDirection = hazard.projectile.entity.velocity.clone().normalize()
-                const directionToSelf = this.bot.entity.position.clone().subtract(hazard.projectile.entity.position).normalize()
-                const dot = projectileDirection.dot(directionToSelf)
-                if (dot <= 0) { continue }
-
-                this.tasks.push(this, {
-                    task: function*(bot, args) {
-                        const shield = bot.searchInventoryItem(null, 'shield')
-
-                        if (shield) {
-                            if (!bot.holds('shield', true)) {
-                                bot.bot.equip(shield.type, 'off-hand')
-                            } else {
-                                bot.bot.lookAt(args.hazard.projectile.entity.position, true)
-                                bot.activateHand('left', 5000)
-                            }
-                        } else {
-                            console.log(`[Bot "${bot.username}"] Incoming projectile`)
-                            // this.debug.drawPoint(hazard.projectile.entity.position, [1, 1, 1])
-
-                            yield* tasks.goto.task(bot, {
-                                point: bot.bot.entity.position.offset(-args.directionToSelf.z * 1, 0, args.directionToSelf.x * 1),
-                                distance: 0,
-                                searchRadius: 3,
-                                timeout: 500,
-                                sprint: true,
-                                interrupt: args.interrupt,
-                            })
-                        }
-                    },
-                    id: `parry-projectile-${hazard.projectile.uuid ?? hazard.projectile.entity.uuid ?? hazard.projectile.entity.id}`,
-                }, {
-                    hazard: hazard,
-                    directionToSelf: directionToSelf,
-                }, priorities.critical - 1, false, null, false)
-
-                break
             }
         }
         //#endregion
@@ -2910,11 +2914,14 @@ module.exports = class BruhBot {
         if (this.dumpTrashInterval?.done()) {
             const freeSlots = this.inventorySlots().filter(v => !this.bot.inventory.slots[v]).toArray()
             if (freeSlots.length < 10 || this.forceDumpTrashInterval?.done()) {
+                const trashItems = this.getTrashItems()
                 this.tasks.push(this, {
-                    task: BruhBot.dumpTrash,
+                    task: tasks.dumpToChest.task,
                     id: 'dump-trash',
                     humanReadableId: 'Dump trash',
-                }, {}, priorities.unnecessary, false, null, false)
+                }, {
+                    items: trashItems,
+                }, priorities.unnecessary, false, null, false)
                     ?.wait()
                     .then(dumped => {
                         if (dumped.isEmpty) return
@@ -3279,18 +3286,7 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @type {import('./task').SimpleTaskDef<Freq<import('./utils/other').ItemId>>}
-     */
-    static *dumpTrash(bot, args) {
-        const trashItems = bot.getTrashItems()
-        return yield* tasks.dumpToChest.task(bot, {
-            items: trashItems,
-            interrupt: args.interrupt,
-        })
-    }
-
-    /**
-     * @param {import("prismarine-entity").Entity} hazard
+     * @param {import('prismarine-entity').Entity} hazard
      */
     defendAgainst(hazard) {
         // if (!tasks.attack.can(this, hazard, {
@@ -3333,6 +3329,7 @@ module.exports = class BruhBot {
 
         const players = Object.values(this.bot.players)
             .filter(v => v.username !== this.username)
+            .filter(v => !bots[v.username])
             .filter(v => v.entity)
             .filter(v => v.entity.position.distanceTo(this.bot.entity.position) < 5)
             .filter(v => {
@@ -3640,7 +3637,6 @@ module.exports = class BruhBot {
             this.bot.getEquipmentDestSlot('torso'),
             this.bot.getEquipmentDestSlot('legs'),
             this.bot.getEquipmentDestSlot('feet'),
-            this.bot.getEquipmentDestSlot('hand'),
             this.bot.getEquipmentDestSlot('off-hand'),
         ]
 
@@ -3910,21 +3906,61 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {MineFlayer.Chest} chest
+     * @param {MineFlayer.Chest | null} chest
      * @param {Vec3} chestBlock
      * @param {Readonly<import('./utils/other').ItemId>} item
      * @param {number} count
      * @returns {import('./task').Task<number>}
      */
     *chestDeposit(chest, chestBlock, item, count) {
-        const depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
+        let depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
+
+        if (depositCount === 0) {
+            chest.close()
+            try {
+                yield* taskUtils.sleepTicks()
+                depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
+            } finally {
+                chest = yield* taskUtils.wrap(this.bot.openChest(this.bot.blockAt(chestBlock)))
+            }
+        }
+
         if (depositCount === 0) return 0
 
         const stackSize = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].stackSize
 
-        const botItems = this.inventoryItems(chest)
+        let botItems = this.inventoryItems(chest)
             .filter(v => isItemEquals(v, item) && v.count > 0)
             .toArray()
+
+        if (botItems.length === 0) {
+            chest.close()
+            try {
+                yield* taskUtils.sleepTicks()
+                const botItemsWithoutChest = this.inventoryItems(null)
+                    .filter(v => isItemEquals(v, item) && v.count > 0)
+                    .toArray()
+                if (botItemsWithoutChest.length > 0) {
+                    const firstItem = botItemsWithoutChest[0]
+                    const specialSlotNames = (/** @type {Array<MineFlayer.EquipmentDestination>} */ ([
+                        'head',
+                        'torso',
+                        'legs',
+                        'feet',
+                        'off-hand',
+                    ])).map(v => ({ name: v, slot: this.bot.getEquipmentDestSlot(v) }))
+                    const slot = specialSlotNames.find(v => v.slot === firstItem.slot)
+                    if (slot) {
+                        yield* taskUtils.wrap(this.bot.unequip(slot.name))
+                    }
+                }
+            } finally {
+                chest = yield* taskUtils.wrap(this.bot.openChest(this.bot.blockAt(chestBlock)))
+                botItems = this.inventoryItems(chest)
+                    .filter(v => isItemEquals(v, item) && v.count > 0)
+                    .toArray()
+            }
+        }
 
         if (botItems.length === 0) return 0
 
@@ -4031,60 +4067,58 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {ReadonlyArray<import('./utils/other').ItemId>} item
+     * @param {import('./task').RuntimeArgs<{
+     *   item: import('./utils/other').ItemId;
+     *   count: number;
+     * } | {
+     *   item: ReadonlyArray<import('./utils/other').ItemId>;
+     * }>} args
      * @returns {import('./task').Task<Item | null>}
      */
-    *ensureItems(...item) {
-        let result = this.searchInventoryItem(null, ...item)
-        if (result) { return result }
+    *ensureItem(args) {
+        if ('count' in args) {
+            const has = this.inventoryItemCount(null, args.item)
 
-        try {
-            yield* tasks.gatherItem.task(this, {
-                item: item,
-                count: 1,
-                canUseInventory: true,
-                canUseChests: true,
-                interrupt: new Interrupt(),
-            })
-            result = this.searchInventoryItem(null, ...item)
+            if (has >= args.count) {
+                const result = this.searchInventoryItem(null, args.item)
+                if (result) { return result }
+            }
+
+            try {
+                yield* tasks.gatherItem.task(this, {
+                    ...taskUtils.runtimeArgs(args),
+                    item: args.item,
+                    count: args.count,
+                    canUseInventory: true,
+                    canUseChests: true,
+                })
+                const result = this.searchInventoryItem(null, args.item)
+                if (result) { return result }
+            } catch (error) {
+                console.warn(`[Bot "${this.username}"]`, error)
+            }
+
+            return null
+        } else {
+            let result = this.searchInventoryItem(null, ...args.item)
             if (result) { return result }
-        } catch (error) { }
 
-        return null
-    }
+            try {
+                yield* tasks.gatherItem.task(this, {
+                    item: args.item,
+                    count: 1,
+                    canUseInventory: true,
+                    canUseChests: true,
+                    interrupt: new Interrupt(),
+                })
+                result = this.searchInventoryItem(null, ...args.item)
+                if (result) { return result }
+            } catch (error) {
 
-    /**
-     * @param {import('./utils/other').ItemId} item
-     * @param {number} count
-     * @returns {import('./task').Task<Item | null>}
-     */
-    *ensureItem(item, count = 1) {
-        if (count === null || count === undefined) {
-            count = 1
+            }
+
+            return null
         }
-
-        const has = this.inventoryItemCount(null, item)
-
-        if (has >= count) {
-            const result = this.searchInventoryItem(null, item)
-            if (result) { return result }
-        }
-
-        try {
-            yield* tasks.gatherItem.task(this, {
-                item: item,
-                count: count,
-                canUseInventory: true,
-                canUseChests: true,
-                interrupt: new Interrupt(),
-            })
-            const result = this.searchInventoryItem(null, item)
-            if (result) { return result }
-        } catch (error) {
-            console.warn(`[Bot "${this.username}"]`, error)
-        }
-
-        return null
     }
 
     //#endregion
@@ -4122,7 +4156,7 @@ module.exports = class BruhBot {
     }
 
     /**
-     * @param {import("prismarine-block").Block | import("prismarine-entity").Entity} chest
+     * @param {import('prismarine-block').Block | import('prismarine-entity').Entity} chest
      * @returns {import('./task').Task<MineFlayer.Chest>}
      * @throws {Error}
      */

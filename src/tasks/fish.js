@@ -1,7 +1,7 @@
 'use strict'
 
 const { Block } = require('prismarine-block')
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const { Weapons } = require('minecrafthawkeye')
@@ -107,7 +107,11 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { break }
 
-            const fishingRod = yield* bot.ensureItem('fishing_rod')
+            const fishingRod = yield* bot.ensureItem({
+                ...runtimeArgs(args),
+                item: 'fishing_rod',
+                count: 1,
+            })
             if (!fishingRod) {
                 if (n) { return n }
                 throw `I have no fishing rod`
@@ -120,21 +124,34 @@ module.exports = {
                 throw `There is no water`
             }
 
+            /** @type {import('./goto').GoalHawkeye} */ //@ts-ignore
+            const hawkeyeGoal = goto.getGoal(bot, {
+                hawkeye: water.offset(0.5, 0.5, 0.5),
+                weapon: Weapons.bobber,
+            }).toArray()[0]
+
             yield* goto.task(bot, {
                 goal: {
-                    heuristic: node => Math.sqrt(Math.pow(node.x - water.x, 2) + Math.pow(node.z - water.z, 2)) + Math.abs(node.y - water.y + 1),
-                    isEnd: node => node.distanceTo(water) <= 8 && node.y > water.y,
+                    heuristic: node => {
+                        return Math.sqrt(Math.pow(node.x - water.x, 2) + Math.pow(node.z - water.z, 2)) + Math.abs(node.y - water.y + 1)
+                    },
+                    isEnd: node => {
+                        if (node.distanceTo(water) <= 8 && node.y <= water.y) return false
+                        if (!hawkeyeGoal.isEnd(node)) return false
+                        if (bot.bot.world.raycast(
+                            node.offset(0, 1, 0),
+                            water.offset(0.5, 0.5, 0.5).subtract(node.offset(0, 1, 0)).normalize(),
+                            node.offset(0, 1, 0).distanceTo(water.offset(0.5, 0.5, 0.5))
+                        )) return false
+                        return true
+                    },
                 },
                 options: {
                     searchRadius: 64,
                 },
                 interrupt: args.interrupt,
             })
-            yield* goto.task(bot, {
-                hawkeye: water.offset(0.5, 0.5, 0.5),
-                weapon: Weapons.bobber,
-                interrupt: args.interrupt,
-            })
+
             const grade = bot.bot.hawkEye.getMasterGrade({
                 position: water.offset(0.5, 0.5, 0.5),
                 isValid: false,
@@ -153,7 +170,7 @@ module.exports = {
             yield* sleepG(500)
             args.interrupt.once(interrupt)
             bot.bot.activateItem(false)
-            console.log(`[Bot "${bot.username}"] Bobber thrown`)
+            // console.log(`[Bot "${bot.username}"] Bobber thrown`)
             splashHeard = 0
             n++
 
@@ -197,7 +214,7 @@ module.exports = {
             
             if (bobber && bobber.isValid) {
                 bot.bot.activateItem(false)
-                console.log(`[Bot "${bot.username}"] Bobber retracted`)
+                // console.log(`[Bot "${bot.username}"] Bobber retracted`)
             }
         }
 

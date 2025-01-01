@@ -19,6 +19,7 @@ const { ItemLock } = require('../bruh-bot')
 const BruhBot = require('../bruh-bot')
 const Freq = require('../utils/freq')
 const brew = require('./brew')
+const Minecraft = require('../minecraft')
 
 const planningLogs = false
 
@@ -155,7 +156,9 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
 
 /**
  * @template {PlanStepType} [TType = PlanStepType]
- * @typedef {PlanSteps[TType]} PlanStep
+ * @typedef {PlanSteps[TType] & {
+ *   isOptional?: true;
+ * }} PlanStep
  */
 
 /**
@@ -170,6 +173,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  * @typedef {{
  *   depth: number;
  *   recursiveItems: Array<import('../utils/other').ItemId>;
+ *   isOptional: boolean;
  * }} PlanningContext
  */
 
@@ -656,6 +660,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...planSoFar, ...ingredientPlans])
                 const subplanResult = planResult(subplan, bot.mc.registry.items[ingredient.id].name)
                 if (subplanResult < ingredientCount) {
@@ -718,6 +723,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...result, ...planSoFar])
                 if (planResult(tablePlan, 'crafting_table') <= 0) {
                     if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Can't gather crafting table, recipe is not good`)
@@ -804,6 +810,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...planSoFar, ...ingredientPlans])
                 let goodItems
                 if (ingredient.startsWith('#')) {
@@ -859,6 +866,56 @@ const planners = [
         const result = []
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Recipe found`)
+
+        let fuelPlan = yield* planAny(
+            bot,
+            Minecraft.sortedFuels.filter(v => !v.no && v.simple).map(v => v.item),
+            (item) => Math.ceil(bestRecipe.recipe.time / Minecraft.fuels[item].time),
+            {
+                ...permissions,
+                canBrew: false,
+                canCraft: permissions.canCraft,
+                canSmelt: false,
+            },
+            {
+                depth: context.depth + 1,
+                recursiveItems: [
+                    ...context.recursiveItems,
+                    item,
+                ],
+                isOptional: true,
+            })
+
+        if (!fuelPlan) {
+            fuelPlan = yield* planAny(
+                bot,
+                Minecraft.sortedFuels.filter(v => !v.no && !v.simple).map(v => v.item),
+                (item) => Math.ceil(bestRecipe.recipe.time / Minecraft.fuels[item].time),
+                {
+                    ...permissions,
+                    canBrew: false,
+                    canCraft: false,
+                    canSmelt: false,
+                    canTrade: false,
+                    canKill: false,
+                    canDigEnvironment: false,
+                    canDigGenerators: false,
+                    canHarvestMobs: false,
+                    canRequestFromPlayers: false,
+                },
+                {
+                    depth: context.depth + 1,
+                    recursiveItems: [
+                        ...context.recursiveItems,
+                        item,
+                    ],
+                    isOptional: true,
+                })
+        }
+
+        if (fuelPlan) {
+            result.push(fuelPlan.plan.flat())
+        }
 
         result.push(bestRecipe.plan.flat())
         result.push({
@@ -917,6 +974,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...planSoFar, ...ingredientPlans])
                 let goodItems
                 if (ingredient.startsWith('#')) {
@@ -1030,6 +1088,7 @@ const planners = [
                     ...context.recursiveItems,
                     recipe.result,
                 ],
+                isOptional: context.isOptional,
             }, [...planSoFar])
             if (!planResult(ingredientPlan, recipe.ingredient)) {
                 if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
@@ -1045,6 +1104,7 @@ const planners = [
                     ...context.recursiveItems,
                     recipe.result,
                 ],
+                isOptional: context.isOptional,
             }, [...planSoFar])
             if (!planResult(bottlePlan, recipe.bottle)) {
                 if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   Not good`)
@@ -1130,6 +1190,7 @@ const planners = [
                         item,
                         trade.outputItem.name,
                     ],
+                    isOptional: context.isOptional,
                 }, planSoFar) : null
 
                 const pricePlan2 = trade.inputItem2 ? yield* plan(bot, trade.inputItem2.name, trade.inputItem2.count * tradeCount, {
@@ -1142,6 +1203,7 @@ const planners = [
                         item,
                         trade.outputItem.name,
                     ],
+                    isOptional: context.isOptional,
                 }, planSoFar) : null
 
                 const price1Result = trade.inputItem1 ? planResult([
@@ -1283,6 +1345,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...planSoFar])
                 if (planResult(bucketPlan, 'bucket') <= 0) {
                     // throw `Can't milk cow: aint have a bucket`
@@ -1326,6 +1389,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    isOptional: context.isOptional,
                 }, [...planSoFar])
                 if (planResult(bowlPlan, 'bowl') <= 0) {
                     // throw `Can't milk mooshroom: aint have a bowl`
@@ -1370,7 +1434,8 @@ const planners = [
             recursiveItems: [
                 ...context.recursiveItems,
                 brew.makePotionItem('water'),
-            ]
+            ],
+            isOptional: context.isOptional,
         }, planSoFar)
         if (!planResult(bottlePlan, 'glass_bottle')) { return null }
 
@@ -1405,6 +1470,7 @@ const planners = [
                 ...context.recursiveItems,
                 'water_bucket',
             ],
+            isOptional: context.isOptional,
         }, planSoFar)
 
         if (planResult(bucketPlan, 'bucket') <= 0) {
@@ -1445,41 +1511,62 @@ const planners = [
 ]
 
 /**
+ * @template {import('../utils/other').ItemId} [TItem=import('../utils/other').ItemId]
+ * @typedef {{
+ *   item:  TItem;
+ *   plan: Plan;
+ *   planCost: number;
+ *   planResult: number;
+ *   needsThisMany: number
+ * }} PlannedItem
+ */
+
+/**
+ * @template {import('../utils/other').ItemId} [TItem=import('../utils/other').ItemId]
  * @param {import('../bruh-bot')} bot
- * @param {ReadonlyArray<import('../utils/other').ItemId>} item
- * @param {number} count
+ * @param {ReadonlyArray<TItem>} item
+ * @param {number | ((item: TItem) => number)} count
  * @param {PermissionArgs & { force?: boolean }} permissions
  * @param {PlanningContext} [context]
  * @param {Plan} [planSoFar]
- * @returns {import('../task').Task<{ item: import('../utils/other').ItemId; plan: Plan; }>}
+ * @param {(plan: PlannedItem<TItem>) => boolean} [postprocessor]
+ * @returns {import('../task').Task<{ item: TItem; plan: Plan; } | null>}
  */
-function* planAny(bot, item, count, permissions, context, planSoFar) {
-    context ??= { depth: 0, recursiveItems: [] }
+function* planAny(bot, item, count, permissions, context, planSoFar, postprocessor) {
+    context ??= { depth: 0, recursiveItems: [], isOptional: false }
     planSoFar = []
 
     /**
-     * @type {{ item: import('../utils/other').ItemId; plan: Plan; planCost: number; planResult: number; } | null}
+     * @type {PlannedItem<TItem> | null}
      */
     let bestPlan = null
 
     /**
-     * @param {import('../utils/other').ItemId} item
+     * @param {TItem} item
      */
     const visitItem = function*(item) {
-        const itemPlan = yield* plan(bot, item, count, permissions, context, planSoFar)
+        const requiredCount = typeof count === 'function' ? count(item) : count
+        const itemPlan = yield* plan(bot, item, requiredCount, permissions, context, planSoFar)
         const _itemPlan = {
             item: item,
             plan: itemPlan,
             planCost: planCost(itemPlan),
             planResult: planResult(itemPlan, item),
+            needsThisMany: requiredCount,
         }
+
+        let isPostprocessedGood = true
+        if (postprocessor) {
+            isPostprocessedGood = postprocessor(_itemPlan)
+        }
+
         if (!bestPlan) {
             bestPlan = _itemPlan
             return
         }
         if (!_itemPlan.planResult) { return }
-        const bestIsGood = bestPlan.planResult >= count
-        const currentIsGood = _itemPlan.planResult >= count
+        const bestIsGood = bestPlan.planResult >= _itemPlan.needsThisMany
+        const currentIsGood = (_itemPlan.planResult >= _itemPlan.needsThisMany) && isPostprocessedGood
         if (bestIsGood && !currentIsGood) { return }
         if (!bestIsGood && currentIsGood) {
             bestPlan = _itemPlan
@@ -1506,17 +1593,17 @@ function* planAny(bot, item, count, permissions, context, planSoFar) {
         yield* visitItem(item.item)
         if (bestPlan &&
             bestPlan.planCost === 0 &&
-            bestPlan.planResult >= count) {
+            bestPlan.planResult >= bestPlan.needsThisMany) {
             break
         }
     }
 
-    if (!bestPlan || (bestPlan.planResult < count)) {
+    if (!bestPlan || (bestPlan.planResult < bestPlan.needsThisMany)) {
         for (const item of lastFailedItems) {
             yield* visitItem(item.item)
             if (bestPlan &&
                 bestPlan.planCost === 0 &&
-                bestPlan.planResult >= count) {
+                bestPlan.planResult >= bestPlan.needsThisMany) {
                 break
             }
         }
@@ -1640,314 +1727,299 @@ function* evaluatePlan(bot, plan, args) {
                 }
             }
 
-            switch (step.type) {
-                case 'inventory': continue
-                case 'goto': {
-                    yield* goto.task(bot, {
-                        point: step.destination,
-                        distance: step.distance,
-                        ...args,
-                    })
-                    continue
-                }
-                case 'fill-item': {
-                    const filledItemBefore = bot.inventoryItemCount(null, step.expectedResult)
-                    yield* goto.task(bot, {
-                        block: step.block.position,
-                        reach: 3,
-                        ...args,
-                    })
-                    let itemToFill = bot.searchInventoryItem(null, step.item)
-                    if (!itemToFill) { throw `I have no ${stringifyItem(step.item)}` }
-
-                    itemToFill = yield* bot.equip(itemToFill)
-                    const block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
-                    if (!block) { throw `The chunk where I want to fill my ${stringifyItem(itemToFill)} aint loaded` }
-
-                    if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
-
-                    if (!bot.blockInView(block)) {
+            try {
+                switch (step.type) {
+                    case 'inventory': continue
+                    case 'goto': {
+                        yield* goto.task(bot, {
+                            point: step.destination,
+                            distance: step.distance,
+                            ...args,
+                        })
+                        continue
+                    }
+                    case 'fill-item': {
+                        const filledItemBefore = bot.inventoryItemCount(null, step.expectedResult)
                         yield* goto.task(bot, {
                             block: step.block.position,
-                            raycast: true,
+                            reach: 3,
                             ...args,
                         })
-                    }
-                    yield* wrap(bot.lookAtBlock(block))
-                    yield* sleepTicks(1)
+                        let itemToFill = bot.searchInventoryItem(null, step.item)
+                        if (!itemToFill) { throw `I have no ${stringifyItem(step.item)}` }
 
-                    bot.bot.activateItem(false)
-                    yield* sleepTicks(1)
+                        itemToFill = yield* bot.equip(itemToFill)
+                        const block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                        if (!block) { throw `The chunk where I want to fill my ${stringifyItem(itemToFill)} aint loaded` }
 
-                    bot.bot.deactivateItem()
+                        if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
 
-                    const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
-                    if (filledItemAfter <= filledItemBefore) {
-                        throw `Failed to fill my ${stringifyItem(itemToFill)}`
-                    }
-                    continue
-                }
-                case 'chest': {
-                    yield* goto.task(bot, {
-                        block: step.chest.clone(),
-                        ...args,
-                    })
-                    const chestBlock = bot.bot.blockAt(step.chest.xyz(bot.dimension))
-                    if (!chestBlock || chestBlock.name !== 'chest') {
-                        bot.env.deleteChest(step.chest)
-                        throw `Chest disappeared`
-                    }
-                    if (openedChest && !step.chest.equals(openedChest.chestPosition)) {
-                        openedChest.chest.close()
-                        openedChest = null
-                    }
-                    if (!openedChest) {
-                        const chest = yield* bot.openChest(chestBlock)
-                        openedChest = {
-                            chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
-                            chest: chest,
-                        }
-                    }
-                    const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
-                    if (took < step.count) {
-                        throw `Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`
-                    }
-                    continue
-                }
-                case 'harvest-mob': {
-                    const entity = bot.bot.nearestEntity(e => e.id === step.entity.id)
-                    if (!entity) {
-                        throw `The ${step.entity.expectedType} disappeared`
-                    }
-                    if (!entity.isValid) {
-                        throw `The ${step.entity.expectedType} is invalid`
-                    }
-                    if (entity.name !== step.entity.expectedType) {
-                        throw `The ${step.entity.expectedType} disappeared`
-                    }
-                    yield* goto.task(bot, {
-                        entity: entity,
-                        distance: 3,
-                        ...args,
-                    })
-                    if (!entity.isValid) {
-                        throw `The ${step.entity.expectedType} is invalid`
-                    }
-                    const toolItem = bot.searchInventoryItem(null, step.tool)
-                    if (!toolItem) {
-                        throw `I have no ${step.tool}`
-                    }
-                    yield* wrap(bot.bot.equip(toolItem, 'hand'))
-                    yield* sleepTicks()
-                    yield* wrap(bot.bot.activateEntity(entity))
-                    yield* sleepTicks()
-                    if (step.isDroppingItem) {
-                        yield* pickupItem.task(bot, {
-                            items: [step.item],
-                            inAir: true,
-                            maxDistance: 8,
-                            minLifetime: 0,
-                            silent: true,
-                            point: entity.position.clone(),
-                            ...args,
-                        })
-                    }
-                    continue
-                }
-                case 'craft': {
-                    for (const ingredient of step.recipe.delta) {
-                        if (ingredient.count >= 0) { continue }
-                        const has = bot.bot.inventory.count(ingredient.id, ingredient.metadata)
-                        if (has < -ingredient.count) {
-                            throw `Not enough ${bot.mc.registry.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${-ingredient.count}`
-                        }
-                    }
-                    if (step.recipe.requiresTable) {
-                        let tableBlock = bot.bot.findBlock({
-                            matching: bot.mc.registry.blocksByName['crafting_table'].id,
-                            maxDistance: config.gatherItem.craftingTableSearchRadius,
-                        })
-                        if (!tableBlock) {
-                            const tableItem = bot.searchInventoryItem(null, 'crafting_table')
-                            if (!tableItem) {
-                                throw `I have no crafting table`
-                            }
-                            yield* placeBlock.task(bot, {
-                                item: tableItem.name,
-                                clearGrass: true,
+                        if (!bot.blockInView(block)) {
+                            yield* goto.task(bot, {
+                                block: step.block.position,
+                                raycast: true,
                                 ...args,
                             })
-                            tableBlock = bot.bot.findBlock({
+                        }
+                        yield* wrap(bot.lookAtBlock(block))
+                        yield* sleepTicks(1)
+
+                        bot.bot.activateItem(false)
+                        yield* sleepTicks(1)
+
+                        bot.bot.deactivateItem()
+
+                        const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
+                        if (filledItemAfter <= filledItemBefore) {
+                            throw `Failed to fill my ${stringifyItem(itemToFill)}`
+                        }
+                        continue
+                    }
+                    case 'chest': {
+                        yield* goto.task(bot, {
+                            block: step.chest.clone(),
+                            ...args,
+                        })
+                        const chestBlock = bot.bot.blockAt(step.chest.xyz(bot.dimension))
+                        if (!chestBlock || chestBlock.name !== 'chest') {
+                            bot.env.deleteChest(step.chest)
+                            throw `Chest disappeared`
+                        }
+                        if (openedChest && !step.chest.equals(openedChest.chestPosition)) {
+                            openedChest.chest.close()
+                            openedChest = null
+                        }
+                        if (!openedChest) {
+                            const chest = yield* bot.openChest(chestBlock)
+                            openedChest = {
+                                chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
+                                chest: chest,
+                            }
+                        }
+                        const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
+                        if (took < step.count) {
+                            throw `Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`
+                        }
+                        continue
+                    }
+                    case 'harvest-mob': {
+                        const entity = bot.bot.nearestEntity(e => e.id === step.entity.id)
+                        if (!entity) {
+                            throw `The ${step.entity.expectedType} disappeared`
+                        }
+                        if (!entity.isValid) {
+                            throw `The ${step.entity.expectedType} is invalid`
+                        }
+                        if (entity.name !== step.entity.expectedType) {
+                            throw `The ${step.entity.expectedType} disappeared`
+                        }
+                        yield* goto.task(bot, {
+                            entity: entity,
+                            distance: 3,
+                            ...args,
+                        })
+                        if (!entity.isValid) {
+                            throw `The ${step.entity.expectedType} is invalid`
+                        }
+                        const toolItem = bot.searchInventoryItem(null, step.tool)
+                        if (!toolItem) {
+                            throw `I have no ${step.tool}`
+                        }
+                        yield* wrap(bot.bot.equip(toolItem, 'hand'))
+                        yield* sleepTicks()
+                        yield* wrap(bot.bot.activateEntity(entity))
+                        yield* sleepTicks()
+                        if (step.isDroppingItem) {
+                            yield* pickupItem.task(bot, {
+                                items: [step.item],
+                                inAir: true,
+                                maxDistance: 8,
+                                minLifetime: 0,
+                                silent: true,
+                                point: entity.position.clone(),
+                                ...args,
+                            })
+                        }
+                        continue
+                    }
+                    case 'craft': {
+                        for (const ingredient of step.recipe.delta) {
+                            if (ingredient.count >= 0) { continue }
+                            const has = bot.bot.inventory.count(ingredient.id, ingredient.metadata)
+                            if (has < -ingredient.count) {
+                                throw `Not enough ${bot.mc.registry.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${-ingredient.count}`
+                            }
+                        }
+                        if (step.recipe.requiresTable) {
+                            let tableBlock = bot.bot.findBlock({
                                 matching: bot.mc.registry.blocksByName['crafting_table'].id,
                                 maxDistance: config.gatherItem.craftingTableSearchRadius,
                             })
                             if (!tableBlock) {
-                                throw `Failed to place down the crafting table`
-                            }
-                        }
-                        if (!tableBlock) {
-                            throw `There is no crafting table`
-                        }
-                        yield* goto.task(bot, {
-                            block: tableBlock.position,
-                            ...args,
-                        })
-                        yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
-                    } else {
-                        yield* wrap(bot.bot.craft(step.recipe, step.count))
-                    }
-                    continue
-                }
-                case 'smelt': {
-                    yield* smelt.task(bot, {
-                        count: step.count,
-                        recipe: step.recipe,
-                        ...args,
-                    })
-                    continue
-                }
-                case 'campfire': {
-                    yield* campfire.task(bot, {
-                        count: step.count,
-                        recipes: [step.recipe],
-                        ...args,
-                    })
-                    continue
-                }
-                case 'request': {
-                    for (const lock of step.locks) {
-                        const result = yield* bot.env.requestItem(lock, 60000)
-                        if (!result) {
-                            throw `Failed to request item "${lock.item}"`
-                        }
-                        yield* sleepG(2000)
-                        try {
-                            yield* pickupItem.task(bot, {
-                                inAir: true,
-                                items: [lock.item],
-                                maxDistance: 4,
-                                minLifetime: 0,
-                                ...args,
-                            })
-                        } catch (error) {
-                            console.warn(`[Bot "${bot.username}"] Can't pick up the requested item:`, error)
-                        }
-                        yield* sleepTicks(1)
-                    }
-                    continue
-                }
-                case 'trade': {
-                    yield* trade.task(bot, {
-                        trade: step.trade,
-                        numberOfTrades: step.count,
-                        ...args,
-                    })
-                    continue
-                }
-                case 'bundle-out': {
-                    const bundleItem = bundle.bestBundleWithItem(bot.bot, step.item)
-                    if (!bundleItem) { throw `Bundle disappeared` }
-                    const content = bundle.content(bundleItem.nbt)
-                    if (!content) { throw `Bundle content sublimated` }
-                    const items = content.filter(v => isItemEquals(v.name, step.item))
-                    if (items.length === 0) { throw `Item disappeared from the bundle` }
-                    if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
-
-                    const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name))
-
-                    if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
-                    if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
-
-                    continue
-                }
-                case 'request-from-anyone': {
-                    if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
-                    if (!args.response) { throw `Can't ask anything` }
-                    let requestPlayer
-                    const res1 = yield* wrap(args.response.askYesNo(
-                        (step.count === 1) ?
-                            `Can someone give me a ${stringifyItem(step.item)}?` :
-                            `Can someone give me ${step.count} ${stringifyItem(step.item)}?`,
-                        30000))
-                    if (!res1 || !res1.message) { throw `:(` }
-
-                    bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItem(step.item)}`)
-
-                    let location = bot.env.getPlayerPosition(requestPlayer, 10000)
-                    if (!location) {
-                        if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
-                        location = (yield* wrap(args.response.askPosition(`Where are you?`, 30000, requestPlayer)))?.message
-                        if (location) {
-                            args.response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`, requestPlayer)
-                        } else {
-                            throw `I can't find you`
-                        }
-                    }
-
-                    yield* goto.task(bot, {
-                        point: location,
-                        distance: 1,
-                        timeout: 30000,
-                        ...args,
-                    })
-
-                    bot.bot.whisper(requestPlayer, `Please give me ${step.count} ${step.item}`)
-
-                    /** @type {Freq<import('../utils/other').ItemId>} */
-                    const originalItems = new Freq(isItemEquals)
-                    bot.inventoryItems().forEach(item => {
-                        originalItems.add(item, item.count)
-                    })
-
-                    const interval = new Interval(20000)
-                    const timeout = new Interval(60000)
-
-                    while (true) {
-                        yield* sleepG(100)
-                        /** @type {Freq<import('../utils/other').ItemId>} */
-                        const newItems = new Freq(isItemEquals)
-                        bot.inventoryItems().forEach(item => {
-                            newItems.add(item, item.count)
-                        })
-
-                        /** @type {Freq<import('../utils/other').ItemId>} */
-                        const delta = new Freq(isItemEquals)
-                        delta.from(newItems)
-                        for (const key of originalItems.keys) {
-                            delta.add(key, -originalItems.get(key))
-                            if (delta.get(key) === 0) { delta.remove(key) }
-                        }
-                        let done = false
-                        for (const key of delta.keys) {
-                            if (key === step.item &&
-                                delta.get(key) >= step.count) {
-                                done = true
-                                if (delta.get(key) > step.count) {
-                                    bot.bot.whisper(requestPlayer, `Too much`)
-                                    yield* giveTo.task(bot, {
-                                        player: requestPlayer,
-                                        items: [{ item: key, count: step.count - delta.get(key) }],
-                                        ...args,
-                                    })
+                                const tableItem = bot.searchInventoryItem(null, 'crafting_table')
+                                if (!tableItem) {
+                                    throw `I have no crafting table`
                                 }
-                            } else if (delta.get(key) > 0) {
-                                bot.bot.whisper(requestPlayer, `This aint a ${step.item}`)
-                                yield* giveTo.task(bot, {
-                                    player: requestPlayer,
-                                    items: [{ item: key, count: delta.get(key) }],
+                                yield* placeBlock.task(bot, {
+                                    item: tableItem.name,
+                                    clearGrass: true,
                                     ...args,
                                 })
+                                tableBlock = bot.bot.findBlock({
+                                    matching: bot.mc.registry.blocksByName['crafting_table'].id,
+                                    maxDistance: config.gatherItem.craftingTableSearchRadius,
+                                })
+                                if (!tableBlock) {
+                                    throw `Failed to place down the crafting table`
+                                }
+                            }
+                            if (!tableBlock) {
+                                throw `There is no crafting table`
+                            }
+                            yield* goto.task(bot, {
+                                block: tableBlock.position,
+                                ...args,
+                            })
+                            yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
+                        } else {
+                            yield* wrap(bot.bot.craft(step.recipe, step.count))
+                        }
+                        continue
+                    }
+                    case 'smelt': {
+                        yield* smelt.task(bot, {
+                            count: step.count,
+                            recipe: step.recipe,
+                            ...args,
+                        })
+                        continue
+                    }
+                    case 'campfire': {
+                        yield* campfire.task(bot, {
+                            count: step.count,
+                            recipes: [step.recipe],
+                            ...args,
+                        })
+                        continue
+                    }
+                    case 'request': {
+                        for (const lock of step.locks) {
+                            const result = yield* bot.env.requestItem(lock, 60000)
+                            if (!result) {
+                                throw `Failed to request item "${lock.item}"`
+                            }
+                            yield* sleepG(2000)
+                            try {
+                                yield* pickupItem.task(bot, {
+                                    inAir: true,
+                                    items: [lock.item],
+                                    maxDistance: 4,
+                                    minLifetime: 0,
+                                    ...args,
+                                })
+                            } catch (error) {
+                                console.warn(`[Bot "${bot.username}"] Can't pick up the requested item:`, error)
+                            }
+                            yield* sleepTicks(1)
+                        }
+                        continue
+                    }
+                    case 'trade': {
+                        yield* trade.task(bot, {
+                            trade: step.trade,
+                            numberOfTrades: step.count,
+                            ...args,
+                        })
+                        continue
+                    }
+                    case 'bundle-out': {
+                        const bundleItem = bundle.bestBundleWithItem(bot.bot, step.item)
+                        if (!bundleItem) { throw `Bundle disappeared` }
+                        const content = bundle.content(bundleItem.nbt)
+                        if (!content) { throw `Bundle content sublimated` }
+                        const items = content.filter(v => isItemEquals(v.name, step.item))
+                        if (items.length === 0) { throw `Item disappeared from the bundle` }
+                        if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
+
+                        const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name))
+
+                        if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
+                        if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
+
+                        continue
+                    }
+                    case 'request-from-anyone': {
+                        if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
+                        if (!args.response) { throw `Can't ask anything` }
+                        let requestPlayer
+                        const res1 = yield* wrap(args.response.askYesNo(
+                            (step.count === 1) ?
+                                `Can someone give me a ${stringifyItem(step.item)}?` :
+                                `Can someone give me ${step.count} ${stringifyItem(step.item)}?`,
+                            30000))
+                        if (!res1 || !res1.message) { throw `:(` }
+
+                        bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItem(step.item)}`)
+
+                        let location = bot.env.getPlayerPosition(requestPlayer, 10000)
+                        if (!location) {
+                            if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
+                            location = (yield* wrap(args.response.askPosition(`Where are you?`, 30000, requestPlayer)))?.message
+                            if (location) {
+                                args.response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`, requestPlayer)
+                            } else {
+                                throw `I can't find you`
                             }
                         }
 
-                        if (done) {
-                            bot.bot.whisper(requestPlayer, `Thanks`)
-                            break
-                        }
+                        yield* goto.task(bot, {
+                            point: location,
+                            distance: 1,
+                            timeout: 30000,
+                            ...args,
+                        })
 
-                        if (timeout.done()) {
+                        bot.bot.whisper(requestPlayer, `Please give me ${step.count} ${step.item}`)
+
+                        /** @type {Freq<import('../utils/other').ItemId>} */
+                        const originalItems = new Freq(isItemEquals)
+                        bot.inventoryItems().forEach(item => {
+                            originalItems.add(item, item.count)
+                        })
+
+                        const interval = new Interval(20000)
+                        const timeout = new Interval(60000)
+
+                        while (true) {
+                            yield* sleepG(100)
+                            /** @type {Freq<import('../utils/other').ItemId>} */
+                            const newItems = new Freq(isItemEquals)
+                            bot.inventoryItems().forEach(item => {
+                                newItems.add(item, item.count)
+                            })
+
+                            /** @type {Freq<import('../utils/other').ItemId>} */
+                            const delta = new Freq(isItemEquals)
+                            delta.from(newItems)
+                            for (const key of originalItems.keys) {
+                                delta.add(key, -originalItems.get(key))
+                                if (delta.get(key) === 0) { delta.remove(key) }
+                            }
+                            let done = false
                             for (const key of delta.keys) {
-                                if (delta.get(key) > 0) {
+                                if (key === step.item &&
+                                    delta.get(key) >= step.count) {
+                                    done = true
+                                    if (delta.get(key) > step.count) {
+                                        bot.bot.whisper(requestPlayer, `Too much`)
+                                        yield* giveTo.task(bot, {
+                                            player: requestPlayer,
+                                            items: [{ item: key, count: step.count - delta.get(key) }],
+                                            ...args,
+                                        })
+                                    }
+                                } else if (delta.get(key) > 0) {
+                                    bot.bot.whisper(requestPlayer, `This aint a ${step.item}`)
                                     yield* giveTo.task(bot, {
                                         player: requestPlayer,
                                         items: [{ item: key, count: delta.get(key) }],
@@ -1955,86 +2027,109 @@ function* evaluatePlan(bot, plan, args) {
                                     })
                                 }
                             }
-                            throw `${requestPlayer} didn't give me ${step.count} ${step.item}`
-                        }
 
-                        if (interval.done()) {
-                            bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta.get(step.item) ?? 0)} ${step.item}`)
-                        }
-                    }
+                            if (done) {
+                                bot.bot.whisper(requestPlayer, `Thanks`)
+                                break
+                            }
 
-                    continue
-                }
-                case 'dig': {
-                    for (let i = 0; i < step.count; i++) {
-                        let remainingRetries = step.retryCount
-                        while (remainingRetries--) {
-                            try {
-                                if (step.block.position.dimension !== bot.dimension) {
-                                    yield* goto.task(bot, {
-                                        block: step.block.position,
-                                        ...args,
-                                    })
+                            if (timeout.done()) {
+                                for (const key of delta.keys) {
+                                    if (delta.get(key) > 0) {
+                                        yield* giveTo.task(bot, {
+                                            player: requestPlayer,
+                                            items: [{ item: key, count: delta.get(key) }],
+                                            ...args,
+                                        })
+                                    }
                                 }
+                                throw `${requestPlayer} didn't give me ${step.count} ${step.item}`
+                            }
 
-                                let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
-                                while (!block || block.name !== step.block.block.name) {
-                                    yield* sleepG(100)
-                                    if (!block) {
+                            if (interval.done()) {
+                                bot.bot.whisper(requestPlayer, `Please give me ${step.count - (delta.get(step.item) ?? 0)} ${step.item}`)
+                            }
+                        }
+
+                        continue
+                    }
+                    case 'dig': {
+                        for (let i = 0; i < step.count; i++) {
+                            let remainingRetries = step.retryCount
+                            while (remainingRetries--) {
+                                try {
+                                    if (step.block.position.dimension !== bot.dimension) {
                                         yield* goto.task(bot, {
                                             block: step.block.position,
                                             ...args,
                                         })
-                                        block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
                                     }
 
-                                    if (!block) { break }
-
-                                    const timeout = new Timeout(5000)
-                                    while (!timeout.done() && block && block.name !== step.block.block.name) {
+                                    let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                    while (!block || block.name !== step.block.block.name) {
                                         yield* sleepG(100)
-                                        block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                        if (!block) {
+                                            yield* goto.task(bot, {
+                                                block: step.block.position,
+                                                ...args,
+                                            })
+                                            block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                        }
+
+                                        if (!block) { break }
+
+                                        const timeout = new Timeout(5000)
+                                        while (!timeout.done() && block && block.name !== step.block.block.name) {
+                                            yield* sleepG(100)
+                                            block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                        }
                                     }
-                                }
 
-                                if (!block) {
-                                    throw `Chunk where I like to dig aint loaded`
-                                }
+                                    if (!block) {
+                                        throw `Chunk where I like to dig aint loaded`
+                                    }
 
-                                if (block.name !== step.block.block.name) {
-                                    throw `Unexpected block at ${step.block.position}: expected ${step.block.block.name}, found ${block.name}`
-                                }
+                                    if (block.name !== step.block.block.name) {
+                                        throw `Unexpected block at ${step.block.position}: expected ${step.block.block.name}, found ${block.name}`
+                                    }
 
-                                const digResult = yield* dig.task(bot, {
-                                    block: block,
-                                    alsoTheNeighbors: false,
-                                    pickUpItems: true,
-                                    ...args,
-                                })
+                                    const digResult = yield* dig.task(bot, {
+                                        block: block,
+                                        alsoTheNeighbors: false,
+                                        pickUpItems: true,
+                                        ...args,
+                                    })
 
-                                if (digResult.itemsDelta.get(step.loot.item) < step.loot.count) {
-                                    if (step.isGenerator) { continue }
-                                    throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta.get(step.loot.item)}`
+                                    if (digResult.itemsDelta.get(step.loot.item) < step.loot.count) {
+                                        if (step.isGenerator) { continue }
+                                        throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta.get(step.loot.item)}`
+                                    }
+                                    break
+                                } catch (error) {
+                                    if (remainingRetries === 0) { throw error }
+                                    console.warn(`[Bot "${bot.username}"] ${error} (remaining retries: ${remainingRetries})`)
                                 }
-                                break
-                            } catch (error) {
-                                if (remainingRetries === 0) { throw error }
-                                console.warn(`[Bot "${bot.username}"] ${error} (remaining retries: ${remainingRetries})`)
                             }
                         }
+                        continue
                     }
-                    continue
+                    case 'brew': {
+                        yield* brew.task(bot, {
+                            count: step.count,
+                            recipe: step.recipe,
+                            brewingStand: step.brewingStand,
+                            ...args,
+                        })
+                        break
+                    }
+                    default: debugger
                 }
-                case 'brew': {
-                    yield* brew.task(bot, {
-                        count: step.count,
-                        recipe: step.recipe,
-                        brewingStand: step.brewingStand,
-                        ...args,
-                    })
-                    break
+            } catch (error) {
+                if (step.isOptional) {
+                    console.warn(`[Bot "${bot.username}"] Step ${step.type} failed but that was optional so no problem`)
+                } else {
+                    throw error
                 }
-                default: debugger
             }
         }
     } finally {
@@ -2063,19 +2158,19 @@ function stringifyPlan(bot, plan) {
         }
         switch (step.type) {
             case 'fill-item': {
-                builder += `Fill ${stringifyItem(step.item)}\n`
+                builder += `Fill ${stringifyItem(step.item)}`
                 break
             }
             case 'inventory': {
-                builder += `I have ${step.count} ${stringifyItem(step.item)}\n`
+                builder += `I have ${step.count} ${stringifyItem(step.item)}`
                 break
             }
             case 'chest': {
-                builder += `I found ${step.count} ${stringifyItem(step.item)} in a chest (${step.chest})\n`
+                builder += `I found ${step.count} ${stringifyItem(step.item)} in a chest (${step.chest})`
                 break
             }
             case 'harvest-mob': {
-                builder += `Harvest mob ${step.entity.expectedType} for ${step.count} ${stringifyItem(step.item)}\n`
+                builder += `Harvest mob ${step.entity.expectedType} for ${step.count} ${stringifyItem(step.item)}`
                 break
             }
             case 'craft': {
@@ -2083,47 +2178,47 @@ function stringifyPlan(bot, plan) {
                 if (step.count > 1) {
                     builder += `, ${step.count} times`
                 }
-                builder += `\n`
+                builder += ``
                 break
             }
             case 'smelt': {
-                builder += `Smelt ${step.count} ${stringifyItem(step.recipe.result)}\n`
+                builder += `Smelt ${step.count} ${stringifyItem(step.recipe.result)}`
                 break
             }
             case 'campfire': {
-                builder += `Cook ${step.count} ${stringifyItem(step.recipe.result)}\n`
+                builder += `Cook ${step.count} ${stringifyItem(step.recipe.result)}`
                 break
             }
             case 'goto': {
-                builder += `Goto ${step.destination}\n`
+                builder += `Goto ${step.destination}`
                 break
             }
             case 'request': {
-                builder += `Request item from others\n`
+                builder += `Request item from others`
                 break
             }
             case 'trade': {
                 if (step.trade.inputItem2) {
-                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name} and ${step.trade.inputItem2.count} ${step.trade.inputItem2.name}, ${step.count} times\n`
+                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name} and ${step.trade.inputItem2.count} ${step.trade.inputItem2.name}, ${step.count} times`
                 } else {
-                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name}, ${step.count} times\n`
+                    builder += `Buy ${step.trade.outputItem.count} ${step.trade.outputItem.name} for ${step.trade.inputItem1.count} ${step.trade.inputItem1.name}, ${step.count} times`
                 }
                 break
             }
             case 'bundle-out': {
-                builder += `I have a bundle with ${step.count} ${stringifyItem(step.item)} in it\n`
+                builder += `I have a bundle with ${step.count} ${stringifyItem(step.item)} in it`
                 break
             }
             case 'request-from-anyone': {
-                builder += `Request ${step.count} ${stringifyItem(step.item)} from anyone\n`
+                builder += `Request ${step.count} ${stringifyItem(step.item)} from anyone`
                 break
             }
             case 'dig': {
-                builder += `Dig ${step.block.block.name} at ${step.block.position}${(step.count > 1 ? ` ${step.count} times` : '')}\n`
+                builder += `Dig ${step.block.block.name} at ${step.block.position}${(step.count > 1 ? ` ${step.count} times` : '')}`
                 break
             }
             case 'brew': {
-                builder += `Brew ${step.count} ${stringifyItem(step.recipe.result)}\n`
+                builder += `Brew ${step.count} ${stringifyItem(step.recipe.result)}`
                 break
             }
             default: {
@@ -2131,6 +2226,9 @@ function stringifyPlan(bot, plan) {
                 break
             }
         }
+
+        if (step.isOptional) builder += ` (optional)`
+        builder += '\n'
     }
 
     return builder.trim()

@@ -8,6 +8,7 @@ const Minecraft = require('../minecraft')
 const { basicRouteSearch, isItemEquals } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
 const Freq = require('../utils/freq')
+const { runtimeArgs } = require('../utils/tasks')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -117,7 +118,11 @@ module.exports = {
                     continue
                 }
 
-                const seed = yield* bot.ensureItem(crop.seed, seedsNeed.get(crop.seed))
+                const seed = yield* bot.ensureItem({
+                    ...runtimeArgs(args),
+                    item: crop.seed,
+                    count: seedsNeed.get(crop.seed),
+                })
                 if (!seed) {
                     console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${crop.seed}"`)
                     continue

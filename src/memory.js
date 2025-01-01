@@ -26,12 +26,6 @@ module.exports = class Memory {
 
     /**
      * @readonly
-     * @type {Array<Vec3Dimension>}
-     */
-    myChests
-
-    /**
-     * @readonly
      * @type {Array<import('./tasks/mlg').MlgJunkBlock>}
      */
     mlgJunkBlocks
@@ -70,7 +64,6 @@ module.exports = class Memory {
         this.filePath = filePath
 
         this.myBed = null
-        this.myChests = []
         this.mlgJunkBlocks = []
         this.myArrows = []
         this.hurtBy = {}
@@ -85,7 +78,6 @@ module.exports = class Memory {
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
 
         this.myBed = data.myBed ?? this.myBed
-        this.myChests = data.myChests ?? this.myChests
         this.mlgJunkBlocks = data.mlgJunkBlocks ?? this.mlgJunkBlocks
         this.myArrows = data.myArrows ?? this.myArrows
         this.successfulGatherings = data.successfulGatherings ? Dict.fromJSON(data.successfulGatherings, isItemEquals) : this.successfulGatherings
@@ -100,7 +92,6 @@ module.exports = class Memory {
         }
         fs.writeFileSync(this.filePath, JSON.stringify({
             myBed: this.myBed,
-            myChests: this.myChests,
             mlgJunkBlocks: this.mlgJunkBlocks,
             myArrows: this.myArrows,
             successfulGatherings: this.successfulGatherings.toJSON(),

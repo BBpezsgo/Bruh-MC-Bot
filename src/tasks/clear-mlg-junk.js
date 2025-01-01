@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const attack = require('./attack')
 const dig = require('./dig')
@@ -49,7 +49,11 @@ module.exports = {
                         if (args.interrupt.isCancelled) { break }
 
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = yield* bot.ensureItem('bucket')
+                        const bucket = yield* bot.ensureItem({
+                            ...runtimeArgs(args),
+                            item: 'bucket',
+                            count: 1,
+                        })
                         if (!bucket) {
                             console.warn(`[Bot "${bot.username}"] I have no bucket`)
                             break

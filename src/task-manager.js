@@ -233,7 +233,7 @@ module.exports = class TaskManager {
     }
 
     /**
-     * @param {import("./bruh-bot")} bot
+     * @param {import('./bruh-bot')} bot
      * @param {string} json
      * @param {(task: import('./managed-task').SavedManagedTask) => import('./task').CommonArgs<{}>} commonArgs 
      */

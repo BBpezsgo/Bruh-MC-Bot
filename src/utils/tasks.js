@@ -214,6 +214,19 @@ function* withInterruption(task, interrupt) {
     }
 }
 
+/**
+ * @template {{}} TArgs
+ * @param {import('../task').RuntimeArgs<TArgs>} args
+ * @returns {import('../task').RuntimeArgs<{}>}
+ */
+function runtimeArgs(args) {
+    return {
+        interrupt: args.interrupt,
+        response: args.response,
+        silent: args.silent,
+    }
+}
+
 module.exports = {
     sleepG,
     sleep,
@@ -225,5 +238,6 @@ module.exports = {
     parallelAll,
     parallel,
     race,
-    withCancellation: withInterruption,
+    withInterruption,
+    runtimeArgs,
 }

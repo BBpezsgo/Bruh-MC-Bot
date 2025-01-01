@@ -9,6 +9,7 @@
     "mineflayer-armor-manager": "^2.0.1",
     "mineflayer-elytrafly": "^1.4.6",
     "mineflayer-pathfinder": "file:../mineflayer-pathfinder",
+    "mineflayer-movement": "file:../mineflayer-movement",
     "node-stream-zip": "^1.15.0",
     "prismarine-block": "^1.17.1",
     "prismarine-chat": "^1.10.1",

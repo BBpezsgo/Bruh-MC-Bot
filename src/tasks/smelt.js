@@ -6,6 +6,7 @@ const goto = require('./goto')
 const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
 const config = require('../config')
+const { Vec3 } = require('vec3')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -75,6 +76,7 @@ function* findBestFurnace(bot, recipes) {
  *   recipe: Exclude<import('../local-minecraft-data').CookingRecipe, import('../local-minecraft-data').CampfireRecipe>;
  *   count: number;
  *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+ *   furnace?: Point3;
  * }> & {
  *   findBestFurnace: findBestFurnace;
  * }}
@@ -85,51 +87,86 @@ module.exports = {
 
         const fuels = Minecraft.sortedFuels.filter((/** @type {{ no: any; }} */ fuel) => !fuel.no)
 
-        const best = yield* findBestFurnace(bot, [args.recipe])
-        if (!best) { throw `No furnaces found` }
+        /** @type {Block} */
+        let furnaceBlock = null
+        /** @type {import('../local-minecraft-data').SmeltingRecipe | import('../local-minecraft-data').SmokingRecipe | import('../local-minecraft-data').BlastingRecipe} */
+        let recipe = null
 
-        let furnaceBlock = best.furnaceBlock
-        if (!furnaceBlock) { throw `No furnaces found` }
+        if (args.furnace) {
+            yield* goto.task(bot, {
+                block: new Vec3(args.furnace.x, args.furnace.y, args.furnace.z),
+                interrupt: args.interrupt,
+            })
+            if (args.interrupt.isCancelled) { return [] }
+
+            furnaceBlock = bot.bot.blockAt(new Vec3(args.furnace.x, args.furnace.y, args.furnace.z))
+            if (!furnaceBlock) { throw `The provided furnace disappeared` }
+
+            recipe = args.recipe
+        } else {
+            let best = yield* findBestFurnace(bot, [args.recipe])
+            if (!best) { throw `No furnaces found` }
+
+            furnaceBlock = best.furnaceBlock
+            if (!furnaceBlock) { throw `No furnaces found` }
+
+            recipe = best.recipes[0]
+        }
+
+        if (!furnaceBlock) { throw `Furnace disappeared` }
 
         yield* goto.task(bot, {
             block: furnaceBlock.position,
             interrupt: args.interrupt,
         })
+        if (args.interrupt.isCancelled) { return [] }
+
+        furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
+
+        if (!furnaceBlock) { throw `Furnace disappeared` }
 
         if (args.interrupt.isCancelled) { return [] }
 
-        const recipe = best.recipes[0]
-
-        furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
-        if (!furnaceBlock) { throw `Furnace disappeared` }
-
-        const furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
         let shouldTakeEverything = false
+        const outputs = []
+
+        let blockLock = null
+        while (!(blockLock = bot.env.tryLockBlock(bot.username, furnaceBlock.position))) {
+            yield sleepTicks()
+        }
+
+        /** @type {import('mineflayer').Furnace | null} */
+        let furnace = null
 
         try {
-            while (furnace.inputItem() && furnace.fuel > 0) {
+            furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
+            furnace.once('close', () => {
+                furnace = null
+                bot.env.unlockBlock(bot.username, blockLock.block)
+            })
+            args.interrupt.once(() => {
+                furnace.close()
+                furnace = null
+                bot.env.unlockBlock(bot.username, blockLock.block)
+            })
+
+            while (furnace.inputItem() && (furnace.fuel > 0 || furnace.fuelItem())) {
                 if (args.interrupt.isCancelled) { return [] }
                 yield* sleepTicks()
             }
 
-            {
-                const inputItem = furnace.inputItem()
-                const outputItem = furnace.outputItem()
-                if (inputItem || outputItem) {
-                    if (!args.response) { throw `cancelled` }
-                    const res = yield* wrap(args.response.askYesNo(`There are some stuff in a furnace. Can I take it out?`, 10000))
-                    if (res?.message) {
-                        if (inputItem) yield* wrap(furnace.takeInput())
-                        if (outputItem) yield* wrap(furnace.takeOutput())
-                    } else {
-                        throw `cancelled`
-                    }
+            if (furnace.inputItem() || furnace.outputItem()) {
+                if (!args.response) { throw `cancelled` }
+                const res = yield* wrap(args.response.askYesNo(`There are some stuff in a furnace. Can I take it out?`, 10000))
+                if (res?.message) {
+                    if (furnace.inputItem()) yield* wrap(furnace.takeInput())
+                    if (furnace.outputItem()) yield* wrap(furnace.takeOutput())
+                } else {
+                    throw `cancelled`
                 }
             }
 
             shouldTakeEverything = true
-
-            const outputs = []
 
             for (let i = 0; i < args.count; i++) {
                 if (args.interrupt.isCancelled) { return outputs }
@@ -151,6 +188,7 @@ module.exports = {
 
                     if (args.interrupt.isCancelled) { return outputs }
 
+                    let havePutSomething = false
                     if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                         for (const fuel of fuels) {
                             const have = bot.searchInventoryItem(furnace, fuel.item)
@@ -158,11 +196,12 @@ module.exports = {
                             const canPut = have.count - bot.isItemLocked(have)
                             if (canPut > 0) {
                                 yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)))
+                                havePutSomething = true
                                 break
                             }
                         }
 
-                        if (furnace.fuel <= 0 && !furnace.fuelItem()) { throw `I have no fuel` }
+                        if (!havePutSomething && furnace.fuel <= 0 && !furnace.fuelItem()) { throw `I have no fuel` }
                     }
 
                     yield* sleepTicks(1)
@@ -182,7 +221,8 @@ module.exports = {
                 if (furnace.inputItem()) { yield* wrap(furnace.takeInput()) }
                 if (furnace.outputItem()) { yield* wrap(furnace.takeOutput()) }
             }
-            furnace.close()
+            furnace?.close()
+            bot.env.unlockBlock(bot.username, blockLock.block)
         }
     },
     id: function(args) {

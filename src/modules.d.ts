@@ -2,10 +2,12 @@ import { OptionsMasterGrade, Projectil } from 'minecrafthawkeye'
 import { Pathfinder } from 'mineflayer-pathfinder'
 import { Block } from 'prismarine-block'
 import { Entity } from 'prismarine-entity'
+import { Vec3 } from 'vec3'
 
 declare module 'mineflayer' {
     interface Bot {
-		readonly debug: import('./debug')
+		readonly movement: import('mineflayer-movement').Movement
+		readonly debug: import('./debug/debug')
         // readonly viewer: viewer.ViewerAPI
 		readonly hawkEye: import('minecrafthawkeye').HawkEye
 		readonly pathfinder: Pathfinder
@@ -41,4 +43,11 @@ declare module 'mineflayer' {
 		incoming_projectil: (projectile: Projectil, trajectory: Array<Vec3>) => void;
 		target_aiming_at_you: (entity: Entity, trajectory: Array<Vec3>) => void;
 	}
+}
+
+declare module 'prismarine-world' {
+	export type RaycastResult = Block | (Block & {
+		face: number
+		intersect: Vec3
+	})
 }

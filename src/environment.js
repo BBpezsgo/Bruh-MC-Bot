@@ -153,10 +153,16 @@ module.exports = class Environment {
     minePositions
 
     /**
-     * @private @readonly
-     * @type {Array<SavedChest>}
+     * @readonly
+     * @type {Array<{ block: Point3; by: string; isUnlocked: boolean; }>}
      */
-    chests
+    lockedBlocks
+
+    /** @type {Array<SavedChest>} */
+    #chests
+
+    /** @type {ReadonlyArray<Readonly<SavedChest>>} */
+    get chests() { return this.#chests }
 
     /**
      * @readonly
@@ -220,7 +226,7 @@ module.exports = class Environment {
         this.filePath = filePath
 
         this.crops = []
-        this.chests = []
+        this.#chests = []
         this.playerPositions = {}
         this.entityHurtTimes = {}
         this.entitySpawnTimes = {}
@@ -231,6 +237,7 @@ module.exports = class Environment {
         this.entityOwners = {}
         this.shared = {}
         this.minePositions = []
+        this.lockedBlocks = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
@@ -239,13 +246,13 @@ module.exports = class Environment {
         const data = JSON.parse(fs.readFileSync(this.filePath, 'utf8'), reviver)
         this.playerPositions = data.playerPositions ?? this.playerPositions
         this.crops = data.crops ?? this.crops
-        this.chests = data.chests
+        this.#chests = data.chests
             ? (/** @type {SavedChest[]} */ (data.chests)).map(v => ({
                 content: new Freq(isItemEquals).from(v.content),
                 myItems: new Freq(isItemEquals).from(v.myItems),
                 position: v.position,
             }))
-            : this.chests
+            : this.#chests
         this.villagers = data.villagers ?? this.villagers
         this.animalBreedTimes = data.animalBreedTimes ?? this.animalBreedTimes
         this.minePositions = data.minePositions ?? this.minePositions
@@ -295,6 +302,8 @@ module.exports = class Environment {
         }
 
         if (isBreak) {
+            this.unlockBlock(null, newBlock.position)
+
             if (Minecraft.isCropRoot(bot.bot, oldBlock)) {
                 let isSaved = false
                 for (const crop of this.crops) {
@@ -498,6 +507,12 @@ module.exports = class Environment {
             }
             this.save()
         }
+
+        for (const lock of this.lockedBlocks) {
+            if (lock.by === bot.bot.username) {
+                lock.isUnlocked = true
+            }
+        }
     }
 
     /**
@@ -506,14 +521,14 @@ module.exports = class Environment {
     *scanChests(bot, args) {
         let scannedChests = 0
 
-        for (let i = this.chests.length - 1; i >= 0; i--) {
-            const chest = this.chests[i]
+        for (let i = this.#chests.length - 1; i >= 0; i--) {
+            const chest = this.#chests[i]
             if (chest.position.dimension !== bot.dimension) { continue }
             const blockAt = bot.bot.blockAt(chest.position.xyz(bot.dimension))
             if (!blockAt) { continue }
             if (blockAt.name !== 'chest') {
                 console.log(`[Bot "${bot.username}"] Chest at ${chest.position} disappeared`)
-                this.chests.splice(i, 1)
+                this.#chests.splice(i, 1)
             }
         }
 
@@ -568,7 +583,7 @@ module.exports = class Environment {
                  * @type {SavedChest | null}
                  */
                 let found = null
-                for (const _chest of this.chests) {
+                for (const _chest of this.#chests) {
                     if (_chest.position.equals(new Vec3Dimension(chestBlock.position, bot.dimension))) {
                         found = _chest
                     }
@@ -579,7 +594,7 @@ module.exports = class Environment {
                         content: new Freq(isItemEquals),
                         myItems: new Freq(isItemEquals),
                     }
-                    this.chests.push(found)
+                    this.#chests.push(found)
                 } else {
                     found.content = new Freq(isItemEquals)
                 }
@@ -611,11 +626,12 @@ module.exports = class Environment {
      * @param {Vec3Dimension} position
      */
     deleteChest(position) {
-        for (let i = this.chests.length - 1; i >= 0; i--) {
-            if (!this.chests[i].position.equals(position)) continue
-            this.chests.splice(i, 1)
+        for (let i = this.#chests.length - 1; i >= 0; i--) {
+            if (!this.#chests[i].position.equals(position)) continue
+            this.#chests.splice(i, 1)
         }
         this.save()
+        console.log(`[Environment] Chest at ${position} deleted`)
     }
 
     /**
@@ -665,7 +681,7 @@ module.exports = class Environment {
          */
         let saved = null
 
-        for (const _chest of this.chests) {
+        for (const _chest of this.#chests) {
             if (_chest.position.equals(chestPosition) &&
                 _chest.position.dimension === chestPosition.dimension) {
                 saved = _chest
@@ -679,7 +695,7 @@ module.exports = class Environment {
                 content: new Freq(isItemEquals),
                 myItems: new Freq(isItemEquals),
             }
-            this.chests.push(saved)
+            this.#chests.push(saved)
         }
 
         saved.content = new Freq(isItemEquals)
@@ -705,7 +721,7 @@ module.exports = class Environment {
          * @type {Array<{ position: Vec3Dimension; count: number; myCount: number; }>}
          */
         const result = []
-        for (const chest of this.chests) {
+        for (const chest of this.#chests) {
             for (const itemName of chest.content.keys) {
                 const count = chest.content.get(itemName)
                 const myCount = chest.myItems.get(itemName)
@@ -722,9 +738,9 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import("prismarine-entity").Entity} entity
-     * @param {import("mineflayer").Villager} villager
-     * @param {import("mineflayer").Dimension} dimension
+     * @param {import('prismarine-entity').Entity} entity
+     * @param {import('mineflayer').Villager} villager
+     * @param {import('mineflayer').Dimension} dimension
      */
     addVillager(entity, villager, dimension) {
         if (entity.uuid) {
@@ -760,7 +776,7 @@ module.exports = class Environment {
         fs.writeFileSync(this.filePath, JSON.stringify({
             playerPositions: this.playerPositions,
             crops: this.crops,
-            chests: this.chests,
+            chests: this.#chests,
             villagers: this.villagers,
             animalBreedTimes: this.animalBreedTimes,
             minePositions: this.minePositions,
@@ -770,7 +786,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {Vec3} plantPosition
-     * @param {import("./minecraft").AnyCrop} plant
+     * @param {import('./minecraft').AnyCrop} plant
      * @param {boolean} exactPosition
      * @param {boolean} exactBlock
      * @returns {{ block: Block; faceVector: Vec3; isExactPosition: boolean; isExactBlock: boolean; } | null}
@@ -1051,7 +1067,7 @@ module.exports = class Environment {
      *   evenIfFull?: boolean;
      *   minLifetime?: number;
      * }} args
-     * @returns {import("prismarine-entity").Entity | null}
+     * @returns {import('prismarine-entity').Entity | null}
      */
     getClosestItem(bot, filter, args) {
         if (!args.inAir) { args.inAir = false }
@@ -1059,7 +1075,7 @@ module.exports = class Environment {
         if (!args.point) { args.point = bot.bot.entity.position.clone() }
         if (!args.evenIfFull) { args.evenIfFull = false }
 
-        const nearestEntity = bot.bot.nearestEntity((/** @type {import("prismarine-entity").Entity} */ entity) => {
+        const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
             if (entity.name !== 'item') { return false }
             if (!args.inAir && entity.velocity.distanceTo(new Vec3(0, 0, 0)) > 0.01) { return false }
             const droppedItem = entity.getDroppedItem()
@@ -1166,6 +1182,48 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {string} by
+     * @param {Point3} block
+     */
+    tryLockBlock(by, block) {
+        for (const lock of this.lockedBlocks) {
+            if (lock.isUnlocked) continue
+            if (lock.block.x === block.x &&
+                lock.block.y === block.y &&
+                lock.block.z === block.z) {
+                return null
+            }
+        }
+        const newLock = {
+            by: by,
+            block: block,
+            isUnlocked: false,
+        }
+        this.lockedBlocks.push(newLock)
+        return newLock
+    }
+
+    /**
+     * @param {string | null} by
+     * @param {Point3} block
+     */
+    unlockBlock(by, block) {
+        for (let i = 0; i < this.lockedBlocks.length; i++) {
+            const lock = this.lockedBlocks[i]
+            if (lock.block.x === block.x &&
+                lock.block.y === block.y &&
+                lock.block.z === block.z &&
+                (!by || by === lock.by)) {
+                lock.isUnlocked = true
+            }
+            if (lock.isUnlocked) {
+                this.lockedBlocks.splice(i, 1)
+                i--
+            }
+        }
+    }
+
+    /**
      * @overload
      * @param {string} bot
      * @param {Vec3Dimension} position
@@ -1258,7 +1316,7 @@ module.exports = class Environment {
     /**
      * @param {Vec3Dimension} blockPosition
      * @param {AllocatedBlock['type']} waitFor
-     * @returns {import("./task").Task<boolean>}
+     * @returns {import('./task').Task<boolean>}
      */
     *waitUntilBlockIs(blockPosition, waitFor) {
         /**
@@ -1326,7 +1384,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot').ItemLock} lock
      * @param {number} timeout
-     * @returns {import("./task").Task<boolean>}
+     * @returns {import('./task').Task<boolean>}
      */
     *requestItem(lock, timeout) {
         let isDone = false
@@ -1429,8 +1487,8 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {{ x: number; y: number; z: number; }} origin
-     * @returns {import("./task").Task<Fencing | null>}
+     * @param {Point3} origin
+     * @returns {import('./task').Task<Fencing | null>}
      */
     *scanFencing(origin) {
         if (!origin) { return { positions: [], mobs: {} } }
@@ -1441,7 +1499,7 @@ module.exports = class Environment {
         const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).floored()]
         const maxSize = config.fencing.maxSize
 
-        const isEmpty = (/** @type {import("prismarine-block").Block} */ block) => {
+        const isEmpty = (/** @type {import('prismarine-block').Block} */ block) => {
             return (
                 this.bots[0].bot.pathfinder.movements.emptyBlocks.has(block.type) ||
                 this.bots[0].bot.pathfinder.movements.carpets.has(block.type) ||
@@ -1504,7 +1562,7 @@ module.exports = class Environment {
         }
 
         /**
-         * @type {Record<number, import("prismarine-entity").Entity>}
+         * @type {Record<number, import('prismarine-entity').Entity>}
          */
         const mobs = {}
         const fencing = visited.filter(v => v.v).map(v => v.p.offset(0, 1, 0))

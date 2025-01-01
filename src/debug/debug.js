@@ -3,6 +3,7 @@
 const { Vec3 } = require('vec3')
 const TextDisplay = require('./text-display')
 const BlockDisplay = require('./block-display')
+const ItemDisplay = require('./item-display')
 
 /**
  * @typedef {{
@@ -30,6 +31,17 @@ const BlockDisplay = require('./block-display')
  *     Properties?: Record<string, any>;
  *   };
  * }} BlockDisplayEntityData
+ */
+
+/**
+ * @typedef {DisplayEntityData & {
+ *   item: {
+ *     id: string;
+ *     count?: number;
+ *     components?: any;
+ *   };
+ *   item_display?: 'none' | 'thirdperson_lefthand' | 'thirdperson_righthand' | 'firstperson_lefthand' | 'firstperson_righthand' | 'head' | 'gui' | 'ground';
+ * }} ItemDisplayEntityData
  */
 
 /**
@@ -97,7 +109,7 @@ const BlockDisplay = require('./block-display')
  *   line_width?: number;
  *   see_through?: boolean;
  *   shadow?: boolean;
- *   text?: JsonTextComponent;
+ *   text: JsonTextComponent;
  *   text_opacity?: number;
  * }} TextDisplayEntityData
  */
@@ -116,7 +128,7 @@ module.exports = class Debug {
 
     /**
      * @private @readonly
-     * @type {import('./bruh-bot')}
+     * @type {import('../bruh-bot')}
      */
     _bot
 
@@ -133,7 +145,7 @@ module.exports = class Debug {
     _isFirstTick = true
 
     /**
-     * @param {import('./bruh-bot')} bot
+     * @param {import('../bruh-bot')} bot
      */
     constructor(bot) {
         this._bot = bot
@@ -192,7 +204,7 @@ module.exports = class Debug {
     }
 
     /**
-     * @template {{ x: number; y: number; z: number; }} TPoint
+     * @template {Point3} TPoint
      * @param {TPoint} a
      * @param {TPoint} b
      * @param {Color | ((t: number, from: TPoint, to: TPoint) => Color)} color
@@ -216,7 +228,7 @@ module.exports = class Debug {
     }
 
     /**
-     * @template {{ x: number; y: number; z: number; }} TPoint
+     * @template {Point3} TPoint
      * @param {ReadonlyArray<TPoint>} points
      * @param {Color | ((t: number, from: TPoint, to: TPoint) => Color)} color
      * @param {Color | undefined} [endColor]
@@ -254,7 +266,7 @@ module.exports = class Debug {
     }
 
     /**
-     * @template {{ x: number; y: number; z: number; }} TPoint
+     * @template {Point3} TPoint
      * @param {ReadonlyArray<TPoint>} points
      * @param {Color} color
      */
@@ -279,6 +291,7 @@ module.exports = class Debug {
             data: {
                 billboard: 'center',
                 text: (typeof text === 'string') ? { text: text } : text,
+                see_through: true,
             },
             maxIdleTime: time,
             position: point,
@@ -306,6 +319,28 @@ module.exports = class Debug {
         })
     }
 
+    /**
+     * @param {Point3} point
+     * @param {string} item
+     * @param {number} [time]
+     * @param {Array<string>} [tags]
+     * @returns {(typeof Debug)['enabled'] extends true ? ItemDisplay : null}
+     */
+    item(point, item, time = 30000, tags = []) {
+        if (!Debug.enabled) { return null }
+
+        return new ItemDisplay(this._bot.commands, {
+            data: {
+                item: {
+                    id: item,
+                },
+            },
+            position: point,
+            maxIdleTime: time,
+            tags: tags,
+        })
+    }
+
     tick() {
         if (!Debug.enabled) { return }
 
@@ -316,6 +351,7 @@ module.exports = class Debug {
 
         TextDisplay.tick(this._bot)
         BlockDisplay.tick(this._bot)
+        ItemDisplay.tick(this._bot)
 
         const n = Math.min(10, this._pointQueue.length)
         for (let i = 0; i < n; i++) {
