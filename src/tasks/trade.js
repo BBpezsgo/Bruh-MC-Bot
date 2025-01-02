@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap, sleepTicks } = require('../utils/tasks')
+const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
@@ -56,7 +56,7 @@ module.exports = {
                         yield* goto.task(bot, {
                             point: villager.position.clone(),
                             distance: 2,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                         entity = bot.bot.nearestEntity(v => v.uuid === villager.uuid || v.id === villager.id)
                         if (entity) {
@@ -75,7 +75,7 @@ module.exports = {
                 yield* goto.task(bot, {
                     point: entity.position,
                     distance: 2,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
                 if (args.interrupt.isCancelled) { break }
                 if (!entity.isValid) { continue }
@@ -103,7 +103,7 @@ module.exports = {
         yield* goto.task(bot, {
             point: args.villager.position,
             distance: 2,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
         if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {

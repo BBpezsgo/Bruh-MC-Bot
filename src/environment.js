@@ -4,10 +4,9 @@ const { Vec3 } = require('vec3')
 const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./serializing')
-const { wrap, sleepG } = require('./utils/tasks')
+const { wrap, sleepG, runtimeArgs } = require('./utils/tasks')
 const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor, isItemEquals } = require('./utils/other')
 const { Block } = require('prismarine-block')
-const { Item } = require('prismarine-item')
 const Minecraft = require('./minecraft')
 const Tasks = require('./tasks')
 const { Chest } = require('mineflayer')
@@ -76,9 +75,15 @@ const Freq = require('./utils/freq')
 class ItemRequest {
     /**
      * @readonly
-     * @type {import('./bruh-bot').ItemLock}
+     * @type {import('./item-lock')}
      */
     lock
+
+    /**
+     * @readonly
+     * @type {number | null | undefined}
+     */
+    priority
 
     /**
      * @private @readonly
@@ -99,15 +104,17 @@ class ItemRequest {
     callback
 
     /**
-     * @param {import('./bruh-bot').ItemLock} lock
+     * @param {import('./item-lock')} lock
      * @param {number} timeout
      * @param {(result: boolean) => void} [callback]
+     * @param {number} [priority]
      */
-    constructor(lock, timeout, callback) {
+    constructor(lock, timeout, callback, priority) {
         this.lock = lock
         this.nevermindAt = performance.now() + timeout
         this.status = 'none'
         this.callback = callback
+        this.priority = priority
     }
 
     getStatus() {
@@ -122,6 +129,8 @@ class ItemRequest {
 }
 
 module.exports = class Environment {
+    static ItemRequest = ItemRequest
+
     /**
      * @readonly
      * @type {Array<import('./bruh-bot')>}
@@ -157,6 +166,12 @@ module.exports = class Environment {
      * @type {Array<{ block: Point3; by: string; isUnlocked: boolean; }>}
      */
     lockedBlocks
+
+    /**
+     * @readonly
+     * @type {Array<{ entity: import('prismarine-entity').Entity; by: string; isUnlocked: boolean; }>}
+     */
+    lockedEntities
 
     /** @type {Array<SavedChest>} */
     #chests
@@ -219,6 +234,17 @@ module.exports = class Environment {
     entityOwners
 
     /**
+     * @readonly
+     * @type {Array<{
+     *   position: Vec3Dimension;
+     *   username: string;
+     *   time: number;
+     *   drops: Array<import('prismarine-entity').Entity>;
+     * }>}
+     */
+    playerDeaths
+
+    /**
      * @param {string} filePath
      */
     constructor(filePath) {
@@ -238,6 +264,8 @@ module.exports = class Environment {
         this.shared = {}
         this.minePositions = []
         this.lockedBlocks = []
+        this.lockedEntities = []
+        this.playerDeaths = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
@@ -356,6 +384,16 @@ module.exports = class Environment {
                 delete this.entityOwners[id]
             }
         }
+
+        if (entity.username) {
+            console.log(`[Environment] Player \"${entity.username}\"'s death recorded at ${new Vec3Dimension(entity.position, bot.dimension)}`)
+            this.playerDeaths.push({
+                position: new Vec3Dimension(entity.position, bot.dimension),
+                username: entity.username,
+                time: performance.now(),
+                drops: [],
+            })
+        }
     }
 
     /**
@@ -449,6 +487,25 @@ module.exports = class Environment {
             default:
                 break
         }
+        if (entity.name === 'item') {
+            setTimeout(() => {
+                let closest = null
+                let closestD = Infinity
+                for (const playerDeath of this.playerDeaths) {
+                    if (playerDeath.position.dimension !== bot.dimension) continue
+                    const d = playerDeath.position.xyz(bot.dimension).distanceTo(entity.position)
+                    if (d < closestD) {
+                        closestD = d
+                        closest = playerDeath
+                    }
+                }
+                if (closest) {
+                    if (!closest.drops.some(v => v.id === entity.id)) {
+                        closest.drops.push(entity)
+                    }
+                }
+            }, 60)
+        }
     }
 
     /**
@@ -513,6 +570,12 @@ module.exports = class Environment {
                 lock.isUnlocked = true
             }
         }
+
+        for (const lock of this.lockedEntities) {
+            if (lock.by === bot.bot.username) {
+                lock.isUnlocked = true
+            }
+        }
     }
 
     /**
@@ -559,7 +622,7 @@ module.exports = class Environment {
             try {
                 yield* Tasks.goto.task(bot, {
                     block: chestPosition,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
                 const chestBlock = bot.bot.blockAt(chestPosition)
                 if (!chestBlock) {
@@ -648,7 +711,7 @@ module.exports = class Environment {
                 yield* Tasks.goto.task(bot, {
                     point: villager.position,
                     distance: 2,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
                 if (!villager.isValid) { continue }
 
@@ -1058,67 +1121,6 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import('./bruh-bot')} bot
-     * @param {((item: Item) => boolean) | null} filter
-     * @param {{
-     *   inAir?: boolean;
-     *   maxDistance: number;
-     *   point?: Vec3;
-     *   evenIfFull?: boolean;
-     *   minLifetime?: number;
-     * }} args
-     * @returns {import('prismarine-entity').Entity | null}
-     */
-    getClosestItem(bot, filter, args) {
-        if (!args.inAir) { args.inAir = false }
-        if (!args.maxDistance) { args.maxDistance = 64 }
-        if (!args.point) { args.point = bot.bot.entity.position.clone() }
-        if (!args.evenIfFull) { args.evenIfFull = false }
-
-        const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
-            if (entity.name !== 'item') { return false }
-            if (!args.inAir && entity.velocity.distanceTo(new Vec3(0, 0, 0)) > 0.01) { return false }
-            const droppedItem = entity.getDroppedItem()
-            if (!droppedItem) { return false }
-            if (filter && !filter(droppedItem)) { return false }
-            if (!args.evenIfFull && bot.isInventoryFull(droppedItem.name)) { return false }
-            if (args.minLifetime && this.entitySpawnTimes[entity.id]) {
-                const entityLifetime = performance.now() - this.entitySpawnTimes[entity.id]
-                if (entityLifetime < args.minLifetime) {
-                    return false
-                }
-            }
-            return true
-        })
-        if (!nearestEntity) { return null }
-
-        const distance = nearestEntity.position.distanceTo(args.point)
-        if (distance > args.maxDistance) { return null }
-
-        return nearestEntity
-    }
-
-    /**
-     * @param {import('./bruh-bot')} bot
-     * @param {{
-     *   maxDistance: number;
-     *   point?: Vec3;
-     * }} args
-     * @returns {import('prismarine-entity').Entity | null}
-     */
-    getClosestXp(bot, args) {
-        const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => (
-            entity.name === 'experience_orb')
-        )
-        if (!nearestEntity) { return null }
-
-        const distance = nearestEntity.position.distanceTo(args.point ?? bot.bot.entity.position)
-        if (distance > args.maxDistance) { return null }
-
-        return nearestEntity
-    }
-
-    /**
      * Source: https://github.com/PrismarineJS/mineflayer-pvp/blob/master/src/PVP.ts
      * @param {import('./bruh-bot')} bot
      * @returns {import('prismarine-entity').Entity | null}
@@ -1182,6 +1184,21 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {Point3} block
+     */
+    isBlockLocked(block) {
+        for (const lock of this.lockedBlocks) {
+            if (lock.isUnlocked) continue
+            if (lock.block.x === block.x &&
+                lock.block.y === block.y &&
+                lock.block.z === block.z) {
+                return lock.by
+            }
+        }
+        return null
+    }
+
+    /**
      * @param {string} by
      * @param {Point3} block
      */
@@ -1218,6 +1235,55 @@ module.exports = class Environment {
             }
             if (lock.isUnlocked) {
                 this.lockedBlocks.splice(i, 1)
+                i--
+            }
+        }
+    }
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     */
+    isEntityLocked(entity) {
+        for (const lock of this.lockedEntities) {
+            if (lock.isUnlocked) continue
+            if (lock.entity.id === entity.id) return lock.by
+        }
+        return null
+    }
+
+    /**
+     * @param {string} by
+     * @param {import('prismarine-entity').Entity} entity
+     */
+    tryLockEntity(by, entity) {
+        for (const lock of this.lockedEntities) {
+            if (lock.isUnlocked) continue
+            if (lock.entity.id === entity.id) {
+                return null
+            }
+        }
+        const newLock = {
+            by: by,
+            entity: entity,
+            isUnlocked: false,
+        }
+        this.lockedEntities.push(newLock)
+        return newLock
+    }
+
+    /**
+     * @param {string | null} by
+     * @param {import('prismarine-entity').Entity} entity
+     */
+    unlockEntity(by, entity) {
+        for (let i = 0; i < this.lockedEntities.length; i++) {
+            const lock = this.lockedEntities[i]
+            if (lock.entity.id === entity.id &&
+                (!by || by === lock.by)) {
+                lock.isUnlocked = true
+            }
+            if (lock.isUnlocked) {
+                this.lockedEntities.splice(i, 1)
                 i--
             }
         }
@@ -1382,11 +1448,12 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import('./bruh-bot').ItemLock} lock
+     * @param {import('./item-lock')} lock
      * @param {number} timeout
+     * @param {number} [priority]
      * @returns {import('./task').Task<boolean>}
      */
-    *requestItem(lock, timeout) {
+    *requestItem(lock, timeout, priority) {
         let isDone = false
         let result = false
         const request = new ItemRequest(
@@ -1395,7 +1462,8 @@ module.exports = class Environment {
             (_result) => {
                 result = _result
                 isDone = true
-            }
+            },
+            priority
         )
         this.itemRequests.push(request)
 

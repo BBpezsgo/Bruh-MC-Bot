@@ -3,6 +3,7 @@
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('./vec3-dimension')
 const Freq = require('./utils/freq')
+const ItemLock = require('./item-lock')
 
 /**
  * @this {any}
@@ -11,6 +12,8 @@ const Freq = require('./utils/freq')
  * @returns {any}
  */
 function reviver(key, value) {
+    if (!value) { return value }
+
     if (value &&
         (typeof value === 'object') &&
         ('x' in value) &&
@@ -41,6 +44,21 @@ function reviver(key, value) {
         ('v' in value)
     ) {
         return Freq.fromJSON(value['v'], (a, b) => { throw new Error() })
+    }
+
+    if (typeof value === 'object' &&
+        'isUnlocked' in value &&
+        'item' in value &&
+        'count' in value &&
+        'by' in value &&
+        Object.keys(value).length === 4) {
+        const lock = new ItemLock(
+            String(value['by']),
+            value['item'],
+            Number(value['count'])
+        )
+        lock.isUnlocked = Boolean(value['isUnlocked'])
+        return lock
     }
 
     return value
@@ -76,6 +94,15 @@ function replacer(key, value) {
         return {
             __class: 'Freq',
             v: value.toJSON(),
+        }
+    }
+
+    if (value instanceof ItemLock) {
+        return {
+            isUnlocked: value.isUnlocked,
+            item: value.item,
+            count: value.count,
+            by: value.by,
         }
     }
 

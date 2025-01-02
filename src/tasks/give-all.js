@@ -1,6 +1,6 @@
 'use strict'
 
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 
 /**
@@ -22,12 +22,12 @@ module.exports = {
         yield* goto.task(bot, {
             point: target,
             distance: 2,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
         if (args.interrupt.isCancelled) { return }
 
-        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0)))
+        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0), bot.instantLook))
 
         let tossedSomething = false
 

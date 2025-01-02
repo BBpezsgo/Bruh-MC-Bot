@@ -14,42 +14,42 @@ module.exports = class TaskManager {
      * @readonly
      * @returns {boolean}
      */
-    get isIdle() { return this._tasks.length === 0 }
+    get isIdle() { return this.#tasks.length === 0 }
 
     /**
      * @readonly
+     * @returns {boolean}
+     */
+    get isIdleOrThinking() { return this.#tasks.length === 0 || this.#tasks.every(v => v._isBackground) }
+
+    /**
      * @returns {ReadonlyArray<ManagedTask>}
      */
-    get tasks() { return this._tasks }
+    get tasks() { return this.#tasks }
 
-    /**
-     * @private
-     * @type {number}
-     */
-    _previousTask
+    /** @returns {number} */
+    get timeSinceImportantTask() { return performance.now() - this.#timeSinceImportantTask }
 
-    /**
-     * @private @readonly
-     * @type {Array<ManagedTask>}
-     */
-    _tasks
+    /** @returns {number} */
+    get timeSinceImportantThinkingOrTask() { return performance.now() - this.#timeSinceImportantThinkingOrTask }
 
-    /**
-     * @private
-     * @type {boolean}
-     */
-    _isStopping
+    /** @type {number} */ #previousTask
+    /** @readonly @type {Array<ManagedTask>} */ #tasks
+    /** @type {boolean} */ #isStopping
+    /** @type {number} */ #timeSinceImportantTask
+    /** @type {number} */ #timeSinceImportantThinkingOrTask
 
     constructor() {
-        this._previousTask = -1
-        this._tasks = []
-        this._isStopping = false
+        this.#previousTask = -1
+        this.#tasks = []
+        this.#isStopping = false
+        this.#timeSinceImportantTask = 0
+        this.#timeSinceImportantThinkingOrTask = 0
     }
 
     /**
      * @template {{}} TArgs
      * @template TResult
-     * @template TError
      * @param {import('./bruh-bot')} bot
      * @param {import('./task').TaskDef<TResult, TArgs>} task
      * @param {import('./task').CommonArgs<TArgs>} args
@@ -57,10 +57,10 @@ module.exports = class TaskManager {
      * @param {boolean} save
      * @param {string | null} byPlayer
      * @param {boolean} isWhispered
-     * @returns {ManagedTask<TResult, TArgs, TError> | null}
+     * @returns {ManagedTask<TResult, TArgs> | null}
      */
     push(bot, task, args, priority, save, byPlayer, isWhispered) {
-        if (this._isStopping) {
+        if (this.#isStopping) {
             return null
         }
         const id = (typeof task.id === 'string') ? task.id : task.id(args)
@@ -94,14 +94,14 @@ module.exports = class TaskManager {
             return isUpdated ? existingTask : null
         }
 
-        if (this._tasks.length > 10) {
-            this._tasks.shift()
-            this._previousTask--
+        if (this.#tasks.length > 10) {
+            this.#tasks.shift()
+            this.#previousTask--
             console.warn(`Too many tasks in queue`)
         }
 
         /**
-         * @type {ManagedTask<TResult, TArgs, TError>}
+         * @type {ManagedTask<TResult, TArgs>}
          */
         const newTask = new ManagedTask(
             priority,
@@ -113,19 +113,19 @@ module.exports = class TaskManager {
             isWhispered
         )
 
-        this._tasks.push(newTask)
+        this.#tasks.push(newTask)
 
         return newTask
     }
 
     death() {
-        for (let i = this._tasks.length - 1; i >= 0; i--) {
-            const task = this._tasks[i]
+        for (let i = this.#tasks.length - 1; i >= 0; i--) {
+            const task = this.#tasks[i]
             if (task.priority < 100 || task.id === 'mlg' || task.id === 'eat') {
                 console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
-                this._tasks.splice(i)
-                if (this._previousTask === i) this._previousTask = -1
-                else if (this._previousTask > i) this._previousTask--
+                this.#tasks.splice(i)
+                if (this.#previousTask === i) this.#previousTask = -1
+                else if (this.#previousTask > i) this.#previousTask--
             }
         }
     }
@@ -133,13 +133,15 @@ module.exports = class TaskManager {
     /**
      * @private
      * @param {ReadonlyArray<ManagedTask>} tasks
+     * @param {boolean} background
      * @returns {number}
      */
-    static findImportantTask(tasks) {
+    static findImportantTask(tasks, background) {
         let maxPriority = null
         let index = -1
         for (let i = 0; i < tasks.length; i++) {
             const task = tasks[i]
+            if (task._isBackground !== background) { continue }
             const priority = task.priority
             if (maxPriority === null || priority > maxPriority) {
                 maxPriority = priority
@@ -154,63 +156,78 @@ module.exports = class TaskManager {
      */
     get(id) {
         if (id) {
-            return this._tasks.find(v => v.id === id)
+            return this.#tasks.find(v => v.id === id)
         }
 
         return undefined
     }
 
     tick() {
-        if (this._tasks.length === 0) { return null }
+        if (this.#tasks.length === 0) { return null }
 
-        const i = TaskManager.findImportantTask(this._tasks)
+        const backgroundTaskIndex = TaskManager.findImportantTask(this.#tasks, true)
 
-        if (i === -1) { return null }
-
-        if (this._previousTask !== i && this._previousTask !== -1) {
-            const prev = this._tasks[this._previousTask]
-            if (prev) {
-                prev.interrupt()
-                // console.warn(`Switching task, expect unexpected behavior! ${prev.id} ---> ${this._tasks[i].id}`)
-            }
-        }
-
-        this._previousTask = i
-
-        if (this._isStopping && this._tasks[i].status === 'queued') {
-            this._tasks.splice(i, 1)
-            this._previousTask = -1
-            return null
-        }
-
-        let running = null
-        for (let step = 0; step < 3; step++) {
-            if (this._tasks[i].tick()) {
-                this._tasks.splice(i, 1)
-                running = null
-                this._previousTask = -1
-                break
+        if (backgroundTaskIndex !== -1) {
+            if (this.#tasks[backgroundTaskIndex].status === 'running') {
+                if (this.#tasks[backgroundTaskIndex].priority > 0) {
+                    this.#timeSinceImportantThinkingOrTask = performance.now()
+                }
+                this.#tasks[backgroundTaskIndex].tick()
             } else {
-                running = this._tasks[i]
+                this.#tasks[backgroundTaskIndex].focus()
             }
         }
-        return running
+
+        const focusedTaskIndex = TaskManager.findImportantTask(this.#tasks, false)
+
+        if (focusedTaskIndex !== -1) {
+            if (this.#previousTask !== focusedTaskIndex && this.#previousTask !== -1) {
+                const prev = this.#tasks[this.#previousTask]
+                if (prev) {
+                    prev.interrupt()
+                }
+            }
+
+            this.#previousTask = focusedTaskIndex
+
+            if (this.#isStopping && this.#tasks[focusedTaskIndex].status === 'queued') {
+                debugger
+                this.#tasks.splice(focusedTaskIndex, 1)
+                this.#previousTask = -1
+                return null
+            }
+
+            if (this.#tasks[focusedTaskIndex].priority > 0) {
+                this.#timeSinceImportantTask = performance.now()
+                this.#timeSinceImportantThinkingOrTask = performance.now()
+            }
+
+            if (this.#tasks[focusedTaskIndex].tick()) {
+                this.#tasks.splice(focusedTaskIndex, 1)
+                this.#previousTask = -1
+                return null
+            } else {
+                return this.#tasks[focusedTaskIndex]
+            }
+        }
+
+        return null
     }
 
     /**
      * @returns {Promise<boolean>}
      */
     cancel() {
-        this._isStopping = true
+        this.#isStopping = true
         return new Promise(resolve => {
             let didSomething = false
             const interval = setInterval(() => {
-                for (const task of this._tasks) {
+                for (const task of this.#tasks) {
                     task.cancel()
                     didSomething = true
                 }
-                if (this._tasks.length === 0) {
-                    this._isStopping = false
+                if (this.#tasks.length === 0) {
+                    this.#isStopping = false
                     clearInterval(interval)
                     resolve(didSomething)
                 }
@@ -219,13 +236,13 @@ module.exports = class TaskManager {
     }
 
     abort() {
-        for (const task of this._tasks) {
+        for (const task of this.#tasks) {
             task.abort()
         }
     }
 
     toJSON() {
-        const _tasks = this._tasks
+        const _tasks = this.#tasks
             .filter(v => !v.isDone && v.save)
             .map(v => v.toJSON())
             .filter(v => v)

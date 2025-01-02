@@ -13,7 +13,6 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (args.interrupt.isCancelled) { return }
         if (bot.quietMode) { throw `Can't eat in quiet mode` }
 
         let food = null

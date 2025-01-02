@@ -1,7 +1,7 @@
 'use strict'
 
 const { Item } = require('prismarine-item')
-const { wrap, sleepTicks } = require('../utils/tasks')
+const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const { Timeout, isItemEquals } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const pickupItem = require('./pickup-item')
@@ -86,7 +86,7 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: composter.position,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             if (args.interrupt.isCancelled) { break }
@@ -114,7 +114,7 @@ module.exports = {
                     items: ['bonemeal'],
                     inAir: true,
                     maxDistance: 4,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
             } catch (error) {
                 console.error(`[Bot "${bot.username}"]`, error)

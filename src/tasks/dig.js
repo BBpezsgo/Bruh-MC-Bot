@@ -2,7 +2,7 @@
 
 const { Block } = require('prismarine-block')
 const getMcData = require('minecraft-data')
-const { wrap } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../vec3-dimension')
@@ -52,16 +52,16 @@ module.exports = {
                 let shouldMoveAway = false
                 if (!belowTargetBlock) shouldMoveAway = true
                 else if (belowTargetBlock.name === 'air' ||
-                        belowTargetBlock.name === 'cave_air' ||
-                        belowTargetBlock.name === 'fire' ||
-                        belowTargetBlock.name === 'water' ||
-                        belowTargetBlock.name === 'lava' ||
-                        belowTargetBlock.name === 'powder_snow' ||
-                        belowTargetBlock.name === 'end_portal' ||
-                        belowTargetBlock.name === 'nether_portal' ||
-                        belowTargetBlock.name === 'magma_block' ||
-                        belowTargetBlock.name === 'campfire' ||
-                        belowTargetBlock.name === 'soul_campfire') {
+                    belowTargetBlock.name === 'cave_air' ||
+                    belowTargetBlock.name === 'fire' ||
+                    belowTargetBlock.name === 'water' ||
+                    belowTargetBlock.name === 'lava' ||
+                    belowTargetBlock.name === 'powder_snow' ||
+                    belowTargetBlock.name === 'end_portal' ||
+                    belowTargetBlock.name === 'nether_portal' ||
+                    belowTargetBlock.name === 'magma_block' ||
+                    belowTargetBlock.name === 'campfire' ||
+                    belowTargetBlock.name === 'soul_campfire') {
                     shouldMoveAway = true
                 } else {
                     const [a, b, c, d] = [
@@ -85,7 +85,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         flee: current.position.offset(0, 1, 0),
                         distance: 1,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                 }
             }
@@ -112,7 +112,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         block: current.position,
                         movements: bot.cutTreeMovements,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
 
                     if (tool?.has) {
@@ -186,7 +186,7 @@ module.exports = {
                             yield* pickupItem.task(bot, {
                                 item: nearestEntity,
                                 silent: true,
-                                interrupt: args.interrupt,
+                                ...runtimeArgs(args),
                             })
                         } catch (error) {
                             // console.warn(error)

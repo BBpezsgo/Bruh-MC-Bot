@@ -43,7 +43,7 @@ module.exports = {
                         yield* goto.task(bot, {
                             block: junkBlock.position,
                             reach: 2,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
 
                         if (args.interrupt.isCancelled) { break }
@@ -62,7 +62,7 @@ module.exports = {
                         if (args.interrupt.isCancelled) { break }
 
                         yield* wrap(bot.bot.equip(bucket, 'hand'))
-                        yield* wrap(bot.bot.lookAt(junkBlock.position, true))
+                        yield* wrap(bot.bot.lookAt(junkBlock.position, bot.instantLook))
                         bot.bot.activateItem(false)
 
                         bot.memory.mlgJunkBlocks.pop()
@@ -94,7 +94,7 @@ module.exports = {
                         block: junkBlock,
                         alsoTheNeighbors: false,
                         pickUpItems: true,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                     bot.memory.mlgJunkBlocks.pop()
                     break
@@ -111,7 +111,7 @@ module.exports = {
                         useBow: false,
                         useMelee: true,
                         useMeleeWeapon: false,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                     bot.memory.mlgJunkBlocks.pop()
                     break

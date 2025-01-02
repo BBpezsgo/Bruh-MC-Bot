@@ -26,6 +26,7 @@ module.exports = class {
     /** @readonly */ static get harvest() { return require('./tasks/harvest') }
     /** @readonly */ static get kill() { return require('./tasks/kill') }
     /** @readonly */ static get mlg() { return require('./tasks/mlg') }
+    /** @readonly */ static get move() { return require('./tasks/move') }
     /** @readonly */ static get pickupItem() { return require('./tasks/pickup-item') }
     /** @readonly */ static get pickupXp() { return require('./tasks/pickup-xp') }
     /** @readonly */ static get placeBlock() { return require('./tasks/place-block') }

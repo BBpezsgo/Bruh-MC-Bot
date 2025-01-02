@@ -8,6 +8,7 @@ const dig = require('./dig')
 const Vec3Dimension = require('../vec3-dimension')
 const pickupItem = require('./pickup-item')
 const config = require('../config')
+const { runtimeArgs } = require('../utils/tasks')
 
 /**
  * @type {import('../task').TaskDef<number, {
@@ -22,7 +23,7 @@ module.exports = {
         if (args.farmPosition) {
             yield* goto.task(bot, {
                 dimension: args.farmPosition.dimension,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
         }
 
@@ -75,7 +76,7 @@ module.exports = {
                     try {
                         yield* goto.task(bot, {
                             block: cropPosition,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                         return true
                     } catch (error) {
@@ -121,7 +122,7 @@ module.exports = {
                         if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
                         yield* goto.task(bot, {
                             block: fruitBlock.position,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                         yield* bot.dig(fruitBlock)
                         break
@@ -139,7 +140,7 @@ module.exports = {
                             block: cropBlock,
                             alsoTheNeighbors: true,
                             pickUpItems: true,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                         break
                     }
@@ -149,7 +150,7 @@ module.exports = {
                             block: cropBlock,
                             alsoTheNeighbors: false,
                             pickUpItems: true,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                         break
                     }
@@ -252,7 +253,7 @@ module.exports = {
         yield* plantSeed.task(bot, {
             harvestedCrops: replantPositions,
             locks: [],
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
         if (args.interrupt.isCancelled) { return n }
@@ -281,7 +282,7 @@ module.exports = {
                 try {
                     yield* pickupItem.task(bot, {
                         item: item,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                     const j = items.findIndex(v => v.id === item.id)
                     if (j !== -1) {

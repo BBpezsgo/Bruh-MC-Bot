@@ -28,7 +28,7 @@ const Interrupt = require('../utils/interrupt')
  * @type {import('../task').TaskDef<'ok' | 'failed'>}
  */
 module.exports = {
-    task: function*(bot) {
+    task: function*(bot, args) {
         let didMLG = false
 
         /**
@@ -65,17 +65,26 @@ module.exports = {
                 const eatTask = eat.task(bot, {
                     food: chorusFruit,
                     interrupt: cancelEat,
+                    response: args.response,
+                    silent: args.silent,
+                    task: args.task,
                 })
+                args.interrupt.on(cancelEat.trigger)
 
                 while (true) {
-                    const v = eatTask.next()
-                    if (v.done) return 'ok'
+                    if (eatTask.next().done) {
+                        args.interrupt.off(cancelEat.trigger)
+                        return 'ok'
+                    }
+
                     if (performance.now() - eatStarted < 1600 &&
                         bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) {
                         cancelEat.trigger('cancel')
+                        args.interrupt.off(cancelEat.trigger)
                         console.warn(`[Bot "${bot.username}"] [MLG] There was not enough time to eat chorus fruit`)
                         return 'failed'
                     }
+
                     yield* sleepTicks()
                 }
             }

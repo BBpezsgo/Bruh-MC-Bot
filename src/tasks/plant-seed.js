@@ -26,7 +26,7 @@ function* plant(bot, placeOn, placeVector, seedItem, args) {
 
     yield* goto.task(bot, {
         block: placeOn.position.clone().offset(0, 0.5, 0),
-        interrupt: args.interrupt,
+        ...runtimeArgs(args),
     })
 
     if (args.interrupt.isCancelled) { return }
@@ -37,7 +37,7 @@ function* plant(bot, placeOn, placeVector, seedItem, args) {
 /**
  * @type {import('../task').TaskDef<number, {
  *   fallbackToNear?: boolean;
- *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+ *   locks: ReadonlyArray<import('../item-lock')>;
 * } & ({
  *   harvestedCrops: ReadonlyArray<import('../environment').SavedCrop>;
  * } | {
@@ -101,7 +101,7 @@ module.exports = {
                         yield* hoeing.task(bot, {
                             block: new Vec3Dimension(placeOn.block.position, bot.dimension),
                             gatherTool: false,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                     } catch (error) {
                         console.error(`[Bot "${bot.username}"]`, error)
@@ -129,7 +129,9 @@ module.exports = {
                 }
 
                 // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
-                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, args)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, {
+                    ...runtimeArgs(args),
+                })
                 seedsNeed.set(crop.seed, -1)
                 plantedCount++
                 continue
@@ -152,7 +154,9 @@ module.exports = {
 
                 // console.log(`[Bot "${bot.username}"] Plant ${seed.displayName} on ${placeOn.block.name}`)
 
-                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, args)
+                yield* plant(bot, placeOn.block, placeOn.faceVector, seed, {
+                    ...runtimeArgs(args),
+                })
 
                 plantedCount++
             }

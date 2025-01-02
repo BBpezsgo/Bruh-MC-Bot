@@ -1,7 +1,7 @@
 'use strict'
 
 const { Block } = require('prismarine-block')
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 const config = require('../config')
@@ -43,7 +43,7 @@ module.exports = {
         if (bot.memory.myBed) {
             yield* goto.task(bot, {
                 dimension: bot.memory.myBed.dimension,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
             bed = bot.bot.blockAt(bot.memory.myBed.xyz(bot.dimension))
         }
@@ -81,7 +81,7 @@ module.exports = {
             block: bed.position,
             timeout: 30000,
             reach: 3,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
         if (args.interrupt.isCancelled) { return }

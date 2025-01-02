@@ -1,6 +1,6 @@
 'use strict'
 
-const { sleepG, wrap, race, withInterruption: withCancellation, sleepTicks } = require('../utils/tasks')
+const { sleepG, wrap, race, withInterruption: withCancellation, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const config = require('../config')
 const Vec3Dimension = require('../vec3-dimension')
@@ -69,7 +69,7 @@ module.exports = {
                 bot.dimension !== target.dimension) {
                 yield* goto.task(bot, {
                     dimension: target.dimension,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
                 continue
             }
@@ -111,14 +111,14 @@ module.exports = {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
                         sprint: distance > 10,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
                         sprint: distance > 10,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                 }
             } catch (error) {

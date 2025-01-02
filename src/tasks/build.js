@@ -1,7 +1,7 @@
 'use strict'
 
 const { Block } = require('prismarine-block')
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap, sleepG, runtimeArgs } = require('../utils/tasks')
 const placeBlock = require('./place-block')
 const { Vec3 } = require('vec3')
 const { incrementalNeighbors } = require('../utils/other')
@@ -221,7 +221,7 @@ function* findPosition(bot, blocks, confirmationCallback) {
  *     name: string;
  *     properties: Record<string, any>;
  *     nbt: object;
- *   }>
+ *   }>;
  * }> & {
  *   findPosition: findPosition;
  *   readStructure: readStructure;
@@ -324,7 +324,7 @@ module.exports = {
                         position: block.position,
                         properties: block.properties,
                         cheat: true,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                     remainingBlocks.splice(i, 1)
                 } catch (error) {

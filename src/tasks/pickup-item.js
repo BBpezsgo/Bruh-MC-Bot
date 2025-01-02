@@ -1,7 +1,10 @@
 'use strict'
 
+const { Vec3 } = require('vec3')
 const { isItemEquals } = require('../utils/other')
 const goto = require('./goto')
+const { sleepTicks, runtimeArgs } = require('../utils/tasks')
+const move = require('./move')
 
 /**
  * @typedef {{
@@ -16,9 +19,53 @@ const goto = require('./goto')
  */
 
 /**
+ * @param {import('../bruh-bot')} bot
+ * @param {((item: import('prismarine-item').Item) => boolean) | null} filter
+ * @param {{
+ *   inAir?: boolean;
+ *   maxDistance: number;
+ *   point?: Vec3;
+ *   evenIfFull?: boolean;
+ *   minLifetime?: number;
+ *   alsoLocked?: boolean;
+ * }} args
+ * @returns {import('prismarine-entity').Entity | null}
+ */
+function getClosestItem(bot, filter, args) {
+    if (!args.inAir) { args.inAir = false }
+    if (!args.maxDistance) { args.maxDistance = 64 }
+    if (!args.point) { args.point = bot.bot.entity.position.clone() }
+    if (!args.evenIfFull) { args.evenIfFull = false }
+
+    const nearestEntity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ entity) => {
+        if (entity.name !== 'item') { return false }
+        if (!args.alsoLocked && bot.env.isEntityLocked(entity)) { return false }
+        if (!args.inAir && (entity.velocity.distanceTo(new Vec3(0, 0, 0)) > 0.1 && !entity.onGround)) { return false }
+        const droppedItem = entity.getDroppedItem()
+        if (!droppedItem) { return false }
+        if (filter && !filter(droppedItem)) { return false }
+        if (!args.evenIfFull && bot.isInventoryFull(droppedItem.name)) { return false }
+        if (args.minLifetime && bot.env.entitySpawnTimes[entity.id]) {
+            const entityLifetime = performance.now() - bot.env.entitySpawnTimes[entity.id]
+            if (entityLifetime < args.minLifetime) {
+                return false
+            }
+        }
+        return true
+    })
+    if (!nearestEntity) { return null }
+
+    const distance = nearestEntity.position.distanceTo(args.point)
+    if (distance > args.maxDistance) { return null }
+
+    return nearestEntity
+}
+
+/**
  * @type {import('../task').TaskDef<void, Args> & {
  *   can: (bot: import('../bruh-bot'), args: Args) => boolean;
  *   getGoal: (item: import('prismarine-entity').Entity) => import('mineflayer-pathfinder/lib/goals').GoalBase;
+ *   getClosestItem: getClosestItem;
  * }}
  */
 module.exports = {
@@ -27,7 +74,7 @@ module.exports = {
 
         const nearest = (() => {
             if ('item' in args) { return args.item }
-            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
+            return getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
         if (!nearest) { throw `No items nearby` }
 
@@ -35,6 +82,9 @@ module.exports = {
         if (!item) { throw `This aint an item` }
 
         if (bot.isInventoryFull(item.name)) { throw `Inventory is full` }
+
+        const entityLock = bot.env.tryLockEntity(bot.username, nearest)
+        if (!entityLock) { throw `Entity is locked` }
 
         let isCollected = false
         /**
@@ -56,18 +106,53 @@ module.exports = {
                     timeout: 5000,
                     savePathError: true,
                 },
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
+
+            const goal = {
+                'danger': bot.bot.movement.heuristic.new('danger'),
+                'distance': bot.bot.movement.heuristic.new('distance'),
+                'proximity': bot.bot.movement.heuristic.new('proximity'),
+            }
+
+            const stopMovement = () => {
+                bot.bot.clearControlStates()
+                bot.bot.jumpQueued = false
+            }
+
+            args.interrupt.on(stopMovement)
+            try {
+                const startWaitAt = performance.now()
+                while (true) {
+                    yield* sleepTicks()
+                    if (isCollected) { break }
+                    if (!nearest.isValid) { throw `The item disappeared` }
+                    const waitTime = performance.now() - startWaitAt
+                    if (waitTime > 5000) { throw `Couldn't pick up the item after ${waitTime.toFixed(2)} sec` }
+
+                    goal.proximity.target(nearest.position)
+                    if (bot.bot.entity.position.distanceTo(nearest.position) > 0.5) {
+                        move.setControlState(bot, {
+                            goal: goal,
+                            freemotion: true,
+                        })
+                    } else {
+                        stopMovement()
+                    }
+                }
+            } finally {
+                args.interrupt.off(stopMovement)
+                stopMovement()
+            }
         } catch (error) {
             if (isCollected) { return }
             throw error
         } finally {
             bot.bot.off('playerCollect', listener)
+            entityLock.isUnlocked = true
         }
 
-        if (!isCollected) {
-            throw `Couldn't pick up the item`
-        }
+        if (!isCollected) { throw `Couldn't pick up the item` }
     },
     id: function(args) {
         if ('item' in args) {
@@ -87,7 +172,7 @@ module.exports = {
     can: function(bot, args) {
         const nearest = (() => {
             if ('item' in args) { return args.item }
-            return bot.env.getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
+            return getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
 
         if (!nearest) return false
@@ -100,13 +185,16 @@ module.exports = {
         const goal = this.getGoal(nearest)
         if (bot.memory.isGoalUnreachable(goal)) return false
 
+        if (bot.env.isEntityLocked(nearest)) return false
+
         return true
     },
     getGoal: function(item) {
         return {
-            isValid: () => item.isValid,
+            isValid: () => true,
             hasChanged: () => false,
-            isEnd: node => node.distanceTo(item.position.floored()) <= 0,
+            isEnd: node => !item.isValid || node.distanceTo(item.position.floored()) <= 2,
         }
     },
+    getClosestItem: getClosestItem,
 }

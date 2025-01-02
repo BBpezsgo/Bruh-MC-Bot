@@ -1,6 +1,13 @@
 import { Vec3 } from 'vec3'
 import BruhBot from './bruh-bot'
 import Interrupt from './utils/interrupt'
+import ManagedTask from './managed-task'
+
+interface IManagedTask {
+    blur(): any
+    focus(): any
+    get priority(): number
+}
 
 export type Task<TResult> = Generator<void, TResult, void>
 
@@ -18,6 +25,9 @@ export type CommonArgs<TArgs extends {}> = TArgs & {
     silent?: boolean
 }
 
-export type RuntimeArgs<TArgs extends {}> = CommonArgs<TArgs> & {
+export type RuntimeArgs<TArgs extends {}> = TArgs & {
+    response: import('./bruh-bot').ChatResponseHandler | null
+    silent: boolean
     interrupt: Interrupt
+    task: IManagedTask
 }

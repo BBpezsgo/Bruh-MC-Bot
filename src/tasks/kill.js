@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const attack = require('./attack')
 
 /**
@@ -33,7 +33,7 @@ module.exports = {
             useBow: true,
             useMelee: true,
             useMeleeWeapon: true,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
         if (!result) {

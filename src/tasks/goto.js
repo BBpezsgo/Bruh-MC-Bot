@@ -1,7 +1,7 @@
 'use strict'
 
 const { goals, Movements } = require('mineflayer-pathfinder')
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap, sleepG, runtimeArgs } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const { Timeout } = require('../utils/other')
 const Vec3Dimension = require('../vec3-dimension')
@@ -472,7 +472,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -493,7 +493,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -524,7 +524,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -545,7 +545,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -570,7 +570,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -594,7 +594,7 @@ module.exports = {
                                             point: portal.position,
                                             distance: 0,
                                             movements: movements,
-                                            interrupt: args.interrupt,
+                                            ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
                                         // @ts-ignore
@@ -656,14 +656,10 @@ module.exports = {
                         return 'ok'
                     }
 
-                    if (args.interrupt.isCancelled) {
-                        throw `cancelled`
-                    }
-
                     if (i === retryCount - 1) {
                         console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
                         bot.bot.pathfinder.stop()
-                        if (args.options.savePathError) bot.memory.theGoalIsUnreachable(_goal)
+                        if (args.options.savePathError && lastError.name === 'NoPath') bot.memory.theGoalIsUnreachable(_goal)
                         throw `I can't get there`
                     } else {
                         bot.bot.pathfinder.stop()
@@ -680,13 +676,13 @@ module.exports = {
                     if ('dimension' in _goal) {
                         result = yield* this.task(bot, {
                             ..._goal,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                     } else {
                         result = yield* this.task(bot, {
                             goal: _goal,
                             options: args,
-                            interrupt: args.interrupt,
+                            ...runtimeArgs(args),
                         })
                     }
                 }

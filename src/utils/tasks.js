@@ -224,6 +224,7 @@ function runtimeArgs(args) {
         interrupt: args.interrupt,
         response: args.response,
         silent: args.silent,
+        task: args.task,
     }
 }
 

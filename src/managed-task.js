@@ -1,5 +1,6 @@
 'use strict'
 
+const CancelledError = require('./cancelled-error')
 const Interrupt = require('./utils/interrupt')
 
 /**
@@ -15,16 +16,14 @@ const Interrupt = require('./utils/interrupt')
  */
 
 /**
+ * @typedef {'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled' | 'aborted'} TaskStatus
+ */
+
+/**
  * @template [TResult = any]
  * @template {{}} [TArgs = {}]
- * @template {any} [TError = any]
  */
 class ManagedTask {
-
-    /**
-     * @exports
-     * @typedef {'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled' | 'aborted'} TaskStatus
-     */
 
     //#region Public
 
@@ -101,13 +100,13 @@ class ManagedTask {
     _resolve
 
     /**
-     * @type {((reason: TError | 'cancelled' | 'aborted') => any) | null}
+     * @type {((reason: Error | CancelledError | 'aborted' | string) => any) | null}
      */
     _reject
 
     /**
      * @private
-     * @type {TypedPromise<TResult, TError | 'cancelled' | 'aborted'> | null}
+     * @type {TypedPromise<TResult, Error | CancelledError | 'aborted' | string> | null}
      */
     _promise
 
@@ -144,13 +143,18 @@ class ManagedTask {
      */
     _isWhispered
 
+    /**
+     * @type {boolean}
+     */
+    _isBackground
+
     //#endregion
 
     /**
      * @param {import('./task-manager').Priority<TArgs>} priority
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
-     * @param {import('./task').TaskDef<TResult, TArgs>} def
+     * @param {import('./task').TaskDef<TResult, TArgs, any>} def
      * @param {boolean} save
      * @param {string | null} byPlayer
      * @param {boolean} isWhispered
@@ -169,6 +173,9 @@ class ManagedTask {
         this.args = {
             ...args,
             interrupt: new Interrupt(),
+            task: this,
+            response: args.response ?? null,
+            silent: args.silent ?? false,
         }
         this._bot = bot
         this._def = def
@@ -179,10 +186,11 @@ class ManagedTask {
         this.save = save
         this._byPlayer = byPlayer
         this._isWhispered = isWhispered
+        this._isBackground = false
     }
 
     /**
-     * @returns {TypedPromise<TResult, TError | 'cancelled' | 'aborted'>}
+     * @returns {TypedPromise<TResult, Error | CancelledError | 'aborted' | string>}
      */
     wait() {
         if (!this._promise) {
@@ -197,7 +205,7 @@ class ManagedTask {
 
     interrupt() {
         this.args.interrupt.trigger('interrupt')
-        // console.log(`[Tasks] Task "${this.id}" interrupted`)
+        // console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
     }
 
     cancel() {
@@ -209,18 +217,36 @@ class ManagedTask {
         }
     }
 
+    blur() {
+        if (!this._isBackground) {
+            console.log(`[Bot "${this._bot.username}"] Task "${this.id}" blurred`)
+            this._isBackground = true
+            return true
+        }
+        return false
+    }
+
+    focus() {
+        if (this._isBackground) {
+            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" focused`)
+            this._isBackground = false
+            return true
+        }
+        return false
+    }
+
     abort() {
         this._status = 'aborted'
         if (!this._task) { return }
 
         this._task.throw('aborted')
-        console.log(`[Tasks] Task "${this.id}" aborted`)
+        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" aborted`)
     }
 
     tick() {
         if (this._status === 'cancelled') {
-            console.log(`[Tasks] Task "${this.id}" cancelled`)
-            if (this._reject) { this._reject('cancelled') }
+            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled`)
+            if (this._reject) { this._reject(new CancelledError()) }
             return true
         }
 
@@ -244,7 +270,7 @@ class ManagedTask {
                             console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled gracefully with result`, v.value)
                         }
                     }
-                    if (this._reject) { this._reject('cancelled') }
+                    if (this._reject) { this._reject(new CancelledError()) }
                 } else {
                     this._status = 'done'
                     if (!this.args.silent) {
@@ -275,10 +301,10 @@ class ManagedTask {
     toJSON() {
         if (!this._def.definition) { return undefined }
 
-        /** @type {import('./task').CommonArgs<TArgs>} */
         const _args = { ...this.args }
 
         delete _args['response']
+        delete _args['task']
 
         for (const key of /** @type {Array<keyof import('./task').CommonArgs<TArgs>>} */ (Object.keys(_args))) {
             const arg = _args[key]
@@ -313,15 +339,14 @@ class ManagedTask {
 
 /**
  * @exports
- * @template {import('./task').TaskDef<any, any, any>} TTask
+ * @template {import('./task').TaskDef<any, {}, any>} TTask
  * @typedef {TTask extends import('./task').TaskDef<any, infer T> ? T : never} TaskArgs
  */
 
 /**
  * @exports
- * @template {import('./task').TaskDef<any, any>} TTask
- * @template {any} [TError = any]
- * @typedef {ManagedTask<TaskResult<TTask>, TaskArgs<TTask>, TError>} AsManaged
+ * @template {import('./task').TaskDef<any, {}, any>} TTask
+ * @typedef {ManagedTask<TaskResult<TTask>, TaskArgs<TTask>>} AsManaged
  */
 
 module.exports = ManagedTask

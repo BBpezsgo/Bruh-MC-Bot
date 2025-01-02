@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap, waitForEvent } = require('../utils/tasks')
+const { wrap, waitForEvent, runtimeArgs } = require('../utils/tasks')
 const { NBT2JSON, stringifyItem } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
@@ -131,7 +131,7 @@ const potions = Object.freeze([
 /**
  * @param {string} potion
  * @param {string} [item='potion']
- * @returns {{ name: string; nbt: import('../bruh-bot').NBT; potion: string; }}
+ * @returns {{ name: string; nbt: import('../utils/items').NBT; potion: string; }}
  */
 function makePotionItem(potion, item = 'potion') {
     if (!potion.startsWith('minecraft:')) {
@@ -316,7 +316,7 @@ const recipes = (() => {
  * }) & {
  *   count: 1 | 2 | 3;
  *   brewingStand?: Vec3Dimension;
- *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
+ *   locks: ReadonlyArray<import('../item-lock')>;
  * }> & {
  *   recipes: typeof recipes;
  *   potions: typeof potions;
@@ -364,7 +364,7 @@ module.exports = {
             yield* goto.task(bot, {
                 point: args.brewingStand,
                 distance: 8,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
         }
 
@@ -378,24 +378,29 @@ module.exports = {
 
         yield* goto.task(bot, {
             block: brewingStand.position,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
 
-        brewingStand = bot.bot.blockAt(brewingStand.position, true)
+        let blockLock = null
+        while (!(blockLock = bot.env.tryLockBlock(bot.username, brewingStand.position))) {
 
-        if (!brewingStand) {
-            throw `Brewing stand disappeared`
         }
 
-        const slot1 = 0
-        const slot2 = 1
-        const slot3 = 2
-        const ingredientSlot = 3
-        const fuelSlot = 4
-
-        const window = yield* wrap(bot.bot.openBrewingStand(brewingStand))
-
+        /** @type {import('mineflayer').BrewingStand | null} */
+        let window = null
         try {
+            brewingStand = bot.bot.blockAt(brewingStand.position, true)
+
+            if (!brewingStand) { throw `Brewing stand disappeared` }
+
+            const slot1 = 0
+            const slot2 = 1
+            const slot3 = 2
+            const ingredientSlot = 3
+            const fuelSlot = 4
+
+            window = yield* wrap(bot.bot.openBrewingStand(brewingStand))
+
             bottleItem = bot.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
             ingredientItem = bot.inventoryItems(window).filter(v => v.name === recipe.ingredient).first()
 
@@ -404,7 +409,7 @@ module.exports = {
             }
 
             if (window.potions().some(Boolean) || window.ingredientItem()) {
-                if (!args.response) { throw `cancelled` }
+                if (!args.response) { throw `I can't ask questions` }
                 const res = yield* wrap(args.response.askYesNo(`There are some stuff in a brewing stand. Can I take it out?`, 10000, null, q => {
                     if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
                         let detRes = ''
@@ -416,13 +421,18 @@ module.exports = {
                         }
                         return detRes
                     }
+
+                    if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
+                        return `At ${brewingStand.position.x} ${brewingStand.position.y} ${brewingStand.position.z} in ${bot.dimension}`
+                    }
+
                     return null
                 }))
                 if (res?.message) {
                     if (window.potions().some(Boolean)) yield* wrap(window.takePotions())
                     if (window.ingredientItem()) yield* wrap(window.takeIngredient())
                 } else {
-                    throw `cancelled`
+                    throw `Didn't got a response to my question`
                 }
             }
 
@@ -468,8 +478,8 @@ module.exports = {
             if (res.length !== args.count) { throw `Something aint right` }
             return res
         } finally {
-            yield
-            bot.bot.closeWindow(window)
+            if (window) bot.bot.closeWindow(window)
+            blockLock.isUnlocked = true
         }
     },
     id: function(args) {

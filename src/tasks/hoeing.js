@@ -1,7 +1,7 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
@@ -58,7 +58,7 @@ module.exports = {
         const equipHoe = function*() {
             const hoeItem = yield* bot.ensureItem({
                 item: hoes,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
             if (hoeItem) {
                 if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name !== hoeItem.name) {
@@ -78,7 +78,7 @@ module.exports = {
         if ('water' in args) {
             yield* goto.task(bot, {
                 dimension: args.water.dimension,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
             water = args.water.xyz(bot.dimension)
         } else if ('nearPlayer' in args) {
@@ -98,7 +98,7 @@ module.exports = {
         } else if ('block' in args) {
             yield* goto.task(bot, {
                 dimension: args.block.dimension,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             if (args.interrupt.isCancelled) { return 0 }
@@ -122,7 +122,7 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: args.block,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             if (args.interrupt.isCancelled) { return 0 }
@@ -188,7 +188,7 @@ module.exports = {
 
                 yield* goto.task(bot, {
                     block: dirt.clone(),
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
 
                 if (args.interrupt.isCancelled) { break }

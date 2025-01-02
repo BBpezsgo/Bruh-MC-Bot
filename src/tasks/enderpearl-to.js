@@ -1,7 +1,7 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { sleepG, wrap } = require('../utils/tasks')
+const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const { trajectoryTime } = require('../utils/other')
 const { Weapons } = require('minecrafthawkeye')
 const goto = require('./goto')
@@ -9,8 +9,8 @@ const goto = require('./goto')
 /**
  * @type {import('../task').TaskDef<'here' | 'ok', {
  *   destination: Vec3;
- *   locks: ReadonlyArray<import('../bruh-bot').ItemLock>;
-* }>}
+ *   locks: ReadonlyArray<import('../item-lock')>;
+ * }>}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -32,10 +32,8 @@ module.exports = {
         yield* goto.task(bot, {
             hawkeye: args.destination,
             weapon: Weapons.ender_pearl,
-            interrupt: args.interrupt,
+            ...runtimeArgs(args),
         })
-
-        if (args.interrupt.isCancelled) { throw `cancelled` }
 
         const grade = bot.bot.hawkEye.getMasterGrade({
             position: args.destination,
@@ -49,10 +47,8 @@ module.exports = {
             throw `There are blocks (${grade.blockInTrayect.name}) intersecting the trajectory`
         }
 
-        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook))
         yield* sleepG(100)
-
-        if (args.interrupt.isCancelled) { throw `cancelled` }
 
         yield* wrap(bot.bot.equip(enderpearl, 'hand'))
         bot.bot.activateItem(false)

@@ -4,6 +4,7 @@ const { Vec3 } = require('vec3')
 const goto = require('./goto')
 const Freq = require('../utils/freq')
 const { isItemEquals } = require('../utils/other')
+const { runtimeArgs } = require('../utils/tasks')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -73,7 +74,7 @@ module.exports = {
                     const chestPosition = chestBlock.position
                     yield* goto.task(bot, {
                         block: chestPosition,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                     chestBlock = bot.bot.blockAt(chestPosition.clone())
                 }

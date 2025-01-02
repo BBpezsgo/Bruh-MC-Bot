@@ -4,6 +4,10 @@ const Minecraft = require('../minecraft')
 const { isItemEquals } = require('./other')
 
 /**
+ * @typedef {import('prismarine-nbt').Tags[import('prismarine-nbt').TagType]} NBT
+ */
+
+/**
  * @param {ReadonlyArray<Readonly<{ item: import('./other').ItemId; count: number; }>>} items
  * @param {import('../minecraft')['registry']} registry
  * @returns {Array<{ item: import('./other').ItemId; count: number; }>}

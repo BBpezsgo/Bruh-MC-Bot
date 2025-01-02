@@ -149,7 +149,7 @@ module.exports = {
                 options: {
                     searchRadius: 64,
                 },
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             const grade = bot.bot.hawkEye.getMasterGrade({
@@ -166,7 +166,7 @@ module.exports = {
             }
 
             yield* wrap(bot.bot.equip(fishingRod, 'hand'))
-            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook))
             yield* sleepG(500)
             args.interrupt.once(interrupt)
             bot.bot.activateItem(false)
@@ -208,10 +208,10 @@ module.exports = {
                 }
                 yield* sleepG(100)
             }
-            
+
             args.interrupt.off(interrupt)
             if (!bot.holds('fishing_rod')) { continue }
-            
+
             if (bobber && bobber.isValid) {
                 bot.bot.activateItem(false)
                 // console.log(`[Bot "${bot.username}"] Bobber retracted`)

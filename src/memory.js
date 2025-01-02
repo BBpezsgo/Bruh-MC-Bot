@@ -57,6 +57,14 @@ module.exports = class Memory {
     idlePosition
 
     /**
+     * @type {Array<{
+     *   username: string;
+     *   items: Array<import('./item-lock')>;
+     * }>}
+     */
+    playerDeathLoots
+
+    /**
      * @param {import('./bruh-bot')} bot
      * @param {string} filePath
      */
@@ -70,6 +78,7 @@ module.exports = class Memory {
         this.successfulGatherings = new Dict(isItemEquals)
         this._unreachableGoals = []
         this.idlePosition = null
+        this.playerDeathLoots = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Memory] File not found at "${this.filePath}"`)
@@ -82,6 +91,7 @@ module.exports = class Memory {
         this.myArrows = data.myArrows ?? this.myArrows
         this.successfulGatherings = data.successfulGatherings ? Dict.fromJSON(data.successfulGatherings, isItemEquals) : this.successfulGatherings
         this.idlePosition = data.idlePosition ?? this.idlePosition
+        this.playerDeathLoots = data.playerDeathLoots ?? this.playerDeathLoots
 
         console.log(`[Memory] Loaded`)
     }
@@ -96,6 +106,7 @@ module.exports = class Memory {
             myArrows: this.myArrows,
             successfulGatherings: this.successfulGatherings.toJSON(),
             idlePosition: this.idlePosition,
+            playerDeathLoots: this.playerDeathLoots,
         }, replacer, ' '))
     }
 

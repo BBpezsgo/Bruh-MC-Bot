@@ -1,7 +1,7 @@
 'use strict'
 
 const { Vec3 } = require('vec3')
-const { wrap, sleepG } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
@@ -401,7 +401,7 @@ module.exports = {
         while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
             yield* goto.task(bot, {
                 block: position,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             if (args.interrupt.isCancelled) { return }
@@ -419,7 +419,7 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: position,
-                interrupt: args.interrupt,
+                ...runtimeArgs(args),
             })
 
             if (args.interrupt.isCancelled) { return }
@@ -436,7 +436,7 @@ module.exports = {
             for (let i = 3; i >= 0; i--) {
                 yield* goto.task(bot, {
                     block: position,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
 
                 let imInTheWay = false
@@ -451,7 +451,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         flee: position,
                         distance: 1.9,
-                        interrupt: args.interrupt,
+                        ...runtimeArgs(args),
                     })
                 }
 
@@ -480,7 +480,7 @@ module.exports = {
                         const yaw = Math.atan2(-botFacing.x, -botFacing.z)
                         const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
                         const pitch = Math.atan2(botFacing.y, groundDistance)
-                        yield* wrap(bot.bot.look(yaw, pitch, true))
+                        yield* wrap(bot.bot.look(yaw, pitch, bot.instantLook))
                     }
 
                     if (args.interrupt.isCancelled) { return }

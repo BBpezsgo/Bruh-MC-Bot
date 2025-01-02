@@ -1,7 +1,7 @@
 'use strict'
 
 const Minecraft = require('../minecraft')
-const { wrap } = require('../utils/tasks')
+const { wrap, runtimeArgs } = require('../utils/tasks')
 const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
@@ -26,7 +26,7 @@ module.exports = {
             if (args.farmPosition) {
                 yield* goto.task(bot, {
                     dimension: args.farmPosition.dimension,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
             }
 
@@ -52,7 +52,7 @@ module.exports = {
 
                 yield* goto.task(bot, {
                     block: crop,
-                    interrupt: args.interrupt,
+                    ...runtimeArgs(args),
                 })
 
                 if (args.interrupt.isCancelled) { break }

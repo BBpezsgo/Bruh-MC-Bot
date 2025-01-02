@@ -33,7 +33,7 @@ module.exports = {
         /**
          * @type {Record<string, Array<import('prismarine-entity').Entity>>}
          */
-        const grouped = { }
+        const grouped = {}
 
         for (const animal of args.animals) {
             if (animal.metadata[16]) { continue }
@@ -42,93 +42,105 @@ module.exports = {
             if ((Date.now() - breedTime) < (1000 * 60 * 5)) {
                 continue
             }
+            const lock = bot.env.tryLockEntity(bot.username, animal)
+            if (!lock) { continue }
+
             grouped[animal.name] ??= []
             grouped[animal.name].push(animal)
         }
 
         let feeded = 0
 
-        for (const animalType in grouped) {
-            const groupedAnimals = grouped[animalType]
+        try {
+            for (const animalType in grouped) {
+                const groupedAnimals = grouped[animalType]
 
-            if (groupedAnimals.length < 2) {
-                console.warn(`[Bot "${bot.username}"] Too few animals to breed (${groupedAnimals.length}), skipping ...`)
-                continue
-            }
-
-            if (groupedAnimals.length % 2) {
-                console.warn(`[Bot "${bot.username}"] Odd number of animals to breed (${groupedAnimals.length}), will skip one ...`)
-                groupedAnimals.splice(0, 1)
-            }
-
-            const animals = basicRouteSearch(bot.bot.entity.position, groupedAnimals, v => v.position).toArray()
-
-            const foods = animalFoods[animalType]
-            if (!foods) {
-                throw `I don't know what to feed to ${animalType}`
-            }
-
-            let food
-            let foodCount = 0
-
-            for (const _food of foods) {
-                let _foodCount = bot.inventoryItemCount(null, _food)
-
-                if (_foodCount >= animals.length) {
-                    foodCount = _foodCount
-                    food = _food
-                    break
+                if (groupedAnimals.length < 2) {
+                    console.warn(`[Bot "${bot.username}"] Too few animals to breed (${groupedAnimals.length}), skipping ...`)
+                    continue
                 }
 
-                yield* bot.ensureItem({
-                    ...runtimeArgs(args),
-                    item: _food,
-                    count: animals.length,
-                })
-
-                _foodCount = bot.inventoryItemCount(null, _food)
-
-                if (_foodCount >= animals.length) {
-                    foodCount = _foodCount
-                    food = _food
-                    break
+                if (groupedAnimals.length % 2) {
+                    console.warn(`[Bot "${bot.username}"] Odd number of animals to breed (${groupedAnimals.length}), will skip one ...`)
+                    groupedAnimals.splice(0, 1)
                 }
 
-                if (_foodCount > foodCount) {
-                    foodCount = _foodCount
-                    food = _food
+                const animals = basicRouteSearch(bot.bot.entity.position, groupedAnimals, v => v.position).toArray()
+
+                const foods = animalFoods[animalType]
+                if (!foods) {
+                    throw `I don't know what to feed to ${animalType}`
+                }
+
+                let food
+                let foodCount = 0
+
+                for (const _food of foods) {
+                    let _foodCount = bot.inventoryItemCount(null, _food)
+
+                    if (_foodCount >= animals.length) {
+                        foodCount = _foodCount
+                        food = _food
+                        break
+                    }
+
+                    yield* bot.ensureItem({
+                        ...runtimeArgs(args),
+                        item: _food,
+                        count: animals.length,
+                    })
+
+                    _foodCount = bot.inventoryItemCount(null, _food)
+
+                    if (_foodCount >= animals.length) {
+                        foodCount = _foodCount
+                        food = _food
+                        break
+                    }
+
+                    if (_foodCount > foodCount) {
+                        foodCount = _foodCount
+                        food = _food
+                    }
+                }
+
+                if (!food) {
+                    throw `I don't have enough food`
+                }
+
+                if (foodCount < 2) {
+                    throw `I don't have enough ${food} (${foodCount})`
+                }
+
+                if (foodCount < animals.length) {
+                    console.warn(`[Bot "${bot.username}"] I have too few ${food} (${foodCount} and need ${animals.length})`)
+                }
+
+                for (const animal of animals) {
+                    let foodItem = bot.searchInventoryItem(null, food)
+                    if (!foodItem) { continue }
+                    yield* goto.task(bot, {
+                        entity: animal,
+                        distance: 4,
+                        ...runtimeArgs(args),
+                    })
+                    foodItem = bot.searchInventoryItem(null, food)
+                    if (!foodItem) { continue }
+                    if (args.interrupt.isCancelled) { break }
+                    yield* wrap(bot.bot.equip(foodItem, 'hand'))
+                    const distance = Math.entityDistance(bot.bot.entity.position, animal)
+                    if (distance < 4) {
+                        yield* wrap(bot.bot.activateEntity(animal))
+                        bot.env.animalBreedTimes[animal.id] = Date.now()
+                        feeded++
+                        bot.env.unlockEntity(bot.username, animal)
+                    }
                 }
             }
-
-            if (!food) {
-                throw `I don't have enough food`
-            }
-
-            if (foodCount < 2) {
-                throw `I don't have enough ${food} (${foodCount})`
-            }
-
-            if (foodCount < animals.length) {
-                console.warn(`[Bot "${bot.username}"] I have too few ${food} (${foodCount} and need ${animals.length})`)
-            }
-
-            for (const animal of animals) {
-                let foodItem = bot.searchInventoryItem(null, food)
-                if (!foodItem) { continue }
-                yield* goto.task(bot, {
-                    entity: animal,
-                    distance: 4,
-                    interrupt: args.interrupt,
-                })
-                foodItem = bot.searchInventoryItem(null, food)
-                if (!foodItem) { continue }
-                if (args.interrupt.isCancelled) { break }
-                yield* wrap(bot.bot.equip(foodItem, 'hand'))
-                yield* wrap(bot.bot.activateEntity(animal))
-                const distance = Math.entityDistance(bot.bot.entity.position, animal)
-                if (distance < 4) {
-                    bot.env.animalBreedTimes[animal.id] = Date.now()
-                    feeded++
+        } finally {
+            for (const animals of Object.values(grouped)) {
+                for (const animal of animals) {
+                    bot.env.unlockEntity(bot.username, animal)
                 }
             }
         }
