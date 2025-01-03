@@ -27,13 +27,13 @@ const Commands = require('./commands')
 const tasks = require('./tasks')
 const { EntityPose } = require('./entity-metadata')
 const { filterOutEquipment, filterOutItems } = require('./utils/items')
-const Vec3Dimension = require('./vec3-dimension')
+const Vec3Dimension = require('./utils/vec3-dimension')
 const { Vec3 } = require('vec3')
-const Iterable = require('./iterable')
+const Iterable = require('./utils/iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
 const ItemLock = require('./item-lock')
-const CancelledError = require('./cancelled-error')
+const CancelledError = require('./errors/cancelled-error')
 
 //#endregion
 

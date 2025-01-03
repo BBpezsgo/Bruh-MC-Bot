@@ -2,9 +2,9 @@
 
 const { Entity } = require('prismarine-entity')
 const { Vec3 } = require('vec3')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('./vec3-dimension')
 const NBT = require('prismarine-nbt')
-const Iterable = require('../iterable')
+const Iterable = require('./iterable')
 const { Item } = require('prismarine-item')
 
 /**

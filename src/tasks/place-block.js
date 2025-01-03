@@ -4,7 +4,7 @@ const { Vec3 } = require('vec3')
 const { wrap, runtimeArgs } = require('../utils/tasks')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
 
 const interactableBlocks = Object.freeze([

@@ -3,7 +3,7 @@
 const { wrap, waitForEvent, runtimeArgs } = require('../utils/tasks')
 const { NBT2JSON, stringifyItemH } = require('../utils/other')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 const potions = Object.freeze([
     {

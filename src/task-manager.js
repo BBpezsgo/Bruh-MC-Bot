@@ -1,7 +1,7 @@
 'use strict'
 
 const ManagedTask = require('./managed-task')
-const { replacer, reviver } = require('./serializing')
+const { replacer, reviver } = require('./utils/serializing')
 
 /**
  * @exports

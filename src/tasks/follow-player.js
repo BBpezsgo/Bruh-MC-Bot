@@ -3,7 +3,7 @@
 const { sleepG, wrap, race, withInterruption: withCancellation, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const config = require('../config')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<void, {

@@ -2,8 +2,8 @@
 
 const path = require('path')
 const fs = require('fs')
-const { replacer, reviver } = require('./serializing')
-const Vec3Dimension = require('./vec3-dimension')
+const { replacer, reviver } = require('./utils/serializing')
+const Vec3Dimension = require('./utils/vec3-dimension')
 const Dict = require('./utils/dict')
 const { isItemEquals } = require('./utils/other')
 

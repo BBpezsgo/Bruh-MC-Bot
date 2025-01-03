@@ -6,7 +6,7 @@ const goto = require('./goto')
 const hoeing = require('./hoeing')
 const Minecraft = require('../minecraft')
 const { basicRouteSearch, isItemEquals } = require('../utils/other')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 const Freq = require('../utils/freq')
 const { runtimeArgs } = require('../utils/tasks')
 

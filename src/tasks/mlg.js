@@ -2,7 +2,7 @@
 
 const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 const Minecraft = require('../minecraft')
 const { stringifyItem, isItemEquals } = require('../utils/other')
 const { Item } = require('prismarine-item')

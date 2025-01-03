@@ -1,6 +1,6 @@
 'use strict'
 
-const CancelledError = require('./cancelled-error')
+const CancelledError = require('./errors/cancelled-error')
 const Interrupt = require('./utils/interrupt')
 
 /**

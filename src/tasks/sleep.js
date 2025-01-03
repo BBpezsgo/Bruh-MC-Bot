@@ -3,7 +3,7 @@
 const { Block } = require('prismarine-block')
 const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
 
 /**

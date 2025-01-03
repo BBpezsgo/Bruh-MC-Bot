@@ -37,7 +37,7 @@ module.exports = class Iterable {
     }
 
     /**
-     * @returns {import('./task').Task<Array<T>>}
+     * @returns {import('../task').Task<Array<T>>}
      */
     *toArrayAsync() {
         const result = []

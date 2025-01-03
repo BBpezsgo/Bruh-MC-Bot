@@ -6,7 +6,7 @@ const { backNForthSort } = require('../utils/other')
 const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
-const Vec3Dimension = require('../vec3-dimension')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 const hoes = Object.freeze([
     'wooden_hoe',
