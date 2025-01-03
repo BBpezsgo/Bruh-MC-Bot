@@ -1,7 +1,7 @@
 'use strict'
 
 const { wrap, waitForEvent, runtimeArgs } = require('../utils/tasks')
-const { NBT2JSON, stringifyItem } = require('../utils/other')
+const { NBT2JSON, stringifyItemH } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../vec3-dimension')
 
@@ -399,7 +399,7 @@ module.exports = {
             const ingredientSlot = 3
             const fuelSlot = 4
 
-            window = yield* wrap(bot.bot.openBrewingStand(brewingStand))
+            window = yield* wrap(bot.bot.openBrewingStand(brewingStand), args.interrupt)
 
             bottleItem = bot.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
             ingredientItem = bot.inventoryItems(window).filter(v => v.name === recipe.ingredient).first()
@@ -414,10 +414,10 @@ module.exports = {
                     if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
                         let detRes = ''
                         for (const potion of window.potions().filter(Boolean)) {
-                            detRes += `${potion.count > 1 ? potion.count : ''}${stringifyItem(potion)}\n`
+                            detRes += `${potion.count > 1 ? potion.count : ''}${stringifyItemH(potion)}\n`
                         }
                         if (window.ingredientItem()) {
-                            detRes += `${window.ingredientItem().count > 1 ? window.ingredientItem().count : ''}${stringifyItem(window.ingredientItem())}\n`
+                            detRes += `${window.ingredientItem().count > 1 ? window.ingredientItem().count : ''}${stringifyItemH(window.ingredientItem())}\n`
                         }
                         return detRes
                     }
@@ -429,8 +429,8 @@ module.exports = {
                     return null
                 }))
                 if (res?.message) {
-                    if (window.potions().some(Boolean)) yield* wrap(window.takePotions())
-                    if (window.ingredientItem()) yield* wrap(window.takeIngredient())
+                    if (window.potions().some(Boolean)) yield* wrap(window.takePotions(), args.interrupt)
+                    if (window.ingredientItem()) yield* wrap(window.takeIngredient(), args.interrupt)
                 } else {
                     throw `Didn't got a response to my question`
                 }
@@ -439,7 +439,7 @@ module.exports = {
             if (!window.fuel && !window.fuelItem()) {
                 const fuelItem = bot.searchInventoryItem(window, 'blaze_powder')
                 if (!fuelItem) { throw `I have no blaze powder` }
-                yield* wrap(window.putFuel(fuelItem.type, fuelItem.metadata, 1))
+                yield* wrap(window.putFuel(fuelItem.type, fuelItem.metadata, 1), args.interrupt)
             }
 
             yield
@@ -470,9 +470,9 @@ module.exports = {
 
             yield* waitForEvent(window, 'brewingStopped')
 
-            const res = yield* wrap(window.takePotions())
+            const res = yield* wrap(window.takePotions(), args.interrupt)
             if (window.ingredientItem()) {
-                yield* wrap(window.takeIngredient())
+                yield* wrap(window.takeIngredient(), args.interrupt)
             }
 
             if (res.length !== args.count) { throw `Something aint right` }

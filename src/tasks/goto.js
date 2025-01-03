@@ -659,7 +659,7 @@ module.exports = {
                     if (i === retryCount - 1) {
                         console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
                         bot.bot.pathfinder.stop()
-                        if (args.options.savePathError && lastError.name === 'NoPath') bot.memory.theGoalIsUnreachable(_goal)
+                        if (args.options.savePathError && lastError?.name === 'NoPath') bot.memory.theGoalIsUnreachable(_goal)
                         throw `I can't get there`
                     } else {
                         bot.bot.pathfinder.stop()

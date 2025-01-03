@@ -581,12 +581,12 @@ module.exports = {
 
             if (meleeWeapon) {
                 if (!holds || holds.type !== meleeWeapon.item.type) {
-                    yield* wrap(bot.bot.equip(meleeWeapon.item.type, 'hand'))
+                    yield* wrap(bot.bot.equip(meleeWeapon.item.type, 'hand'), args.interrupt)
                     cooldownEndAt = performance.now() + cooldown
                 }
             } else {
                 if (holds) {
-                    yield* wrap(bot.bot.unequip('hand'))
+                    yield* wrap(bot.bot.unequip('hand'), args.interrupt)
                     cooldownEndAt = performance.now() + cooldown
                 }
             }
@@ -772,7 +772,7 @@ module.exports = {
                 searchRadius: 5,
                 sprint: true,
                 movements: bot.restrictedMovements,
-                lookAtTarget: false, // FIXME jumping backward
+                lookAtTarget: true, // FIXME jumping backward
                 retryCount: 0,
             }
             switch (movementState) {
@@ -1123,7 +1123,7 @@ module.exports = {
                         } else {
                             // console.log(`[Bot "${bot.username}"] Attacking with bare hands`)
                             if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
-                                yield* wrap(bot.bot.unequip('hand'))
+                                yield* wrap(bot.bot.unequip('hand'), args.interrupt)
                             }
                         }
                         // console.log(`[Bot "${bot.username}"] Best melee weapon: "${meleeWeapon?.item?.name ?? 'null'}"`)
@@ -1133,7 +1133,7 @@ module.exports = {
                     shield = bot.searchInventoryItem(null, 'shield')
                     if (shield) {
                         if (!bot.holds('shield', true)) {
-                            yield* wrap(bot.bot.equip(shield.type, 'off-hand'))
+                            yield* wrap(bot.bot.equip(shield.type, 'off-hand'), args.interrupt)
                         }
                         bot.bot.lookAt(target.position.offset(0, target.height, 0), true)
                     }
@@ -1205,7 +1205,7 @@ module.exports = {
 
                         movementState = 'none'
 
-                        yield* wrap(bot.bot.equip(weapon.item, 'hand'))
+                        yield* wrap(bot.bot.equip(weapon.item, 'hand'), args.interrupt)
                         // @ts-ignore
                         cooldown = 1 / (bot.bot.entity.attributes['minecraft:generic.attack_speed'] ?? 4)
                         cooldownEndAt = performance.now() + cooldown
@@ -1233,7 +1233,7 @@ module.exports = {
                                 reequipMeleeWeapon = true
                                 continue
                             }
-                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true), args.interrupt)
 
                             if (target && target.isValid) {
                                 bot.activateHand('right')
@@ -1249,7 +1249,7 @@ module.exports = {
                                 continue
                             }
 
-                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true), args.interrupt)
                             if (bot.bot.supportFeature('useItemWithOwnPacket')) {
                                 bot.bot._client.write('use_item', {
                                     hand: 0
@@ -1283,7 +1283,7 @@ module.exports = {
                                 continue
                             }
 
-                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true))
+                            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, true), args.interrupt)
                             bot.deactivateHand()
                             yield* sleepTicks(2)
                             saveMyArrow()

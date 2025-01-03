@@ -165,8 +165,8 @@ module.exports = {
                 throw `Block ${grade.blockInTrayect.displayName} is in the way`
             }
 
-            yield* wrap(bot.bot.equip(fishingRod, 'hand'))
-            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook))
+            yield* wrap(bot.bot.equip(fishingRod, 'hand'), args.interrupt)
+            yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook), args.interrupt)
             yield* sleepG(500)
             args.interrupt.once(interrupt)
             bot.bot.activateItem(false)

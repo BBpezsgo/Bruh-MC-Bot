@@ -1,3 +1,5 @@
+'use strict'
+
 /** @type {import('mineflayer').Plugin} */
 const plugin = function(bot) {
     // @ts-ignore

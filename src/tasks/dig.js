@@ -119,7 +119,7 @@ module.exports = {
                         // console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
                         yield* bot.equip(tool.item.name, 'hand')
                     } else {
-                        yield* wrap(bot.tryUnequip())
+                        yield* wrap(bot.tryUnequip(), args.interrupt)
                     }
 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
@@ -129,7 +129,7 @@ module.exports = {
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
 
                     // console.log(`[Bot "${bot.username}"] Digging ...`)
-                    yield* wrap(bot.bot.dig(current, true))
+                    yield* wrap(bot.bot.dig(current, true), args.interrupt)
                     digged.push({
                         position: current.position.clone(),
                         loot: loot,

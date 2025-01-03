@@ -61,8 +61,8 @@ module.exports = {
 
                         if (args.interrupt.isCancelled) { break }
 
-                        yield* wrap(bot.bot.equip(bucket, 'hand'))
-                        yield* wrap(bot.bot.lookAt(junkBlock.position, bot.instantLook))
+                        yield* wrap(bot.bot.equip(bucket, 'hand'), args.interrupt)
+                        yield* wrap(bot.bot.lookAt(junkBlock.position, bot.instantLook), args.interrupt)
                         bot.bot.activateItem(false)
 
                         bot.memory.mlgJunkBlocks.pop()

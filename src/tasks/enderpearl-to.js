@@ -47,10 +47,10 @@ module.exports = {
             throw `There are blocks (${grade.blockInTrayect.name}) intersecting the trajectory`
         }
 
-        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook))
+        yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook), args.interrupt)
         yield* sleepG(100)
 
-        yield* wrap(bot.bot.equip(enderpearl, 'hand'))
+        yield* wrap(bot.bot.equip(enderpearl, 'hand'), args.interrupt)
         bot.bot.activateItem(false)
 
         const thrownFrom = bot.bot.entity.position.clone()

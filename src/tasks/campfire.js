@@ -99,8 +99,8 @@ module.exports = {
 
                 if (!ingredientItem) { throw `No ingredient` }
 
-                yield* wrap(bot.bot.equip(ingredientItem, 'hand'))
-                yield* wrap(bot.bot.activateBlock(campfire))
+                yield* wrap(bot.bot.equip(ingredientItem, 'hand'), args.interrupt)
+                yield* wrap(bot.bot.activateBlock(campfire), args.interrupt)
                 console.log(`[Bot "${bot.username}"] Item placed on campfire`)
                 placedCount++
             }

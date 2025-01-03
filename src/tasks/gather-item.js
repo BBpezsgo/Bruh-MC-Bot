@@ -9,7 +9,7 @@ const pickupItem = require('./pickup-item')
 const trade = require('./trade')
 const Vec3Dimension = require('../vec3-dimension')
 const bundle = require('../utils/bundle')
-const { Interval, directBlockNeighbors, Timeout, isItemEquals, stringifyItem } = require('../utils/other')
+const { Interval, directBlockNeighbors, Timeout, isItemEquals, stringifyItem, stringifyItemH } = require('../utils/other')
 const giveTo = require('./give-to')
 const dig = require('./dig')
 const smelt = require('./smelt')
@@ -549,7 +549,7 @@ const planners = [
         let locks = []
         if (context.lockItems) {
             debugger
-            const lock = bot.tryLockItems(bot.username, item, needFromInventory)
+            const lock = bot.tryLockItem(bot.username, item, needFromInventory)
             if (!lock) { return null }
             context.localLocks.push(lock)
             locks.push(lock)
@@ -1837,11 +1837,11 @@ function* evaluatePlan(bot, plan, args) {
                             ...runtimeArgs(args),
                         })
                         let itemToFill = bot.searchInventoryItem(null, step.item)
-                        if (!itemToFill) { throw `I have no ${stringifyItem(step.item)}` }
+                        if (!itemToFill) { throw `I have no ${stringifyItemH(step.item)}` }
 
                         itemToFill = yield* bot.equip(itemToFill)
                         const block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
-                        if (!block) { throw `The chunk where I want to fill my ${stringifyItem(itemToFill)} aint loaded` }
+                        if (!block) { throw `The chunk where I want to fill my ${stringifyItemH(itemToFill)} aint loaded` }
 
                         if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
 
@@ -1852,7 +1852,7 @@ function* evaluatePlan(bot, plan, args) {
                                 ...runtimeArgs(args),
                             })
                         }
-                        yield* wrap(bot.lookAtBlock(block, null, bot.instantLook))
+                        yield* wrap(bot.lookAtBlock(block, null, bot.instantLook), args.interrupt)
                         yield* sleepTicks(1)
 
                         bot.bot.activateItem(false)
@@ -1862,7 +1862,7 @@ function* evaluatePlan(bot, plan, args) {
 
                         const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
                         if (filledItemAfter <= filledItemBefore) {
-                            throw `Failed to fill my ${stringifyItem(itemToFill)}`
+                            throw `Failed to fill my ${stringifyItemH(itemToFill)}`
                         }
                         continue
                     }
@@ -1916,9 +1916,9 @@ function* evaluatePlan(bot, plan, args) {
                         if (!toolItem) {
                             throw `I have no ${step.tool}`
                         }
-                        yield* wrap(bot.bot.equip(toolItem, 'hand'))
+                        yield* wrap(bot.bot.equip(toolItem, 'hand'), args.interrupt)
                         yield* sleepTicks()
-                        yield* wrap(bot.bot.activateEntity(entity))
+                        yield* wrap(bot.bot.activateEntity(entity), args.interrupt)
                         yield* sleepTicks()
                         if (step.isDroppingItem) {
                             yield* pickupItem.task(bot, {
@@ -1979,7 +1979,7 @@ function* evaluatePlan(bot, plan, args) {
                             })
                         }
                         checkIngredients()
-                        yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock))
+                        yield* wrap(bot.bot.craft(step.recipe, step.count, tableBlock), args.interrupt)
                         continue
                     }
                     case 'smelt': {
@@ -2003,19 +2003,50 @@ function* evaluatePlan(bot, plan, args) {
                     }
                     case 'request': {
                         for (const lock of step.remoteLocks) {
-                            const result = yield* bot.env.requestItem(lock, 60000, args.task?.priority)
-                            if (!result) { throw `Failed to request item "${lock.item}"` }
-                            yield* sleepG(50)
+                            /** @type {import('../environment')['itemRequests'][0]} */
+                            const request = {
+                                lock: lock,
+                                priority: args.task?.priority,
+                            }
+                            bot.env.itemRequests.push(request)
+
                             try {
-                                yield* pickupItem.task(bot, {
-                                    inAir: true,
-                                    items: [lock.item],
-                                    maxDistance: 4,
-                                    minLifetime: 0,
-                                    ...runtimeArgs(args),
-                                })
-                            } catch (error) {
-                                console.warn(`[Bot "${bot.username}"] Can't pick up the requested item:`, error)
+                                while (true) {
+                                    yield* sleepG(100)
+
+                                    if (request.itemEntity &&
+                                        request.itemEntity.isValid) {
+                                        args.task?.focus()
+                                        try {
+                                            yield* pickupItem.task(bot, {
+                                                item: request.itemEntity,
+                                                ...runtimeArgs(args),
+                                            })
+                                            break
+                                        } catch (error) { }
+                                    }
+
+                                    if (request.status === 'dropped') {
+                                        console.error(`[Bot "${bot.username}"] The requested item is dropped but I aint picked it up`)
+                                        break
+                                    }
+
+                                    if (request.status === 'failed') {
+                                        console.error(`[Bot "${bot.username}"] Failed to receive the requested item`)
+                                        break
+                                    }
+
+                                    if (request.status === 'served') {
+                                        console.error(`[Bot "${bot.username}"] The request looks like served but I didn't picked up the item`)
+                                        break
+                                    }
+
+                                    if (!request.status) {
+                                        args.task?.blur()
+                                    }
+                                }
+                            } finally {
+                                args.task?.focus()
                             }
                             yield* sleepTicks()
                         }
@@ -2038,7 +2069,7 @@ function* evaluatePlan(bot, plan, args) {
                         if (items.length === 0) { throw `Item disappeared from the bundle` }
                         if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
 
-                        const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name))
+                        const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name), args.interrupt)
 
                         if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
                         if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
@@ -2051,12 +2082,12 @@ function* evaluatePlan(bot, plan, args) {
                         let requestPlayer
                         const res1 = yield* wrap(args.response.askYesNo(
                             (step.count === 1) ?
-                                `Can someone give me a ${stringifyItem(step.item)}?` :
-                                `Can someone give me ${step.count} ${stringifyItem(step.item)}?`,
+                                `Can someone give me a ${stringifyItemH(step.item)}?` :
+                                `Can someone give me ${step.count} ${stringifyItemH(step.item)}?`,
                             30000))
                         if (!res1 || !res1.message) { throw `:(` }
 
-                        bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItem(step.item)}`)
+                        bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItemH(step.item)}`)
 
                         let location = bot.env.getPlayerPosition(requestPlayer, 10000)
                         if (!location) {
@@ -2562,12 +2593,12 @@ const def = {
 
             if (_planResult <= 0) {
                 planningRemoteLocks.forEach(v => v.isUnlocked = true)
-                throw `Can't gather ${stringifyItem(bestPlan.item)}`
+                throw `Can't gather ${stringifyItemH(bestPlan.item)}`
             }
 
             if (_planResult < args.count) {
                 planningRemoteLocks.forEach(v => v.isUnlocked = true)
-                throw `I can only gather ${_planResult} ${stringifyItem(bestPlan.item)}`
+                throw `I can only gather ${_planResult} ${stringifyItemH(bestPlan.item)}`
             }
 
             console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${stringifyItem(bestPlan.item)}:`)
@@ -2651,7 +2682,7 @@ const def = {
         if ('plan' in args) {
             return `Gathering something`
         } else {
-            return `Gathering ${args.count} ${[args.item].flat().length > 1 ? 'something' : stringifyItem([args.item].flat()[0])}`
+            return `Gathering ${args.count} ${[args.item].flat().length > 1 ? 'something' : stringifyItemH([args.item].flat()[0])}`
         }
     },
     definition: 'gatherItem',

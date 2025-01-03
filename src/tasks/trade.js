@@ -81,7 +81,7 @@ module.exports = {
                 if (!entity.isValid) { continue }
                 if (entity.name !== 'villager') { continue }
 
-                const villager = yield* wrap(bot.bot.openVillager(args.villager))
+                const villager = yield* wrap(bot.bot.openVillager(args.villager), args.interrupt)
                 while (!villager.trades) { yield }
                 yield
 
@@ -110,7 +110,7 @@ module.exports = {
             throw `This aint a villager`
         }
 
-        const villager = yield* wrap(bot.bot.openVillager(args.villager))
+        const villager = yield* wrap(bot.bot.openVillager(args.villager), args.interrupt)
         while (!villager.trades) { yield }
         yield
 
@@ -131,7 +131,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
                 const have = bot.inventoryItemCount(villager, trade.inputItem1)
                 if (have < trade.inputItem1.count) { break }
-                yield* wrap(bot.bot.trade(villager, tradeIndex, 1))
+                yield* wrap(bot.bot.trade(villager, tradeIndex, 1), args.interrupt)
                 traded++
             }
         } finally {

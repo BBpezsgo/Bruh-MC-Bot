@@ -382,6 +382,44 @@ function stringifyItem(item) {
     if (typeof item === 'string') {
         return item
     } else {
+        let result = item.name
+
+        if (item.name === 'bundle') {
+            const content = require('./bundle').content(item.nbt)
+            if (content.length) {
+                result += `_${content.length}`
+            }
+        } else if (item.nbt) {
+            const nbt = NBT2JSON(item.nbt)
+            if (nbt['Potion']) {
+                const potion = require('../tasks/brew').potions.find(v => [v.name, v.long, v.level2].includes(nbt['Potion']))
+                if (potion) {
+                    result = potion.name
+                    if (nbt['Potion'] === potion.level2) {
+                        result += `_strong`
+                    } else if (nbt['Potion'] === potion.long) {
+                        result += `_long`
+                    }
+                } else {
+                    result += `_${nbt['Potion'].replace('minecraft:', '')}`
+                }
+            } else {
+                result += `_nbt`
+            }
+        }
+
+        return result
+    }
+}
+
+/**
+ * @param {ItemId} item
+ */
+function stringifyItemH(item) {
+    if (!item) { return 'nothing' }
+    if (typeof item === 'string') {
+        return item
+    } else {
         let result = 'displayName' in item ? item.displayName : item.name
 
         if (item.name === 'bundle') {
@@ -403,8 +441,6 @@ function stringifyItem(item) {
                 } else {
                     result += ` (${nbt['Potion'].replace('minecraft:', '')})`
                 }
-            } else {
-                result += ` (+NBT)`
             }
         }
 
@@ -629,6 +665,7 @@ module.exports = {
     spiralIterator,
     sequenceEquals,
     stringifyItem,
+    stringifyItemH,
     isItemEquals,
     resolveEntityAttribute,
 }

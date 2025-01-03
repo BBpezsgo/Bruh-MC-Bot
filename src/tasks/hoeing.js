@@ -62,7 +62,7 @@ module.exports = {
             })
             if (hoeItem) {
                 if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name !== hoeItem.name) {
-                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[hoeItem.name].id, 'hand'))
+                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[hoeItem.name].id, 'hand'), args.interrupt)
                 }
                 return
             } else if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]?.name === hoeItem.name) {
@@ -128,14 +128,14 @@ module.exports = {
             if (args.interrupt.isCancelled) { return 0 }
 
             if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
-                yield* wrap(bot.bot.dig(above, true))
+                yield* wrap(bot.bot.dig(above, true), args.interrupt)
             }
 
             if (args.interrupt.isCancelled) { return 0 }
 
             yield* equipHoe()
             yield
-            yield* wrap(bot.bot.activateBlock(dirt, null, null, true))
+            yield* wrap(bot.bot.activateBlock(dirt, null, null, true), args.interrupt)
             n++
             yield* sleepG(100)
 
@@ -194,7 +194,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
 
                 if (Minecraft.replaceableBlocks[above.name] === 'break') {
-                    yield* wrap(bot.bot.dig(above, true))
+                    yield* wrap(bot.bot.dig(above, true), args.interrupt)
                 }
 
                 if (args.interrupt.isCancelled) { break }
@@ -204,7 +204,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
 
                 yield* sleepG(100)
-                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, true))
+                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, true), args.interrupt)
                 n++
                 yield* sleepG(100)
                 shouldContinue = true

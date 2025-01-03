@@ -111,7 +111,7 @@ module.exports = {
                     return 'ok'
                 }
 
-                yield* wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true))
+                yield* wrap(bot.bot.look(bot.bot.entity.yaw, -Math.PI / 2, true), args.interrupt)
 
                 yield
 
@@ -153,7 +153,7 @@ module.exports = {
                         const bucket = bot.searchInventoryItem(null, 'bucket')
                         if (bucket) {
                             yield* bot.equip(bucket)
-                            yield* wrap(bot.bot.lookAt(junkBlock.position, true))
+                            yield* wrap(bot.bot.lookAt(junkBlock.position, true), args.interrupt)
                             bot.bot.activateItem(false)
                             console.log(`[Bot "${bot.username}"] Water cleared`)
                         } else {
@@ -194,7 +194,7 @@ module.exports = {
                     }
                 } else {
                     console.log(`[Bot "${bot.username}"] [MLG] Placing block ...`)
-                    yield* wrap(bot.bot.placeBlock(reference, new Vec3(0, 1, 0)))
+                    yield* wrap(bot.bot.placeBlock(reference, new Vec3(0, 1, 0)), args.interrupt)
                     didMLG = true
 
                     yield* sleepTicks(2)

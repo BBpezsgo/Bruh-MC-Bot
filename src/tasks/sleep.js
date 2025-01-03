@@ -86,13 +86,13 @@ module.exports = {
 
         if (args.interrupt.isCancelled) { return }
 
-        yield* wrap(bot.bot.sleep(bed))
+        yield* wrap(bot.bot.sleep(bed), args.interrupt)
 
         bot.memory.myBed = new Vec3Dimension(bed.position, bot.dimension)
 
         while (bot.bot.isSleeping) {
             if (args.interrupt.isCancelled) {
-                yield* wrap(bot.bot.wake())
+                yield* wrap(bot.bot.wake(), args.interrupt)
                 break
             }
             yield* sleepG(500)

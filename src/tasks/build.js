@@ -262,16 +262,16 @@ module.exports = {
             itemsToGive.add(itemToGive, 1)
         }
 
-        yield* wrap(bot.commands.sendAsync(`/clear @p`))
+        yield* wrap(bot.commands.sendAsync(`/clear @p`), args.interrupt)
         yield* sleepG(50)
         for (const itemName of itemsToGive.keys) {
-            yield* wrap(bot.commands.sendAsync(`/give @p ${itemName} ${itemsToGive.get(itemName)}`))
+            yield* wrap(bot.commands.sendAsync(`/give @p ${itemName} ${itemsToGive.get(itemName)}`), args.interrupt)
             yield* sleepG(50)
         }
 
         for (const block of blocks) {
             if (bot.bot.blockAt(block.position)?.name !== 'air') {
-                yield* wrap(bot.commands.sendAsync(`/setblock ${block.position.x} ${block.position.y} ${block.position.z} minecraft:air`))
+                yield* wrap(bot.commands.sendAsync(`/setblock ${block.position.x} ${block.position.y} ${block.position.z} minecraft:air`), args.interrupt)
                 yield* sleepG(50)
             }
         }

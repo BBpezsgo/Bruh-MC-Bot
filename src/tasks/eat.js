@@ -29,7 +29,7 @@ module.exports = {
         if (bot.bot.food >= 20 &&
             food.name !== 'chorus_fruit') { return 'full' }
 
-        yield* wrap(bot.bot.equip(food, 'hand'))
+        yield* wrap(bot.bot.equip(food, 'hand'), args.interrupt)
 
         const eatStarted = performance.now()
         const eatTime = (food.name === 'dried_kelp') ? (900 /* 0.865 */) : (1700 /* 1610 */)

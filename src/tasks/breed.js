@@ -127,10 +127,10 @@ module.exports = {
                     foodItem = bot.searchInventoryItem(null, food)
                     if (!foodItem) { continue }
                     if (args.interrupt.isCancelled) { break }
-                    yield* wrap(bot.bot.equip(foodItem, 'hand'))
+                    yield* wrap(bot.bot.equip(foodItem, 'hand'), args.interrupt)
                     const distance = Math.entityDistance(bot.bot.entity.position, animal)
                     if (distance < 4) {
-                        yield* wrap(bot.bot.activateEntity(animal))
+                        yield* wrap(bot.bot.activateEntity(animal), args.interrupt)
                         bot.env.animalBreedTimes[animal.id] = Date.now()
                         feeded++
                         bot.env.unlockEntity(bot.username, animal)

@@ -1,19 +1,19 @@
 'use strict'
 
 const Freq = require('../utils/freq')
-const { stringifyItem, isItemEquals } = require('../utils/other')
+const { stringifyItem, isItemEquals, stringifyItemH } = require('../utils/other')
 const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const ItemLock = require('../item-lock')
 const move = require('./move')
-const { ItemRequest } = require('../environment')
+const pickupItem = require('./pickup-item')
 
 /**
  * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, ({
  *   player: string;
  *   items: ReadonlyArray<{ item: import('../utils/other').ItemId; count: number; } | ItemLock>;
  * } | {
- *   request: import('../environment').ItemRequest;
+ *   request: import('../environment')['itemRequests'][0];
  * }) & {
  *   waitUntilTargetPickedUp?: boolean;
  * }>}
@@ -40,11 +40,13 @@ module.exports = {
 
         if (!canGiveSomething) {
             if (itemsToGive.length === 1) {
-                throw `Don't have ${stringifyItem(itemsToGive[0].item)}`
+                throw `Don't have ${stringifyItemH(itemsToGive[0].item)}`
             } else {
                 throw `Don't have anything`
             }
         }
+
+        if ('request' in args && !args.request.status) args.request.status = 'on-the-way'
 
         /** @type {Array<import('prismarine-entity').Entity>} */
         const droppedItemEntities = []
@@ -63,7 +65,10 @@ module.exports = {
             }
 
             const collectedItem = collected.getDroppedItem()
-            if (!collectedItem) return
+            if (!collectedItem) {
+                if ('request' in args) args.request.status = 'failed'
+                return
+            }
 
             if (collector.username && collector.username === player) {
                 console.log(`[Bot "${bot.username}"] The target picked up the item I just dropped`)
@@ -71,6 +76,7 @@ module.exports = {
             }
 
             if (collector.username && collector.username === bot.username) {
+                if ('request' in args) args.request.status = 'on-the-way'
                 itemsToGive.push({
                     item: collectedItem,
                     count: collectedItem.count,
@@ -81,17 +87,20 @@ module.exports = {
 
             if (collector.username && bots[collector.username] && 'request' in args && isItemEquals(args.request.lock.item, collectedItem)) {
                 const badBot = bots[collector.username]
-                const lock = badBot.tryLockItems(player, collectedItem, collectedItem.count)
-                if (lock) {
-                    console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped so I asked to give it to \"${player}\" ...`)
-                    bot.env.itemRequests.push(new ItemRequest(lock, 10000, args.request.callback, args.request.priority))
+                const lock = badBot.forceLockItem(player, collectedItem, collectedItem.count)
+                if (!lock) {
+                    console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped and it aint want to give it back`)
+                    args.request.status = 'failed'
                 } else {
-                    console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped and it aint want to give it back ...`)
+                    console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped so I asked to give it to \"${player}\" ...`)
+                    args.request.lock = lock
+                    args.request.status = undefined
                 }
                 return
             }
 
             console.warn(`[Bot "${bot.username}"] Someone else picked up the item I just dropped ...`)
+            if ('request' in args) args.request.status = 'failed'
         }
 
         bot.bot.on('playerCollect', onCollect)
@@ -109,6 +118,19 @@ module.exports = {
                     distance: MAX_DISTANCE,
                     ...runtimeArgs(args),
                 })
+
+                while (true) {
+                    const alreadyDroppedItem = pickupItem.getClosestItem(bot, v => isItemEquals(v, itemsToGive[0].item), {
+                        inAir: true,
+                        minLifetime: 0,
+                        alsoLocked: true,
+                        evenIfFull: true,
+                        maxDistance: 4,
+                    })
+                    if (!alreadyDroppedItem) break
+                    yield* sleepTicks()
+                }
+
                 yield* move.task(bot, {
                     goal: {
                         danger: bot.bot.movement.heuristic.new('danger'),
@@ -129,19 +151,24 @@ module.exports = {
                     ...runtimeArgs(args),
                 })
 
-                if (args.interrupt.isCancelled) { return tossedMap }
-
-                yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), bot.instantLook))
-
-                if (args.interrupt.isCancelled) { break }
-
                 const itemToGive = itemsToGive.shift()
 
                 const has = bot.inventoryItemCount(null, itemToGive.item)
-                if (!has) { continue }
+                if (!has) {
+                    if ('request' in args) args.request.status = 'failed'
+                    continue
+                }
+
+                yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), bot.instantLook), args.interrupt)
 
                 const countCanGive = Math.min(has, itemToGive.count)
                 const { tossed, droppedItems } = yield* bot.toss(itemToGive.item, countCanGive)
+
+                if ('request' in args) {
+                    args.request.itemEntity = droppedItems[0]
+                    args.request.status = args.waitUntilTargetPickedUp ? 'dropped' : 'served'
+                }
+
                 droppedItemEntities.push(...droppedItems)
                 if (itemToGive instanceof ItemLock) {
                     itemToGive.count -= tossed
@@ -161,7 +188,7 @@ module.exports = {
 
         if (tossedMap.isEmpty) {
             if (itemsToGiveOriginal.length === 1) {
-                throw `Don't have ${stringifyItem(itemsToGiveOriginal[0].item)}`
+                throw `Don't have ${stringifyItemH(itemsToGiveOriginal[0].item)}`
             } else {
                 throw `Don't have anything`
             }

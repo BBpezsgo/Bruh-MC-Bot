@@ -26,8 +26,8 @@ const waitCompost = function*(bot, composter, args) {
     if (args.interrupt.isCancelled) { return false }
 
     if (Number(composter.getProperties()['level']) === 8) {
-        yield* wrap(bot.bot.unequip('hand'))
-        yield* wrap(bot.bot.activateBlock(composter))
+        yield* wrap(bot.bot.unequip('hand'), args.interrupt)
+        yield* wrap(bot.bot.activateBlock(composter), args.interrupt)
         return true
     }
 
@@ -100,10 +100,10 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { break }
 
-            yield* wrap(bot.bot.equip(item, 'hand'))
+            yield* wrap(bot.bot.equip(item, 'hand'), args.interrupt)
             if (!bot.bot.heldItem) { continue }
 
-            yield* wrap(bot.bot.activateBlock(composter))
+            yield* wrap(bot.bot.activateBlock(composter), args.interrupt)
             composted++
         }
 

@@ -72,65 +72,7 @@ const Freq = require('./utils/freq')
  * }} Fencing
  */
 
-class ItemRequest {
-    /**
-     * @readonly
-     * @type {import('./item-lock')}
-     */
-    lock
-
-    /**
-     * @readonly
-     * @type {number | null | undefined}
-     */
-    priority
-
-    /**
-     * @private @readonly
-     * @type {number}
-     */
-    nevermindAt
-
-    /**
-     * @private
-     * @type {'none' | 'on-the-way' | 'done'}
-     */
-    status
-
-    /**
-     * @readonly
-     * @type {(result: boolean) => void}
-     */
-    callback
-
-    /**
-     * @param {import('./item-lock')} lock
-     * @param {number} timeout
-     * @param {(result: boolean) => void} [callback]
-     * @param {number} [priority]
-     */
-    constructor(lock, timeout, callback, priority) {
-        this.lock = lock
-        this.nevermindAt = performance.now() + timeout
-        this.status = 'none'
-        this.callback = callback
-        this.priority = priority
-    }
-
-    getStatus() {
-        if (this.status !== 'none') { return this.status }
-        if (performance.now() >= this.nevermindAt) { return 'timed-out' }
-        return 'none'
-    }
-
-    onTheWay() {
-        this.status = 'on-the-way'
-    }
-}
-
 module.exports = class Environment {
-    static ItemRequest = ItemRequest
-
     /**
      * @readonly
      * @type {Array<import('./bruh-bot')>}
@@ -223,7 +165,12 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {Array<ItemRequest>}
+     * @type {Array<{
+     *   lock: import('./item-lock');
+     *   priority?: number;
+     *   status?: 'on-the-way' | 'dropped' | 'served' | 'failed';
+     *   itemEntity?: import('prismarine-entity').Entity;
+     * }>}
      */
     itemRequests
 
@@ -523,13 +470,7 @@ module.exports = class Environment {
         if (!this.interval) {
             this.interval = setInterval(() => {
                 this.save()
-                for (let i = this.itemRequests.length - 1; i >= 0; i--) {
-                    if (this.itemRequests[i].getStatus() === 'done' ||
-                        this.itemRequests[i].getStatus() === 'timed-out') {
-                        this.itemRequests[i].lock.isUnlocked = true
-                        this.itemRequests.splice(i, 1)
-                    }
-                }
+                this.purgeItemRequests()
                 if (this.bots.length === 0) {
                     clearInterval(this.interval)
                     this.interval = null
@@ -574,6 +515,14 @@ module.exports = class Environment {
         for (const lock of this.lockedEntities) {
             if (lock.by === bot.bot.username) {
                 lock.isUnlocked = true
+            }
+        }
+    }
+
+    purgeItemRequests() {
+        for (let i = this.itemRequests.length - 1; i >= 0; i--) {
+            if (this.itemRequests[i].status === 'served') {
+                this.itemRequests.splice(i, 1)
             }
         }
     }
@@ -715,7 +664,7 @@ module.exports = class Environment {
                 })
                 if (!villager.isValid) { continue }
 
-                const _villager = yield* wrap(bot.bot.openVillager(villager))
+                const _villager = yield* wrap(bot.bot.openVillager(villager), args.interrupt)
                 while (!_villager.trades) { yield }
                 yield
                 this.addVillager(villager, _villager, bot.dimension)
@@ -1448,33 +1397,6 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {import('./item-lock')} lock
-     * @param {number} timeout
-     * @param {number} [priority]
-     * @returns {import('./task').Task<boolean>}
-     */
-    *requestItem(lock, timeout, priority) {
-        let isDone = false
-        let result = false
-        const request = new ItemRequest(
-            lock,
-            timeout,
-            (_result) => {
-                result = _result
-                isDone = true
-            },
-            priority
-        )
-        this.itemRequests.push(request)
-
-        while (!isDone) {
-            yield
-        }
-
-        return result
-    }
-
-    /**
      * @param {string} requestor
      * @param {string} item
      * @param {number} count
@@ -1484,7 +1406,7 @@ module.exports = class Environment {
         const locks = []
         for (const bot of this.bots) {
             if (bot.username === requestor) { continue }
-            const lock = bot.tryLockItems(requestor, item, count - locked)
+            const lock = bot.tryLockItem(requestor, item, count - locked)
             if (!lock) { continue }
             locked += lock.count
             locks.push(lock)

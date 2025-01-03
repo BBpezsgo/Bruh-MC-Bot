@@ -17,7 +17,7 @@ const MineFlayerMovement = require('mineflayer-movement')
 
 const TaskManager = require('./task-manager')
 const Minecraft = require('./minecraft')
-const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals, stringifyItem } = require('./utils/other')
+const { Interval, parseLocationH, parseYesNoH, Timeout, parseAnyLocationH, isItemEquals, stringifyItem, stringifyItemH } = require('./utils/other')
 const taskUtils = require('./utils/tasks')
 require('./utils/math')
 const Environment = require('./environment')
@@ -623,6 +623,7 @@ module.exports = class BruhBot {
         })
 
         this.bot.on('target_aiming_at_you', (entity, trajectory) => {
+            if (entity.type === 'player') { return } // FIXME: also activates when eating something
             this.tasks.push(this, {
                 task: function*(bot, args) {
                     const goal = {
@@ -1390,8 +1391,8 @@ module.exports = class BruhBot {
                         }
                         this.tasks.push(this, {
                             task: function*(bot, args) {
-                                const res = yield* taskUtils.wrap(args.onNeedYesNo(`I gathered ${result.count} ${stringifyItem(result.item)}, do you need it?`, 10000))
-                                if (!res || res.message === true) {
+                                const res = yield* taskUtils.wrap(args.onNeedYesNo(`I gathered ${result.count} ${stringifyItemH(result.item)}, do you need it?`, 10000))
+                                if (res?.message) {
                                     bot.tasks.push(bot, tasks.giveTo, {
                                         player: sender,
                                         items: [result],
@@ -1450,11 +1451,11 @@ module.exports = class BruhBot {
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
 
                         if (organizedPlan.length === 0 && planResult === 0) {
-                            response.respond(`I can't gather ${stringifyItem(plan.item)}`)
+                            response.respond(`I can't gather ${stringifyItemH(plan.item)}`)
                             return
                         }
 
-                        response.respond(`There is a plan for ${planResult} ${stringifyItem(plan.item)} with a cost of ${planCost}:`)
+                        response.respond(`There is a plan for ${planResult} ${stringifyItemH(plan.item)} with a cost of ${planCost}:`)
                         yield* taskUtils.sleepTicks()
                         for (const step of tasks.gatherItem.stringifyPlan(bot, organizedPlan).split('\n')) {
                             response.respond(` ${step}`)
@@ -1473,7 +1474,7 @@ module.exports = class BruhBot {
                                 for (const name of future.inventory.keys) {
                                     const delta = future.inventory.get(name)
                                     if (delta) {
-                                        response.respond(` ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
+                                        response.respond(` ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItemH(name)}`)
                                         yield* taskUtils.sleepTicks()
                                     }
                                 }
@@ -1492,7 +1493,7 @@ module.exports = class BruhBot {
                                     for (const name of chest.delta.keys) {
                                         const delta = chest.delta.get(name)
                                         if (delta) {
-                                            response.respond(`  ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItem(name)}`)
+                                            response.respond(`  ${delta < 0 ? `${delta}` : `+${delta}`} ${stringifyItemH(name)}`)
                                             yield* taskUtils.sleepTicks()
                                         }
                                     }
@@ -1504,7 +1505,7 @@ module.exports = class BruhBot {
                         return `plan-${args.count}-${args.item.map(v => stringifyItem(v)).join('-')}`
                     },
                     humanReadableId: function(args) {
-                        return `Planning ${args.count} ${args.item.length > 1 ? 'something' : stringifyItem(args.item[0])}`
+                        return `Planning ${args.count} ${args.item.length > 1 ? 'something' : stringifyItemH(args.item[0])}`
                     }
                 }, {
                     item: items,
@@ -1689,7 +1690,7 @@ module.exports = class BruhBot {
                         builder += `${count} `
                     }
 
-                    builder += stringifyItem(item)
+                    builder += stringifyItemH(item)
                 }
 
                 if (builder === '') {
@@ -2004,9 +2005,9 @@ module.exports = class BruhBot {
                     .wait()
                     .then(result => {
                         if (!result.get(item)) {
-                            response.respond(`I don't have ${stringifyItem(item)}`)
+                            response.respond(`I don't have ${stringifyItemH(item)}`)
                         } else if (result.get(item) < count && count !== Infinity) {
-                            response.respond(`I had only ${result.get(item)} ${stringifyItem(item)}`)
+                            response.respond(`I had only ${result.get(item)} ${stringifyItemH(item)}`)
                         } else {
                             response.respond(`There it is`)
                         }
@@ -2335,8 +2336,8 @@ module.exports = class BruhBot {
                             }
                             refBlock = bot.bot.blockAt(bot.bot.entity.position)
                             if (refBlock.name === 'air') {
-                                yield* taskUtils.wrap(bot.bot.lookAt(refBlock.position.offset(0.5, 0.1, 0.5), bot.instantLook))
-                                yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'))
+                                yield* taskUtils.wrap(bot.bot.lookAt(refBlock.position.offset(0.5, 0.1, 0.5), bot.instantLook), args.interrupt)
+                                yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'), args.interrupt)
                                 bot.bot.activateItem(false)
                                 while (bot.bot.entity.metadata[0] & 0x01) {
                                     yield
@@ -2350,8 +2351,8 @@ module.exports = class BruhBot {
                                         maxDistance: 2,
                                     }).filter(Boolean).first()
                                     if (water) {
-                                        yield* taskUtils.wrap(bot.bot.equip(bucketItem, 'hand'))
-                                        yield* taskUtils.wrap(bot.bot.lookAt(water.position.offset(0.5, 0.1, 0.5), bot.instantLook))
+                                        yield* taskUtils.wrap(bot.bot.equip(bucketItem, 'hand'), args.interrupt)
+                                        yield* taskUtils.wrap(bot.bot.lookAt(water.position.offset(0.5, 0.1, 0.5), bot.instantLook), args.interrupt)
                                         bot.bot.activateItem(false)
                                     }
                                 }
@@ -2444,11 +2445,11 @@ module.exports = class BruhBot {
                         const milk = this.searchInventoryItem(null, 'milk_bucket')
                         if (milk) {
                             this.tasks.push(this, {
-                                task: function*(bot) {
+                                task: function*(bot, args) {
                                     const milk = bot.searchInventoryItem(null, 'milk_bucket')
                                     if (!milk) { throw `I have no milk` }
-                                    yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'))
-                                    yield* taskUtils.wrap(bot.bot.consume())
+                                    yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'), args.interrupt)
+                                    yield* taskUtils.wrap(bot.bot.consume(), args.interrupt)
                                 },
                                 id: 'consume-milk',
                             }, {}, priorities.critical - 5, false, null, false)
@@ -2714,33 +2715,30 @@ module.exports = class BruhBot {
 
         for (const request of this.env.itemRequests) {
             if (request.lock.by === this.username) { continue }
-            if (request.getStatus() !== 'none') { continue }
+            if (request.status) { continue }
+            if (!this.lockedItems.some(v => v === request.lock)) { continue }
             if (!this.inventoryItemCount(null, request.lock.item)) { continue }
-            request.onTheWay()
             this.tasks.push(this, {
-                task: function(bot, args) {
+                task: function*(bot, args) {
+                    if (request.status) {
+                        console.log(`[Bot "${bot.username}"] Someone else already serving \"${request.lock.by}\" ...`)
+                        return
+                    }
                     console.log(`[Bot "${bot.username}"] Serving \"${request.lock.by}\" with ${stringifyItem(request.lock.item)} ...`)
-                    return tasks.giveTo.task(bot, args)
+                    yield* tasks.giveTo.task(bot, args)
+                    console.log(`[Bot "${bot.username}"] \"${request.lock.by}\" served with ${stringifyItem(request.lock.item)}`)
                 },
-                id: `serve-${request.lock.by}-${request.lock.item}-${request.lock.count}`,
+                id: `serve-${request.lock.by}-${stringifyItem(request.lock.item)}-${request.lock.count}`,
                 humanReadableId: `Serving ${request.lock.by}`,
             }, {
                 request: request,
                 waitUntilTargetPickedUp: true,
             }, request.priority ?? priorities.otherBots, false, null, false)
                 ?.wait()
-                .then(result => {
-                    console.log(`[Bot "${this.username}"] \"${request.lock.by}\" served with ${stringifyItem(request.lock.item)}`)
-                    const givenCount = result.get(request.lock.item) ?? 0
-                    if (givenCount >= request.lock.count) {
-                        request.callback(true)
-                    } else {
-                        request.callback(false)
-                    }
-                })
                 .catch(reason => {
                     console.error(`[Bot "${this.username}"] Failed to serve \"${request.lock.by}\" with ${stringifyItem(request.lock.item)}:`, reason)
-                    request.callback(false)
+                    request.status = 'failed'
+                    request.lock.isUnlocked = true
                 })
         }
 
@@ -2771,7 +2769,7 @@ module.exports = class BruhBot {
     doSimpleBoredomTasks() {
         if (this.loadCrossbowsInterval.done()) {
             this.tasks.push(this, {
-                task: function*(bot) {
+                task: function*(bot, args) {
                     const crossbows =
                         bot.inventoryItems(null)
                             .filter(v => v.name === 'crossbow')
@@ -2781,7 +2779,7 @@ module.exports = class BruhBot {
                         if (!tasks.attack.isCrossbowCharged(crossbow) &&
                             bot.searchInventoryItem(null, 'arrow')) {
                             const weapon = tasks.attack.resolveRangeWeapon(crossbow)
-                            yield* taskUtils.wrap(bot.bot.equip(crossbow, 'hand'))
+                            yield* taskUtils.wrap(bot.bot.equip(crossbow, 'hand'), args.interrupt)
                             bot.activateHand('right')
                             yield* taskUtils.sleepG(Math.max(100, weapon.chargeTime))
                             bot.deactivateHand()
@@ -3570,7 +3568,7 @@ module.exports = class BruhBot {
      */
     *equip(item, destination = 'hand') {
         const _item = (typeof item === 'object' && 'slot' in item) ? item : this.searchInventoryItem(null, item)
-        if (!_item) { throw `Item ${stringifyItem(item)} not found to equip` }
+        if (!_item) { throw `Item ${stringifyItemH(item)} not found to equip` }
 
         const sourceSlot = _item.slot
         const destSlot = this.bot.getEquipmentDestSlot(destination)
@@ -3605,9 +3603,23 @@ module.exports = class BruhBot {
      * @param {string} by
      * @param {import('./utils/other').ItemId} item
      * @param {number} count
+     * @returns {import('./item-lock')}
+     */
+    forceLockItem(by, item, count) {
+        if (!count) { return null }
+        const lock = new ItemLock(by, item, Math.min(count, count))
+        this.lockedItems.push(lock)
+        // console.log(`[Bot "${this.username}"] Item forcefully ${stringifyItem(item)} locked by ${by}`)
+        return lock
+    }
+
+    /**
+     * @param {string} by
+     * @param {import('./utils/other').ItemId} item
+     * @param {number} count
      * @returns {import('./item-lock') | null}
      */
-    tryLockItems(by, item, count) {
+    tryLockItem(by, item, count) {
         if (!count) { return null }
         const trash = this.getTrashItems().filter(v => isItemEquals(v.item, item))
         if (trash.length === 0) { return null }
@@ -4357,7 +4369,7 @@ module.exports = class BruhBot {
             }
             holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
             if (!holds || !isItemEquals(holds, item)) {
-                throw `I have no ${stringifyItem(item)}`
+                throw `I have no ${stringifyItemH(item)}`
             }
 
             yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
@@ -4371,7 +4383,7 @@ module.exports = class BruhBot {
             }
             holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
             if (!holds || !isItemEquals(holds, item)) {
-                throw `I have no ${stringifyItem(item)}`
+                throw `I have no ${stringifyItemH(item)}`
             }
 
             yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))

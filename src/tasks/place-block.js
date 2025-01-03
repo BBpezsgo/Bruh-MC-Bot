@@ -424,7 +424,7 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { return }
 
-            yield* wrap(bot.bot.dig(blockHere))
+            yield* wrap(bot.bot.dig(blockHere), args.interrupt)
         }
 
         if (!bot.env.allocateBlock(bot.username, blockPosition, 'place', { item: bot.bot.registry.itemsByName[item].id })) {
@@ -468,23 +468,23 @@ module.exports = {
 
                 if (!bot.searchInventoryItem(null, item)) {
                     if (args.cheat) {
-                        yield* wrap(bot.commands.sendAsync(`/give @p ${item}`))
+                        yield* wrap(bot.commands.sendAsync(`/give @p ${item}`), args.interrupt)
                     } else {
                         throw `I don't have ${item}`
                     }
                 }
 
                 try {
-                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'))
+                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'), args.interrupt)
                     if (botFacing) {
                         const yaw = Math.atan2(-botFacing.x, -botFacing.z)
                         const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
                         const pitch = Math.atan2(botFacing.y, groundDistance)
-                        yield* wrap(bot.bot.look(yaw, pitch, bot.instantLook))
+                        yield* wrap(bot.bot.look(yaw, pitch, bot.instantLook), args.interrupt)
                     }
 
                     if (args.interrupt.isCancelled) { return }
-                    yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }))
+                    yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }), args.interrupt)
                     break
                 } catch (error) {
                     if (i === 0) { throw error }

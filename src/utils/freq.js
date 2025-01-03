@@ -129,4 +129,6 @@ module.exports = class Freq {
         }
         return res
     }
+
+    toString() { return `{${this.#entries.slice(0, 5).map(v => `${v.k}: ${v.f}`).join(', ')}}` }
 }

@@ -7,7 +7,7 @@ const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
 const config = require('../config')
 const { Vec3 } = require('vec3')
-const { stringifyItem } = require('../utils/other')
+const { stringifyItemH } = require('../utils/other')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -145,7 +145,7 @@ module.exports = {
         let furnace = null
 
         try {
-            furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock))
+            furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock), args.interrupt)
             furnace.once('close', () => {
                 furnace = null
                 bot.env.unlockBlock(bot.username, blockLock.block)
@@ -167,10 +167,10 @@ module.exports = {
                     if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
                         let detRes = ''
                         if (furnace.inputItem()) {
-                            detRes += `${furnace.inputItem().count > 1 ? furnace.inputItem().count : ''}${stringifyItem(furnace.inputItem())}\n`
+                            detRes += `${furnace.inputItem().count > 1 ? furnace.inputItem().count : ''}${stringifyItemH(furnace.inputItem())}\n`
                         }
                         if (furnace.outputItem()) {
-                            detRes += `${furnace.outputItem().count > 1 ? furnace.outputItem().count : ''}${stringifyItem(furnace.outputItem())}\n`
+                            detRes += `${furnace.outputItem().count > 1 ? furnace.outputItem().count : ''}${stringifyItemH(furnace.outputItem())}\n`
                         }
                         return detRes
                     }
@@ -182,8 +182,8 @@ module.exports = {
                     return null
                 }))
                 if (res?.message) {
-                    if (furnace.inputItem()) yield* wrap(furnace.takeInput())
-                    if (furnace.outputItem()) yield* wrap(furnace.takeOutput())
+                    if (furnace.inputItem()) yield* wrap(furnace.takeInput(), args.interrupt)
+                    if (furnace.outputItem()) yield* wrap(furnace.takeOutput(), args.interrupt)
                 } else {
                     throw `Didn't got a response to my question`
                 }
@@ -200,7 +200,7 @@ module.exports = {
                     if (!ingredientItem) {
                         continue
                     }
-                    yield* wrap(furnace.putInput(ingredientItem.type, null, 1))
+                    yield* wrap(furnace.putInput(ingredientItem.type, null, 1), args.interrupt)
                     break
                 }
 
@@ -218,7 +218,7 @@ module.exports = {
                             if (!have) continue
                             const canPut = have.count - bot.isItemLocked(have)
                             if (canPut > 0) {
-                                yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)))
+                                yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)), args.interrupt)
                                 havePutSomething = true
                                 break
                             }
@@ -230,7 +230,7 @@ module.exports = {
                     yield* sleepTicks(1)
                 }
 
-                const output = yield* wrap(furnace.takeOutput())
+                const output = yield* wrap(furnace.takeOutput(), args.interrupt)
 
                 if (!output) { throw `Failed to smelt item` }
 
@@ -241,8 +241,8 @@ module.exports = {
             return outputs
         } finally {
             if (shouldTakeEverything) {
-                if (furnace.inputItem()) { yield* wrap(furnace.takeInput()) }
-                if (furnace.outputItem()) { yield* wrap(furnace.takeOutput()) }
+                if (furnace.inputItem()) { yield* wrap(furnace.takeInput(), args.interrupt) }
+                if (furnace.outputItem()) { yield* wrap(furnace.takeOutput(), args.interrupt) }
             }
             furnace?.close()
             bot.env.unlockBlock(bot.username, blockLock.block)

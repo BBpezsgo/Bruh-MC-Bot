@@ -34,12 +34,6 @@ function setControlState(bot, args) {
         } else {
             bot.bot.setControlState('sprint', false)
         }
-        /** @type {import('prismarine-world').RaycastResult | null} */
-        const ray = bot.bot.world.raycast(
-            bot.bot.entity.position.offset(0, 0.6, 0),
-            Math.rotationToVectorRad(0, yaw),
-            bot.bot.controlState.sprint ? 2 : 1)
-        if (ray) { bot.bot.jumpQueued = true }
     } else {
         bot.bot.look(yaw, 0, true)
         bot.bot.setControlState('left', false)
@@ -47,13 +41,18 @@ function setControlState(bot, args) {
         bot.bot.setControlState('back', true)
         bot.bot.setControlState('forward', true)
         bot.bot.setControlState('sprint', Boolean(args.sprint))
+    }
 
-        /** @type {import('prismarine-world').RaycastResult | null} */
-        const ray = bot.bot.world.raycast(
-            bot.bot.entity.position.offset(0, 0.6, 0),
-            Math.rotationToVectorRad(0, yaw),
-            bot.bot.controlState.sprint ? 2 : 1)
-        if (ray) { bot.bot.jumpQueued = true }
+    const rotation = Math.rotationToVectorRad(0, yaw)
+    if (bot.bot.world.raycast(
+        bot.bot.entity.position.offset(0, 0.6, 0),
+        rotation,
+        bot.bot.controlState.sprint ? 2 : 1) &&
+        !bot.bot.world.raycast(
+            bot.bot.entity.position.offset(0, 1.6, 0),
+            rotation,
+            bot.bot.controlState.sprint ? 2 : 1)) {
+        bot.bot.jumpQueued = true
     }
 }
 
@@ -71,9 +70,23 @@ module.exports = {
             bot.bot.clearControlStates()
             bot.bot.jumpQueued = false
         })
+
+        let lastPosition = bot.bot.entity.position.clone()
+        let lastPositionChange = performance.now()
+
         while (!args.isDone()) {
             args.update?.(args.goal)
             setControlState(bot, args)
+            if (bot.bot.controlState.forward || bot.bot.controlState.back || bot.bot.controlState.left || bot.bot.controlState.right) {
+                const moved = bot.bot.entity.position.xzDistanceTo(lastPosition)
+                if (moved > 0.01) {
+                    lastPosition = bot.bot.entity.position.clone()
+                    lastPositionChange = performance.now()
+                } else if (performance.now() - lastPositionChange > 1000) {
+                    console.warn(`[Bot "${bot.username}"] Aint look like I'm moving`)
+                    break
+                }
+            }
             yield* sleepTicks()
         }
         bot.bot.clearControlStates()

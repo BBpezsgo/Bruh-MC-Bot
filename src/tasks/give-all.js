@@ -27,7 +27,7 @@ module.exports = {
 
         if (args.interrupt.isCancelled) { return }
 
-        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0), bot.instantLook))
+        yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 1, 0), bot.instantLook), args.interrupt)
 
         let tossedSomething = false
 
@@ -39,7 +39,7 @@ module.exports = {
                 for (const item of items) {
                     if (args.interrupt.isCancelled) { return }
 
-                    yield* wrap(bot.bot.tossStack(item))
+                    yield* wrap(bot.bot.tossStack(item), args.interrupt)
                     tossedSomething = true
                     yield* sleepG(100)
                 }
@@ -62,8 +62,8 @@ module.exports = {
 
             const item = bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot(specialSlot)]
             if (item) {
-                yield* wrap(bot.bot.unequip(specialSlot))
-                yield* wrap(bot.bot.toss(item.type, null, item.count))
+                yield* wrap(bot.bot.unequip(specialSlot), args.interrupt)
+                yield* wrap(bot.bot.toss(item.type, null, item.count), args.interrupt)
                 tossedSomething = true
             }
         }

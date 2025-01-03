@@ -8,13 +8,15 @@ const move = require('./move')
 
 /**
  * @typedef {{
- *   inAir?: boolean;
  *   maxDistance: number;
  *   point?: import('vec3').Vec3;
- *   minLifetime?: number;
  *   items?: ReadonlyArray<import('../utils/other').ItemId>;
+ *   inAir?: boolean;
+ *   minLifetime?: number;
  * } | {
  *   item: import('prismarine-entity').Entity;
+ *   inAir?: boolean;
+ *   minLifetime?: number;
  * }} Args
  */
 
@@ -85,6 +87,24 @@ module.exports = {
 
         const entityLock = bot.env.tryLockEntity(bot.username, nearest)
         if (!entityLock) { throw `Entity is locked` }
+
+        if (args.minLifetime) {
+            while (true) {
+                if (!bot.env.entitySpawnTimes[nearest.id]) break
+                const entityLifetime = performance.now() - bot.env.entitySpawnTimes[nearest.id]
+                if (entityLifetime >= args.minLifetime) break
+                yield* sleepTicks()
+            }
+        }
+
+        if (!args.inAir) {
+            while (true) {
+                if (nearest.onGround) break
+                if (nearest.velocity.distanceTo(new Vec3(0, 0, 0)) <= 0.1) break
+                yield* sleepTicks()
+            }
+
+        }
 
         let isCollected = false
         /**

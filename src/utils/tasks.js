@@ -32,26 +32,21 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 /**
  * @template T
- * @param {Promise<T>} task
- * @param {number} ms
- * @returns {Promise<T>}
- */
-function timeout(task, ms) {
-    const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-            reject('Time Limit Exceeded')
-        }, ms)
-    })
-    return Promise.race([task, timeoutPromise])
-}
-
-/**
- * @template T
  * @param {Promise<T> | (() => Promise<T>)} promise
+ * @param {import('./interrupt') | null} [interrupt=null]
  * @returns {import('../task').Task<T>}
  */
-function* wrap(promise) {
+function* wrap(promise, interrupt = null) {
     if (typeof promise === 'function') { promise = promise() }
+
+    const onInterrupt = (/** @type {'cancel' | 'interrupt'} */ type) => {
+        if (type === 'cancel') {
+            console.warn(`Task interrupted while a promise is running`)
+            interrupt?.off(onInterrupt)
+        }
+    }
+
+    interrupt?.on(onInterrupt)
 
     let isDone = false
     /** @type {any | undefined} */
@@ -66,6 +61,8 @@ function* wrap(promise) {
     while (!isDone) {
         yield
     }
+
+    interrupt?.off(onInterrupt)
 
     if (error) {
         throw error
@@ -99,15 +96,6 @@ function* waitForEvent(emitter, event, interrupt = null) {
         yield
     }
     return args
-}
-
-/**
- * @template T
- * @param {T} result
- * @returns {import('../task').Task<T>}
- */
-function* finished(result) {
-    return result
 }
 
 /**
@@ -231,9 +219,7 @@ function runtimeArgs(args) {
 module.exports = {
     sleepG,
     sleep,
-    timeout,
     wrap,
-    finished,
     waitForEvent,
     sleepTicks,
     parallelAll,
