@@ -92,7 +92,7 @@ module.exports = {
                     console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped and it aint want to give it back`)
                     args.request.status = 'failed'
                 } else {
-                    console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped so I asked to give it to \"${player}\" ...`)
+                    console.log(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped so I asked to give it to \"${player}\" ...`)
                     args.request.lock = lock
                     args.request.status = undefined
                 }
@@ -107,49 +107,58 @@ module.exports = {
 
         try {
             while (itemsToGive.length > 0) {
-                const target = bot.env.getPlayerPosition(player)
-                if (!target) { throw `Can't find ${player}` }
-
-                const MAX_DISTANCE = 3
-                const MIN_DISTANCE = 2
-
-                yield* goto.task(bot, {
-                    point: target,
-                    distance: MAX_DISTANCE,
-                    ...runtimeArgs(args),
-                })
+                /** @type {import('../utils/vec3-dimension')} */
+                let target = null
 
                 while (true) {
+                    yield
+
+                    target = bot.env.getPlayerPosition(player)
+                    if (!target) { throw `Can't find ${player}` }
+                    const MAX_DISTANCE = 3
+                    const MIN_DISTANCE = 2
+
+                    if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE + 1) {
+                        yield* goto.task(bot, {
+                            point: target,
+                            distance: MAX_DISTANCE,
+                            ...runtimeArgs(args),
+                        })
+                    }
+
                     const alreadyDroppedItem = pickupItem.getClosestItem(bot, v => isItemEquals(v, itemsToGive[0].item), {
                         inAir: true,
                         minLifetime: 0,
                         alsoLocked: true,
                         evenIfFull: true,
                         maxDistance: 4,
+                        point: target.xyz(bot.dimension),
                     })
-                    if (!alreadyDroppedItem) break
-                    yield* sleepTicks()
-                }
+                    if (alreadyDroppedItem) continue
 
-                yield* move.task(bot, {
-                    goal: {
-                        danger: bot.bot.movement.heuristic.new('danger'),
-                        distance: bot.bot.movement.heuristic.new('distance'),
-                        proximity: bot.bot.movement.heuristic.new('proximity'),
-                    },
-                    update: (goal) => {
-                        const d = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
-                        goal.proximity
-                            .target(target.xyz(bot.dimension))
-                            .avoid(d <= MIN_DISTANCE)
-                    },
-                    isDone: () => {
-                        const d = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
-                        return d < MAX_DISTANCE && d > MIN_DISTANCE
-                    },
-                    freemotion: true,
-                    ...runtimeArgs(args),
-                })
+                    if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE + 1) continue
+
+                    yield* move.task(bot, {
+                        goal: {
+                            danger: bot.bot.movement.heuristic.new('danger'),
+                            distance: bot.bot.movement.heuristic.new('distance'),
+                            proximity: bot.bot.movement.heuristic.new('proximity'),
+                        },
+                        update: (goal) => {
+                            const d = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
+                            goal.proximity
+                                .target(target.xyz(bot.dimension))
+                                .avoid(d <= MIN_DISTANCE)
+                        },
+                        isDone: () => {
+                            const d = bot.bot.entity.position.distanceTo(target.xyz(bot.dimension))
+                            return d < MAX_DISTANCE && d > MIN_DISTANCE
+                        },
+                        freemotion: true,
+                        ...runtimeArgs(args),
+                    })
+                    break
+                }
 
                 const itemToGive = itemsToGive.shift()
 

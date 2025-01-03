@@ -154,7 +154,7 @@ class ManagedTask {
      * @param {import('./task-manager').Priority<TArgs>} priority
      * @param {import('./task').CommonArgs<TArgs>} args
      * @param {import('./bruh-bot')} bot
-     * @param {import('./task').TaskDef<TResult, TArgs, any>} def
+     * @param {import('./task').TaskDef<TResult, TArgs, {}>} def
      * @param {boolean} save
      * @param {string | null} byPlayer
      * @param {boolean} isWhispered

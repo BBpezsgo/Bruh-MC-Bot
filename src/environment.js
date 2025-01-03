@@ -438,7 +438,9 @@ module.exports = class Environment {
             setTimeout(() => {
                 let closest = null
                 let closestD = Infinity
+                const now = performance.now()
                 for (const playerDeath of this.playerDeaths) {
+                    if (now - playerDeath.time > 2000) continue
                     if (playerDeath.position.dimension !== bot.dimension) continue
                     const d = playerDeath.position.xyz(bot.dimension).distanceTo(entity.position)
                     if (d < closestD) {
@@ -1099,7 +1101,7 @@ module.exports = class Environment {
         if (saved) {
             if (maxAge) {
                 const age = Date.now() - saved.time
-                if (maxAge < age) {
+                if (age > maxAge) {
                     return null
                 }
             }
