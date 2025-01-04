@@ -901,10 +901,12 @@ module.exports = class BruhBot {
 
         this.bot.on('entityMoved', (entity) => {
             entity.time = performance.now()
+            if (!entity.spawnPosition) entity.spawnPosition = entity.position.clone()
         })
 
         this.bot.on('entitySpawn', (entity) => {
             entity.time = performance.now()
+            entity.spawnPosition = entity.position.clone()
         })
 
         this.bot.on('entityDead', (entity) => {
@@ -913,6 +915,24 @@ module.exports = class BruhBot {
 
         this.bot.on('entityGone', (entity) => {
             entity.isValid = false
+        })
+
+        this.bot.on('entitySpawn', (entity) => {
+            if (entity.name !== 'eye_of_ender') return
+        })
+
+        this.bot.on('entityGone', (entity) => {
+            if (entity.name !== 'eye_of_ender') return
+            const a = entity.spawnPosition
+            const b = entity.position
+            const direction = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z)
+            const yaw = Math.atan2(-direction.x, -direction.z)
+            require('./stronghold')(this.env.enderPearlThrows, {
+                x: a.x,
+                y: a.y,
+                z: a.z,
+                angle: yaw,
+            }, makeResponseHandler(`BB_vagyok`, this.bot.chat))
         })
 
         /**

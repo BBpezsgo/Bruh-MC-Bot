@@ -20,5 +20,6 @@ declare module 'prismarine-entity' {
     interface Entity {
         readonly metadata: EntityMetadata
         time?: number
+        spawnPosition?: import('vec3').Vec3
     }
 }

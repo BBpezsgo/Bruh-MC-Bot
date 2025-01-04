@@ -192,6 +192,12 @@ module.exports = class Environment {
     playerDeaths
 
     /**
+     * @readonly
+     * @type {Array<import('./stronghold').EnderPearlThrow>}
+     */
+    enderPearlThrows
+
+    /**
      * @param {string} filePath
      */
     constructor(filePath) {
@@ -213,6 +219,7 @@ module.exports = class Environment {
         this.lockedBlocks = []
         this.lockedEntities = []
         this.playerDeaths = []
+        this.enderPearlThrows = []
 
         if (!fs.existsSync(this.filePath)) {
             console.log(`[Environment] File not found at "${this.filePath}"`)
