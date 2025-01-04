@@ -12,6 +12,7 @@ const TextDisplay = require('../debug/text-display')
 const Debug = require('../debug/debug')
 const { resolveEntityAttribute } = require('../utils/other')
 const config = require('../config')
+const projectilRadar = require('minecrafthawkeye/dist/projectilRadar')
 
 /**
  * @typedef {{
@@ -1186,7 +1187,15 @@ module.exports = {
                         deactivateShield(shield)
 
                         let grade = getGrade()
-                        if (!grade || grade.blockInTrayect) {
+                        if ((() => {
+                            if (!grade) return true
+                            if (!grade.blockInTrayect) return true
+                            if (projectilRadar.trajectoryCollisions(grade.arrowTrajectoryPoints, Object.values(bot.bot.players).map(v => v.entity).filter(v => v.id !== target.id))) {
+                                console.warn(`[Bot "${bot.username}"] Someone in my way so aint shooting arrow ...`)
+                                return true
+                            }
+                            return false
+                        })()) {
                             // console.log(`[Bot "${bot.username}"] Target too far away, moving closer ...`)
                             // yield* goto.task(bot, {
                             //     entity: target,
