@@ -110,14 +110,18 @@ module.exports = {
                     yield* goto.task(bot, {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
-                        sprint: distance > 10,
+                        options: {
+                            sprint: distance > 10,
+                        },
                         ...runtimeArgs(args),
                     })
                 } else {
                     yield* goto.task(bot, {
                         point: target,
                         distance: args.range,
-                        sprint: distance > 10,
+                        options: {
+                            sprint: distance > 10,
+                        },
                         ...runtimeArgs(args),
                     })
                 }

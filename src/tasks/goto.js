@@ -180,12 +180,11 @@ class GoalEntity extends goals.Goal {
 /**
  * @exports @typedef {{
  *   goal: {
- *     heuristic?: (node: Vec3) => number;
+ *     heuristic: (node: Vec3) => number;
  *     isEnd: (node: Vec3) => boolean;
  *     hasChanged?: () => boolean;
  *     isValid?: () => boolean;
  *   };
- *   options: GeneralArgs;
  * }} GoalArgs
  */
 
@@ -369,7 +368,7 @@ function setOptions(bot, args) {
     } else {
         bot.bot.pathfinder.searchRadius = Infinity
     }
-    bot.bot.pathfinder.tickTimeout = 20
+    bot.bot.pathfinder.tickTimeout = 10
     bot.bot.pathfinder.enablePathShortcut = true
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
@@ -398,7 +397,6 @@ function setOptions(bot, args) {
     }
 
     bot.bot.pathfinder.setMovements(newMovements)
-    bot.bot.pathfinder.tickTimeout = 10
 }
 
 /**
@@ -423,11 +421,9 @@ function getTime(movements, path) {
 /**
  * @type {import('../task').TaskDef<'ok' | 'here',
  * (
- *   (
- *     (
- *       GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs
- *     ) & GeneralArgs
- *   ) | GoalArgs
+ *   (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs | GoalArgs) & {
+ *     options?: GeneralArgs;
+ *   }
  * ) & {
  *   onPathUpdated?: (path: import('mineflayer-pathfinder').PartiallyComputedPath) => void;
  *   onPathReset?: (reason: 'goal_updated' | 'movements_updated' | 'block_updated' | 'chunk_loaded' | 'goal_moved' | 'dig_error' | 'no_scaffolding_blocks' | 'place_error' | 'stuck') => void;
@@ -441,12 +437,10 @@ function getTime(movements, path) {
  * }}
  */
 module.exports = {
-    /**
-     * @throws {Error} `NoPath`, `Timeout`, `GoalChanged`, `PathStopped`
-     */
     task: function*(bot, args) {
         if (args.onPathUpdated) { bot.bot.on('path_update', args.onPathUpdated) }
         if (args.onPathReset) { bot.bot.on('path_reset', args.onPathReset) }
+        args.options ??= {}
         try {
             if ('dimension' in args) {
                 let remainingTravels = 3
@@ -471,7 +465,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -492,7 +488,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -523,7 +521,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -544,7 +544,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -569,7 +571,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -593,7 +597,9 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            movements: movements,
+                                            options: {
+                                                movements: movements,
+                                            },
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -614,12 +620,6 @@ module.exports = {
                 const _goal = args.goal
                 _goal.hasChanged ??= () => false
                 _goal.isValid ??= () => true
-                _goal.heuristic ??= (node) => {
-                    const dx = bot.bot.entity.position.x - node.x
-                    const dy = bot.bot.entity.position.y - node.y
-                    const dz = bot.bot.entity.position.z - node.z
-                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                }
 
                 if (args.options.savePathError && bot.memory.isGoalUnreachable(_goal)) { throw `If I remember correctly I can't get there` }
 
@@ -676,12 +676,13 @@ module.exports = {
                     if ('dimension' in _goal) {
                         result = yield* this.task(bot, {
                             ..._goal,
+                            options: args.options,
                             ...runtimeArgs(args),
                         })
                     } else {
                         result = yield* this.task(bot, {
                             goal: _goal,
-                            options: args,
+                            options: args.options,
                             ...runtimeArgs(args),
                         })
                     }

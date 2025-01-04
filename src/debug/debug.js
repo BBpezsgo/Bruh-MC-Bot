@@ -6,6 +6,23 @@ const BlockDisplay = require('./block-display')
 const ItemDisplay = require('./item-display')
 
 /**
+ * @typedef {[number, number, number, number]} Quaternion
+ */
+
+/**
+ * @typedef {[number, number, number]} SimpleVector3
+ */
+
+/**
+ * @typedef {[
+ *   number, number, number, number,
+ *   number, number, number, number,
+ *   number, number, number, number,
+ *   number, number, number, number,
+ * ]} Matrix4x4
+ */
+
+/**
  * @typedef {{
  *   billboard?: 'fixed' | 'vertical' | 'horizontal' | 'center';
  *   brightness?: {
@@ -21,6 +38,12 @@ const ItemDisplay = require('./item-display')
  *   shadow_radius?: number;
  *   shadow_strength?: number;
  *   view_range?: number;
+ *   transformation?: Matrix4x4 | {
+ *     right_rotation: Quaternion | { angle: number; axis: SimpleVector3; };
+ *     scale: SimpleVector3;
+ *     left_rotation: Quaternion | { angle: number; axis: SimpleVector3; };
+ *     translation: SimpleVector3;
+ *   }
  * }} DisplayEntityData
  */
 
@@ -268,6 +291,82 @@ module.exports = class Debug {
     /**
      * @template {Point3} TPoint
      * @param {ReadonlyArray<TPoint>} points
+     * @param {'white' | 'light_gray' | 'gray' | 'black' | 'brown' | 'red' | 'orange' | 'yellow' | 'lime' | 'green' | 'cyan' | 'light_blue' | 'blue' | 'purple' | 'magenta' | 'pink'} color
+     * @param {number} time
+     * @param {number} [thickness]
+     */
+    drawSolidLines(points, color, time, thickness = 0.05) {
+        if (!Debug.enabled) { return }
+        for (let i = 1; i < points.length; i++) {
+            this.drawSolidLine(points[i - 1], points[i], color, time, thickness)
+        }
+    }
+
+    /**
+     * @param {Point3} a
+     * @param {Point3} b
+     * @param {'white' | 'light_gray' | 'gray' | 'black' | 'brown' | 'red' | 'orange' | 'yellow' | 'lime' | 'green' | 'cyan' | 'light_blue' | 'blue' | 'purple' | 'magenta' | 'pink'} color
+     * @param {number} time
+     * @param {number} [thickness]
+     */
+    drawSolidLine(a, b, color, time, thickness = 0.05) {
+        if (!Debug.enabled) { return }
+        const target = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z).normalize()
+        const forward = new Vec3(0, 0, 1)
+        const distance = Math.distance(a, b)
+
+        /** @type {BlockDisplayEntityData} */
+        const data = {
+            block_state: { Name: color + '_wool' },
+        }
+
+        if (forward.equals(target)) {
+            data.transformation = {
+                right_rotation: [0, 0, 0, 1],
+                left_rotation: [0, 0, 0, 1],
+                scale: [thickness, thickness, distance],
+                translation: [thickness / 2, thickness / 2, thickness / 2],
+            }
+        } else {
+            if (target.equals(new Vec3(0, 0, -1))) {
+                forward.z = -1
+                const axis = forward.cross(target).normalize()
+                const theta = Math.acos(forward.dot(target))
+                data.transformation = {
+                    right_rotation: [0, 0, 0, 1],
+                    left_rotation: { angle: theta, axis: [axis.x, axis.y, axis.z] },
+                    scale: [thickness, thickness, distance],
+                    translation: [thickness / 2, thickness / 2, -(distance + thickness / 2)],
+                }
+            } else {
+                const axis = forward.cross(target).normalize()
+                const theta = Math.acos(forward.dot(target))
+                data.transformation = {
+                    right_rotation: [0, 0, 0, 1],
+                    left_rotation: { angle: theta, axis: [axis.x, axis.y, axis.z] },
+                    scale: [thickness, thickness, distance],
+                    translation: [thickness / 2, thickness / 2, thickness / 2],
+                }
+            }
+        }
+
+        for (const other of Object.values(BlockDisplay.registry)) {
+            if (other.equals({ _options: data, _position: new Vec3(a.x, a.y, a.z) })) {
+                other.touch()
+                return
+            }
+        }
+
+        new BlockDisplay(this._bot.commands, {
+            data: data,
+            position: a,
+            maxIdleTime: time,
+        })
+    }
+
+    /**
+     * @template {Point3} TPoint
+     * @param {ReadonlyArray<TPoint>} points
      * @param {Color} color
      */
     drawPoints(points, color) {
@@ -287,6 +386,7 @@ module.exports = class Debug {
     label(point, text, time = 30000, tags = []) {
         if (!Debug.enabled) { return null }
 
+        // @ts-ignore
         return new TextDisplay(this._bot.commands, {
             data: {
                 billboard: 'center',
@@ -304,15 +404,28 @@ module.exports = class Debug {
      * @param {string | BlockDisplayEntityData['block_state']} block
      * @param {number} [time]
      * @param {Array<string>} [tags]
+     * @param {DisplayEntityData['transformation']} [transformation]
      * @returns {(typeof Debug)['enabled'] extends true ? BlockDisplay : null}
      */
-    block(point, block, time = 30000, tags = []) {
+    block(point, block, time = 30000, tags = [], transformation = undefined) {
         if (!Debug.enabled) { return null }
 
+        const data = {
+            block_state: (typeof block === 'string') ? { Name: block } : block,
+            transformation: transformation,
+        }
+
+        for (const other of Object.values(BlockDisplay.registry)) {
+            if (other.equals({ _options: data, _position: new Vec3(point.x, point.y, point.z) })) {
+                other.touch()
+                // @ts-ignore
+                return other
+            }
+        }
+
+        // @ts-ignore
         return new BlockDisplay(this._bot.commands, {
-            data: {
-                block_state: (typeof block === 'string') ? { Name: block } : block,
-            },
+            data: data,
             position: point,
             maxIdleTime: time,
             tags: tags,
@@ -329,6 +442,7 @@ module.exports = class Debug {
     item(point, item, time = 30000, tags = []) {
         if (!Debug.enabled) { return null }
 
+        // @ts-ignore
         return new ItemDisplay(this._bot.commands, {
             data: {
                 item: {

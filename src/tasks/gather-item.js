@@ -124,7 +124,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  *   };
  *   'request': {
  *     type: 'request';
- *     remoteLocks: ReadonlyArray<import('../item-lock')>;
+ *     remoteLock: import('../item-lock');
  *   };
  *   'trade': {
  *     type: 'trade';
@@ -431,10 +431,8 @@ function planResult(plan, item) {
                 continue
             }
             if (step.type === 'request') {
-                for (const lock of step.remoteLocks) {
-                    if (!isItemEquals(lock.item, item)) { continue }
-                    count += lock.count
-                }
+                if (!isItemEquals(step.remoteLock.item, item)) { continue }
+                count += step.remoteLock.count
                 continue
             }
             if (step.type === 'request-from-anyone' &&
@@ -507,9 +505,7 @@ function unlockPlanItems(plan) {
         if ('locks' in step) for (const lock of step.locks) {
             lock.isUnlocked = true
         }
-        if ('remoteLocks' in step) for (const lock of step.remoteLocks) {
-            lock.isUnlocked = true
-        }
+        if ('remoteLock' in step) step.remoteLock.isUnlocked = true
     }
 }
 
@@ -630,10 +626,10 @@ const planners = [
         if (locked.length === 0) { return null }
 
         context.remoteLocks.push(...locked)
-        return {
+        return locked.map(lock => ({
             type: 'request',
-            remoteLocks: locked,
-        }
+            remoteLock: lock,
+        }))
     },
     function*(bot, item, count, permissions, context, planSoFar) {
         const _depthPrefix = ' '.repeat(context.depth)
@@ -2002,54 +1998,52 @@ function* evaluatePlan(bot, plan, args) {
                         continue
                     }
                     case 'request': {
-                        for (const lock of step.remoteLocks) {
-                            /** @type {import('../environment')['itemRequests'][0]} */
-                            const request = {
-                                lock: lock,
-                                priority: args.task?.priority,
-                            }
-                            bot.env.itemRequests.push(request)
-
-                            try {
-                                while (true) {
-                                    yield* sleepG(100)
-
-                                    if (request.itemEntity &&
-                                        request.itemEntity.isValid) {
-                                        args.task?.focus()
-                                        try {
-                                            yield* pickupItem.task(bot, {
-                                                item: request.itemEntity,
-                                                ...runtimeArgs(args),
-                                            })
-                                            break
-                                        } catch (error) { }
-                                    }
-
-                                    if (request.status === 'dropped') {
-                                        console.error(`[Bot "${bot.username}"] The requested item is dropped but I aint picked it up`)
-                                        break
-                                    }
-
-                                    if (request.status === 'failed') {
-                                        console.error(`[Bot "${bot.username}"] Failed to receive the requested item`)
-                                        break
-                                    }
-
-                                    if (request.status === 'served') {
-                                        console.error(`[Bot "${bot.username}"] The request looks like served but I didn't picked up the item`)
-                                        break
-                                    }
-
-                                    if (!request.status) {
-                                        args.task?.blur()
-                                    }
-                                }
-                            } finally {
-                                args.task?.focus()
-                            }
-                            yield* sleepTicks()
+                        /** @type {import('../environment')['itemRequests'][0]} */
+                        const request = {
+                            lock: step.remoteLock,
+                            priority: args.task?.priority,
                         }
+                        bot.env.itemRequests.push(request)
+
+                        try {
+                            while (true) {
+                                yield* sleepG(100)
+
+                                if (request.itemEntity &&
+                                    request.itemEntity.isValid) {
+                                    args.task?.focus()
+                                    try {
+                                        yield* pickupItem.task(bot, {
+                                            item: request.itemEntity,
+                                            ...runtimeArgs(args),
+                                        })
+                                        break
+                                    } catch (error) { }
+                                }
+
+                                if (request.status === 'dropped') {
+                                    console.error(`[Bot "${bot.username}"] The requested item is dropped but I aint picked it up`)
+                                    break
+                                }
+
+                                if (request.status === 'failed') {
+                                    console.error(`[Bot "${bot.username}"] Failed to receive the requested item`)
+                                    break
+                                }
+
+                                if (request.status === 'served') {
+                                    console.error(`[Bot "${bot.username}"] The request looks like served but I didn't picked up the item`)
+                                    break
+                                }
+
+                                if (!request.status) {
+                                    args.task?.blur()
+                                }
+                            }
+                        } finally {
+                            args.task?.focus()
+                        }
+                        yield* sleepTicks()
                         continue
                     }
                     case 'trade': {
@@ -2103,7 +2097,9 @@ function* evaluatePlan(bot, plan, args) {
                         yield* goto.task(bot, {
                             point: location,
                             distance: 1,
-                            timeout: 30000,
+                            options: {
+                                timeout: 30000,
+                            },
                             ...runtimeArgs(args),
                         })
 
@@ -2323,7 +2319,7 @@ function stringifyPlan(bot, plan) {
                 break
             }
             case 'request': {
-                builder += `Request item from others`
+                builder += `Request ${step.remoteLock.count} ${stringifyItem(step.remoteLock.item)} from someone`
                 break
             }
             case 'trade': {
@@ -2530,10 +2526,10 @@ const def = {
             }
 
             console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
-            unlockPlanItems(_organizedPlan)
+            _organizedPlan.filter(v => 'locks' in v).map(v => v.locks).flat().forEach(v => v.isUnlocked = true)
             const locks = lockPlanItems(bot, _organizedPlan)
             bot.lockedItems.push(...locks)
-            locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.remoteLocks).flat())
+            locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.remoteLock))
             /** @param {'interrupt' | 'cancel'} type */
             const cleanup = (type) => {
                 if (type !== 'cancel') { return }
@@ -2644,7 +2640,7 @@ const def = {
             const locks = lockPlanItems(bot, _organizedPlan)
             locks.push(new ItemLock(bot.username, bestPlan.item, args.count))
             bot.lockedItems.push(...locks)
-            locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.remoteLocks).flat())
+            locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.remoteLock))
             /** @param {'interrupt' | 'cancel'} type */
             const cleanup = (type) => {
                 if (type !== 'cancel') { return }

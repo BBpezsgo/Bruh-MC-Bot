@@ -111,7 +111,9 @@ module.exports = {
                     // console.log(`[Bot "${bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
                         block: current.position,
-                        movements: bot.cutTreeMovements,
+                        options: {
+                            movements: bot.cutTreeMovements,
+                        },
                         ...runtimeArgs(args),
                     })
 

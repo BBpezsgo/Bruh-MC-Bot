@@ -1817,8 +1817,10 @@ module.exports = class BruhBot {
                                         point: location,
                                     }),
                                     distance: 2,
-                                    timeout: 30000,
-                                    sprint: true,
+                                    options: {
+                                        timeout: 30000,
+                                        sprint: true,
+                                    },
                                     // onPathUpdated: (path) => {
                                     //     const time = tasks.goto.getTime(bot.bot.pathfinder.movements, path)
                                     //     response.respond(`I'm here in ${Math.round((time) / 1000).toFixed(2)} seconds`)
@@ -2041,7 +2043,9 @@ module.exports = class BruhBot {
                         this.tasks.push(this, tasks.goto, {
                             entity: location,
                             distance: 3,
-                            sprint: true,
+                            options: {
+                                sprint: true,
+                            },
                         }, priorities.user, false, sender, isWhispered)
                             ?.wait()
                             .then(result => result === 'here' ? response.respond(`I'm already at ${rawLocation}`) : response.respond(`I'm here`))
@@ -2051,7 +2055,9 @@ module.exports = class BruhBot {
                         this.tasks.push(this, tasks.goto, {
                             point: location,
                             distance: 3,
-                            sprint: true,
+                            options: {
+                                sprint: true,
+                            },
                         }, priorities.user, false, sender, isWhispered)
                             ?.wait()
                             .then(result => result === 'here' ? response.respond(`I'm already here`) : response.respond(`I'm here`))
@@ -2222,9 +2228,11 @@ module.exports = class BruhBot {
                 this.tasks.push(this, tasks.goto, {
                     flee: explodingCreeper,
                     distance: 8,
-                    timeout: 300,
-                    sprint: true,
-                    retryCount: 10,
+                    options: {
+                        timeout: 300,
+                        sprint: true,
+                        retryCount: 10,
+                    },
                 }, priorities.critical, false, null, false)
                 return
             }
@@ -2234,8 +2242,10 @@ module.exports = class BruhBot {
                 this.tasks.push(this, tasks.goto, {
                     flee: creeper,
                     distance: 8,
-                    timeout: 300,
-                    sprint: true,
+                    options: {
+                        timeout: 300,
+                        sprint: true,
+                    },
                 }, priorities.critical - 1, false, null, false)
                 return
             }
@@ -2369,7 +2379,9 @@ module.exports = class BruhBot {
                             yield* tasks.goto.task(bot, {
                                 point: water.position,
                                 distance: 0,
-                                sprint: true,
+                                options: {
+                                    sprint: true,
+                                },
                                 ...taskUtils.runtimeArgs(args),
                             })
                         }
@@ -2557,6 +2569,12 @@ module.exports = class BruhBot {
                                     }
                                     return false
                                 },
+                                heuristic: (node) => {
+                                    const dx = bot.bot.entity.position.x - node.x
+                                    const dy = bot.bot.entity.position.y - node.y
+                                    const dz = bot.bot.entity.position.z - node.z
+                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+                                },
                             },
                             options: {
                                 searchRadius: 20,
@@ -2586,6 +2604,12 @@ module.exports = class BruhBot {
                                         return true
                                     }
                                     return false
+                                },
+                                heuristic: (node) => {
+                                    const dx = bot.bot.entity.position.x - node.x
+                                    const dy = bot.bot.entity.position.y - node.y
+                                    const dz = bot.bot.entity.position.z - node.z
+                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
                                 },
                             },
                             options: {
@@ -2940,7 +2964,9 @@ module.exports = class BruhBot {
             }, {
                 point: this.memory.idlePosition,
                 distance: 4,
-                sprint: false,
+                options: {
+                    sprint: false,
+                },
             }, -999, false, null, false)
         }
 

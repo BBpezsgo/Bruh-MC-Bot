@@ -79,8 +79,10 @@ module.exports = {
 
         yield* goto.task(bot, {
             block: bed.position,
-            timeout: 30000,
             reach: 3,
+            options: {
+                timeout: 30000,
+            },
             ...runtimeArgs(args),
         })
 

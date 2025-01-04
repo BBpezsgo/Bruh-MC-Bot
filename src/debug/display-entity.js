@@ -24,13 +24,77 @@ module.exports = class DisplayEntity {
     /** @protected @type {boolean} */ _disposed
     /** @protected @type {Vec3} */ _position
     /** @private @type {number | null} */ _lockOn
+    /** @protected @readonly @type {import('./debug').DisplayEntityData} */ _options
+
+    /**
+     * @param {number} data
+     */
+    static stringifyNumber(data) {
+        let result = ''
+        result += data.toFixed(2)
+        while (result.endsWith('0')) {
+            result = result.substring(0, result.length - 1)
+        }
+        if (result.endsWith('.')) {
+            result = result.substring(0, result.length - 1)
+        }
+        return result
+    }
+
+    /**
+     * @param {unknown} data
+     */
+    static stringifyJsonData(data) {
+        let result = ''
+        switch (typeof data) {
+            case 'boolean':
+                return data ? '1b' : '0b'
+            case 'number':
+                return DisplayEntity.stringifyNumber(data) + 'f'
+            case 'string':
+                return JSON.stringify(data)
+            case 'object':
+                if (Array.isArray(data)) {
+                    result += '['
+                    let addComma = false
+                    for (const item of data) {
+                        // @ts-ignore
+                        const dataString = this.stringifyJsonData(item)
+                        if (dataString) {
+                            if (addComma) result += ','
+                            result += dataString
+                            addComma = true
+                        }
+                    }
+                    result += ']'
+                } else {
+                    result += '{'
+                    let addComma = false
+                    for (const key in data) {
+                        // @ts-ignore
+                        const dataString = this.stringifyJsonData(data[key])
+                        if (dataString) {
+                            if (addComma) result += ','
+                            result += key
+                            result += ':'
+                            result += dataString
+                            addComma = true
+                        }
+                    }
+                    result += '}'
+                }
+                return result
+            default:
+                return null
+        }
+    }
 
     /**
      * @param {Commands} commands
      * @param {string} entityName
      * @param {DisplayEntityOptions<import('./debug').DisplayEntityData>} [options]
      */
-    constructor(commands, entityName, options = { data: { } }) {
+    constructor(commands, entityName, options = { data: {} }) {
         this._commands = commands
         this._position = options.position ? new Vec3(options.position.x, options.position.y, options.position.z) : new Vec3(0, 0, 0)
         this._nonce = options.uuid ?? Math.nonce(8)
@@ -38,13 +102,14 @@ module.exports = class DisplayEntity {
         const tags = ['debug', this._nonce]
         if (options.tags) { tags.push(...options.tags) }
         this._maxIdleTime = options.maxIdleTime ?? 2000
-        this._selector = `@e[type=minecraft:${entityName},limit=1,nbt={Tags:["debug","${this._nonce}"]}]`
+        this._options = options.data
+        this._selector = `@e[type=${entityName},limit=1,nbt={Tags:["debug","${this._nonce}"]}]`
 
-        let command = `/summon minecraft:text_display`
+        let command = `/summon ${entityName}`
         command += ' '
-        command += `${this._position.x.toFixed(2)} ${this._position.y.toFixed(2)} ${this._position.z.toFixed(2)}`
+        command += `${DisplayEntity.stringifyNumber(this._position.x)} ${DisplayEntity.stringifyNumber(this._position.y)} ${DisplayEntity.stringifyNumber(this._position.z)}`
         command += ' '
-        command += JSON.stringify({
+        command += DisplayEntity.stringifyJsonData({
             Tags: tags,
             ...options.data,
         })
@@ -97,5 +162,19 @@ module.exports = class DisplayEntity {
     lockOn(entityId) {
         this._lastEvent = performance.now()
         this._lockOn = entityId
+    }
+
+    /**
+     * @param {{
+     *   _position: Vec3;
+     *   _options: import('./debug').DisplayEntityData;
+     * }} other
+     */
+    equals(other) {
+        return this._position.equals(other._position) && JSON.stringify(this._options) === JSON.stringify(other._options)
+    }
+
+    touch() {
+        this._lastEvent = performance.now()
     }
 }

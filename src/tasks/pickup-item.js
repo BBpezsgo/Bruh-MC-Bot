@@ -123,8 +123,8 @@ module.exports = {
             yield* goto.task(bot, {
                 goal: this.getGoal(nearest),
                 options: {
-                    timeout: 5000,
-                    savePathError: true,
+                    // timeout: 5000,
+                    savePathError: false,
                 },
                 ...runtimeArgs(args),
             })
@@ -214,6 +214,7 @@ module.exports = {
             isValid: () => true,
             hasChanged: () => false,
             isEnd: node => !item.isValid || node.distanceTo(item.position.floored()) <= 2,
+            heuristic: node => node.distanceTo(item.position.floored()),
         }
     },
     getClosestItem: getClosestItem,

@@ -114,6 +114,7 @@ module.exports = class Commands {
      * @returns {Promise<Array<import('prismarine-chat').ChatMessage>>}
      */
     sendAsync(command) {
+        if (command.length > 256) return Promise.reject(`Too big command`)
         return new Promise((resolve, reject) => {
             this._queue.push({
                 command: command,
