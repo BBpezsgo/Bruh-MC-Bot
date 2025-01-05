@@ -7,7 +7,7 @@ const { sleepTicks, runtimeArgs } = require('../utils/tasks')
 const move = require('./move')
 
 /**
- * @typedef {{
+ * @typedef {({
  *   maxDistance: number;
  *   point?: import('vec3').Vec3;
  *   items?: ReadonlyArray<import('../utils/other').ItemId>;
@@ -17,6 +17,8 @@ const move = require('./move')
  *   item: import('prismarine-entity').Entity;
  *   inAir?: boolean;
  *   minLifetime?: number;
+ * }) & {
+ *   pathfinderOptions?: import('./goto').GeneralArgs;
  * }} Args
  */
 
@@ -122,10 +124,7 @@ module.exports = {
         try {
             yield* goto.task(bot, {
                 goal: this.getGoal(nearest),
-                options: {
-                    // timeout: 5000,
-                    savePathError: false,
-                },
+                options: args.pathfinderOptions,
                 ...runtimeArgs(args),
             })
 
@@ -210,11 +209,13 @@ module.exports = {
         return true
     },
     getGoal: function(item) {
+        let lastEntityPosition = item.position.floored()
         return {
             isValid: () => true,
-            hasChanged: () => false,
-            isEnd: node => !item.isValid || node.distanceTo(item.position.floored()) <= 2,
-            heuristic: node => node.distanceTo(item.position.floored()),
+            hasChanged: () => !lastEntityPosition.equals(item.position.floored()),
+            refresh: () => lastEntityPosition = item.position.floored(),
+            isEnd: node => !item.isValid || node.distanceTo(item.position) <= 2,
+            heuristic: node => node.distanceTo(item.position),
         }
     },
     getClosestItem: getClosestItem,

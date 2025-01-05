@@ -54,7 +54,7 @@ const equipment = [
     },
     {
         type: 'any',
-        priority: 'must',
+        priority: 'good',
         count: 1,
         item: [
             'wooden_pickaxe',

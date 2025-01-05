@@ -190,8 +190,9 @@ module.exports = class TaskManager {
 
             this.#previousTask = focusedTaskIndex
 
+            this.#tasks[focusedTaskIndex].resume()
+
             if (this.#isStopping && this.#tasks[focusedTaskIndex].status === 'queued') {
-                debugger
                 this.#tasks.splice(focusedTaskIndex, 1)
                 this.#previousTask = -1
                 return null
@@ -238,6 +239,18 @@ module.exports = class TaskManager {
     abort() {
         for (const task of this.#tasks) {
             task.abort()
+        }
+    }
+
+    interrupt() {
+        for (const task of this.#tasks) {
+            task.interrupt()
+        }
+    }
+
+    resume() {
+        for (const task of this.#tasks) {
+            task.resume()
         }
     }
 

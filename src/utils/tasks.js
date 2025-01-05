@@ -41,8 +41,10 @@ function* wrap(promise, interrupt = null) {
 
     const onInterrupt = (/** @type {'cancel' | 'interrupt'} */ type) => {
         if (type === 'cancel') {
-            console.warn(`Task interrupted while a promise is running`)
+            console.warn(`Task cancelled while a promise is running`)
             interrupt?.off(onInterrupt)
+        } else {
+            console.warn(`Task interrupted while a promise is running`)
         }
     }
 

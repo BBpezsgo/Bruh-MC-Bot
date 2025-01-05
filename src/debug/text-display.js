@@ -45,37 +45,14 @@ module.exports = class TextDisplay extends DisplayEntity {
 
     /**
      * @param {Commands} commands
-     * @param {string} uuid
-     */
-    static ensure(commands, uuid) {
-        if (!this._registry[uuid]) {
-            return new TextDisplay(commands, {
-                uuid: uuid,
-                data: {
-                    text: { text: '' },
-                    billboard: 'center',
-                },
-            })
-        }
-        return this._registry[uuid]
-    }
-
-    /**
-     * @param {Commands} commands
      * @param {import('./display-entity').DisplayEntityOptions<import('./debug').TextDisplayEntityData>} options
      */
     constructor(commands, options) {
-        const text = JSON.stringify(options.data.text ?? { text: '' })
         super(commands, 'text_display', {
             ...options,
-            data: {
-                ...options.data,
-                billboard: options.data.billboard ?? 'center',
-                // @ts-ignore
-                text: text,
-            }
+            data: options.data,
         })
-        this._text = text
+        this._text = options.data.text
 
         TextDisplay._registry[this._nonce] = this
     }

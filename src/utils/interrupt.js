@@ -6,6 +6,10 @@
  */
 
 /**
+ * @typedef {'cancel' | 'interrupt'} InterruptType
+ */
+
+/**
  * @template {Array<any>} TArgs
  */
 class TaskEventEmitter {
@@ -61,7 +65,7 @@ class TaskEventEmitter {
 }
 
 module.exports = class Interrupt {
-    /** @readonly @type {TaskEventEmitter<['interrupt' | 'cancel']>} */
+    /** @readonly @type {TaskEventEmitter<[InterruptType]>} */
     #emitter
 
     /** @type {boolean} */
@@ -76,22 +80,22 @@ module.exports = class Interrupt {
     }
 
     /**
-     * @param {'interrupt' | 'cancel'} type
+     * @param {InterruptType} type
      */
     trigger(type) {
         if (type === 'cancel') this.#isCancelled = true
         this.#emitter.emit(type)
     }
 
-    /** @param {TaskEventCallback<['interrupt' | 'cancel']>} callback */
+    /** @param {TaskEventCallback<[InterruptType]>} callback */
     once(callback) {
         this.#emitter.once(callback)
     }
-    /** @param {TaskEventCallback<['interrupt' | 'cancel']>} callback */
+    /** @param {TaskEventCallback<[InterruptType]>} callback */
     on(callback) {
         this.#emitter.on(callback)
     }
-    /** @param {TaskEventCallback<['interrupt' | 'cancel']>} callback */
+    /** @param {TaskEventCallback<[InterruptType]>} callback */
     off(callback) {
         this.#emitter.off(callback)
     }

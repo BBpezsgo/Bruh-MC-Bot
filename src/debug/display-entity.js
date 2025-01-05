@@ -166,12 +166,12 @@ module.exports = class DisplayEntity {
 
     /**
      * @param {{
-     *   _position: Vec3;
+     *   _position: Point3;
      *   _options: import('./debug').DisplayEntityData;
      * }} other
      */
     equals(other) {
-        return this._position.equals(other._position) && JSON.stringify(this._options) === JSON.stringify(other._options)
+        return this._position.equals(new Vec3(other._position.x, other._position.y, other._position.z)) && JSON.stringify(this._options) === JSON.stringify(other._options)
     }
 
     touch() {

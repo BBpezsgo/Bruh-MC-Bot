@@ -1105,7 +1105,7 @@ module.exports = {
                             .target(target.position)
                             .avoid(distance < 3)
                         bot.bot.movement.setGoal(newGoal)
-                        const yaw = bot.bot.movement.getYaw(160, 15, 2)
+                        const { yaw } = bot.bot.movement.getYaw(160, 15, 2)
                         bot.bot.freemotion.moveTowards(yaw)
                         bot.bot.setControlState('sprint', true)
                         const rotation = Math.rotationToVectorRad(0, yaw)
@@ -1190,7 +1190,11 @@ module.exports = {
                         if ((() => {
                             if (!grade) return true
                             if (!grade.blockInTrayect) return true
-                            if (projectilRadar.trajectoryCollisions(grade.arrowTrajectoryPoints, Object.values(bot.bot.players).map(v => v.entity).filter(v => v.id !== target.id))) {
+                            if (projectilRadar.trajectoryCollisions(
+                                grade.arrowTrajectoryPoints,
+                                Object.values(bot.bot.players)
+                                    .map(v => v.entity)
+                                    .filter(v => v.id !== target.id && v.id !== bot.bot.entity.id))) {
                                 console.warn(`[Bot "${bot.username}"] Someone in my way so aint shooting arrow ...`)
                                 return true
                             }

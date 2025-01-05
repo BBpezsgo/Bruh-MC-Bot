@@ -64,20 +64,23 @@ function filterOutEquipment(items, registry) {
             }
             case 'food': {
                 const foods = result
-                    .map(v => ({ food: registry.foods[registry.itemsByName[typeof v.item === 'string' ? v.item : v.item.name].id], ...v }))
+                    .map(v => ({
+                        food: registry.foods[registry.itemsByName[typeof v.item === 'string' ? v.item : v.item.name].id],
+                        item: v,
+                    }))
                     .filter(v =>
                         v.food &&
-                        !Minecraft.badFoods.some(v2 => isItemEquals(v2, v.item)) &&
-                        (v.count > 0)
+                        !Minecraft.badFoods.some(v2 => isItemEquals(v2, v.item.item)) &&
+                        (v.item.count > 0)
                     )
                 let soFar = 0
                 for (const food of foods) {
-                    while (food.count > 0 && soFar < _equipmentItem.food) {
-                        food.count--
+                    while (food.item.count > 0 && !_equipmentItem.satisfied) {
+                        food.item.count--
                         soFar += food.food.foodPoints
+                        _equipmentItem.satisfied = (soFar >= _equipmentItem.food)
                     }
                 }
-                _equipmentItem.satisfied = (soFar >= _equipmentItem.food)
                 break
             }
             default: break
@@ -96,7 +99,7 @@ function filterOutEquipment(items, registry) {
  */
 function filterOutItems(items, exclude) {
     const result = items.map(v => ({ ...v }))
-   
+
     for (const _exclude of exclude.map(v => ({ ...v }))) {
         if (_exclude.count <= 0) { continue }
         const goodItem = result.find(v =>

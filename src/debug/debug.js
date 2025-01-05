@@ -132,7 +132,7 @@ const ItemDisplay = require('./item-display')
  *   line_width?: number;
  *   see_through?: boolean;
  *   shadow?: boolean;
- *   text: JsonTextComponent;
+ *   text: string;
  *   text_opacity?: number;
  * }} TextDisplayEntityData
  */
@@ -380,19 +380,30 @@ module.exports = class Debug {
      * @param {Point3} point
      * @param {string | JsonTextComponent} text
      * @param {number} [time]
-     * @param {Array<string>} [tags=[]]
+     * @param {Array<string>} [tags]
      * @returns {(typeof Debug)['enabled'] extends true ? TextDisplay : null}
      */
     label(point, text, time = 30000, tags = []) {
         if (!Debug.enabled) { return null }
 
+        /** @type {TextDisplayEntityData} */
+        const data = {
+            billboard: 'center',
+            text: JSON.stringify((typeof text === 'string') ? { text: text } : text),
+            see_through: true,
+        }
+
+        for (const other of Object.values(TextDisplay.registry)) {
+            if (other.equals({ _options: data, _position: point })) {
+                other.touch()
+                // @ts-ignore
+                return other
+            }
+        }
+
         // @ts-ignore
         return new TextDisplay(this._bot.commands, {
-            data: {
-                billboard: 'center',
-                text: (typeof text === 'string') ? { text: text } : text,
-                see_through: true,
-            },
+            data: data,
             maxIdleTime: time,
             position: point,
             tags: tags,

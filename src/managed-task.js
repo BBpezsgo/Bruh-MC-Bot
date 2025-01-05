@@ -16,7 +16,7 @@ const Interrupt = require('./utils/interrupt')
  */
 
 /**
- * @typedef {'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled' | 'aborted'} TaskStatus
+ * @typedef {'queued' | 'running' | 'done' | 'failed' | 'cancelled' | 'aborted' | 'interrupted'} TaskStatus
  */
 
 /**
@@ -204,8 +204,16 @@ class ManagedTask {
     }
 
     interrupt() {
+        if (this._status !== 'running') return
         this.args.interrupt.trigger('interrupt')
-        // console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
+        this._status = 'interrupted'
+        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
+    }
+
+    resume() {
+        if (this._status !== 'interrupted') return
+        this._status = 'running'
+        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" resumed`)
     }
 
     cancel() {
@@ -250,7 +258,11 @@ class ManagedTask {
             return true
         }
 
-        if (!this._task && this._status !== 'cancelling') {
+        if (this._status === 'interrupted') {
+            return false
+        }
+
+        if (!this._task) {
             this._task = this._def.task(this._bot, this.args)
             this._status = 'running'
             if (!this.args.silent) {
@@ -261,27 +273,15 @@ class ManagedTask {
         try {
             const v = this._task.next()
             if (v.done) {
-                if (this._status === 'cancelling') {
-                    this._status = 'cancelled'
-                    if (!this.args.silent) {
-                        if (v.value === undefined) {
-                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled gracefully`)
-                        } else {
-                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled gracefully with result`, v.value)
-                        }
+                this._status = 'done'
+                if (!this.args.silent) {
+                    if (v.value === undefined) {
+                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
+                    } else {
+                        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
                     }
-                    if (this._reject) { this._reject(new CancelledError()) }
-                } else {
-                    this._status = 'done'
-                    if (!this.args.silent) {
-                        if (v.value === undefined) {
-                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
-                        } else {
-                            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished with result`, v.value)
-                        }
-                    }
-                    if (this._resolve) { this._resolve(v.value) }
                 }
+                if (this._resolve) { this._resolve(v.value) }
                 return true
             } else {
                 this._status = 'running'

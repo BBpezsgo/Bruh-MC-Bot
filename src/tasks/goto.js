@@ -361,7 +361,7 @@ function setOptions(bot, args) {
     if (args.timeout !== null && args.timeout !== undefined) {
         bot.bot.pathfinder.thinkTimeout = args.timeout
     } else {
-        bot.bot.pathfinder.thinkTimeout = Infinity
+        bot.bot.pathfinder.thinkTimeout = 60000
     }
     if (args.searchRadius !== null && args.searchRadius !== undefined) {
         bot.bot.pathfinder.searchRadius = args.searchRadius
@@ -633,8 +633,12 @@ module.exports = {
                      * @param {'interrupt' | 'cancel'} type
                      */
                     const interrupt = (type) => {
-                        if (type === 'cancel') bot.bot.pathfinder.stop()
+                        if (type === 'cancel') {
+                            bot.bot.pathfinder.stop()
+                            bot.bot.pathfinder.setGoal(null)
+                        }
                     }
+
                     args.interrupt.on(interrupt)
                     try {
                         yield* wrap(bot.bot.pathfinder.goto(_goal))

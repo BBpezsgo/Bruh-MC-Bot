@@ -670,7 +670,7 @@ module.exports = class BruhBot {
                         }
 
                         bot.bot.movement.setGoal(goal)
-                        const yaw = bot.bot.movement.getYaw(360, 15, 2)
+                        const { yaw } = bot.bot.movement.getYaw(360, 15, 2)
                         const rotation = Math.rotationToVectorRad(0, yaw)
 
                         bot.bot.freemotion.moveTowards(yaw)
@@ -761,7 +761,7 @@ module.exports = class BruhBot {
                             .target(p)
                             .avoid(true)
                         bot.bot.movement.setGoal(goal)
-                        const yaw = bot.bot.movement.getYaw(360, 15, 2)
+                        const { yaw } = bot.bot.movement.getYaw(360, 15, 2)
                         const rotation = Math.rotationToVectorRad(0, yaw)
 
                         bot.bot.freemotion.moveTowards(yaw)
@@ -847,7 +847,6 @@ module.exports = class BruhBot {
             console.log(`[Bot "${this.username}"] Spawned`)
             this.bot.clearControlStates()
 
-            this.bot.pathfinder.enablePathShortcut = true
             this.bot.hawkEye?.startRadar()
 
             const mineflayerPathfinder = require('mineflayer-pathfinder')
@@ -1463,6 +1462,7 @@ module.exports = class BruhBot {
                             lockItems: false,
                             localLocks: planningLocalLocks,
                             remoteLocks: planningRemoteLocks,
+                            force: false,
                         })
                         planningLocalLocks.forEach(v => v.isUnlocked = true)
                         planningRemoteLocks.forEach(v => v.isUnlocked = true)
@@ -1805,6 +1805,7 @@ module.exports = class BruhBot {
                         builder += `${task.humanReadableId ?? task.id} with priority ${task.priority}`
                         if (task._isBackground) builder += ` (background)`
                         else if (task === this._runningTask) builder += ` (focused)`
+                        builder += ` (${task.status})`
                     }
                     response.respond(builder)
                 }
@@ -2230,6 +2231,12 @@ module.exports = class BruhBot {
             this.deactivateHand()
         }
 
+        for (let i = 0; i < this.chatAwaits.length; i++) {
+            if (this.chatAwaits[i].done) {
+                this.chatAwaits.splice(i--, 1)
+            }
+        }
+
         this._runningTask = this.tasks.tick()
 
         //#region Fall damage prevention
@@ -2634,7 +2641,6 @@ module.exports = class BruhBot {
                             },
                             options: {
                                 searchRadius: 20,
-                                timeout: 1000,
                             },
                             ...taskUtils.runtimeArgs(args),
                         })
@@ -2643,7 +2649,7 @@ module.exports = class BruhBot {
                     humanReadableId: `Getting out of water`,
                 }, {}, this.bot.oxygenLevel < 20 ? priorities.surviving + 1 : priorities.low, false, null, false)
 
-                if (!this.bot.pathfinder.goal) {
+                if (this.bot.pathfinder.path.length === 0) {
                     if (this.bot.blockAt(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
                         this.bot.setControlState('jump', true)
                     } else if (this.bot.controlState['jump']) {
@@ -2699,14 +2705,13 @@ module.exports = class BruhBot {
 
         //#region Eating
         if (this.bot.food < 18 &&
-            !this.quietMode) {
-            if ((this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints', false).length > 0)) {
-                this.tasks.push(this, tasks.eat, {
-                    sortBy: 'foodPoints',
-                    includeRaw: false,
-                }, priorities.surviving, false, null, false)
-                return
-            }
+            !this.quietMode &&
+            this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints', false).length > 0) {
+            this.tasks.push(this, tasks.eat, {
+                sortBy: 'foodPoints',
+                includeLocked: this.bot.food === 0,
+            }, priorities.surviving, false, null, false)
+            return
         }
         //#endregion
 
@@ -2872,23 +2877,26 @@ module.exports = class BruhBot {
 
         {
             /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-item')>} */
-            const filter = {
+            const options = {
                 inAir: false,
                 maxDistance: config.boredom.pickupItemRadius,
                 minLifetime: config.boredom.pickupItemMinAge,
+                pathfinderOptions: {
+                    savePathError: true,
+                },
             }
-            if (tasks.pickupItem.can(this, filter)) {
-                this.tasks.push(this, tasks.pickupItem, filter, priorities.low, false, null, false)
+            if (tasks.pickupItem.can(this, options)) {
+                this.tasks.push(this, tasks.pickupItem, options, priorities.low, false, null, false)
             }
         }
 
         {
             /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-xp')>} */
-            const filter = {
+            const options = {
                 maxDistance: config.boredom.pickupXpRadius,
             }
-            if (tasks.pickupXp.getClosestXp(this, filter)) {
-                this.tasks.push(this, tasks.pickupXp, filter, priorities.low, false, null, false)
+            if (tasks.pickupXp.getClosestXp(this, options)) {
+                this.tasks.push(this, tasks.pickupXp, options, priorities.low, false, null, false)
             }
         }
 
@@ -3004,7 +3012,8 @@ module.exports = class BruhBot {
                         }, {
                             goal: {
                                 distance: this.bot.movement.heuristic.new('distance'),
-                                danger: this.bot.movement.heuristic.new('danger'),
+                                danger: this.bot.movement.heuristic.new('danger')
+                                    .weight(5),
                                 proximity: this.bot.movement.heuristic.new('proximity'),
                             },
                             freemotion: true,
@@ -3097,8 +3106,6 @@ module.exports = class BruhBot {
     static *ensureEquipment(bot, args) {
         const equipment = require('./equipment')
 
-        let foodPointsInInventory = calculateFoodPoints(null)
-
         /**
          * @param {import('./tasks/gather-item').PredictedEnvironment | null} future 
          */
@@ -3113,6 +3120,8 @@ module.exports = class BruhBot {
             }
             return res
         }
+
+        let foodPointsInInventory = calculateFoodPoints(null)
 
         const sortedEquipment = equipment.toSorted((a, b) => {
             let _a = 0
@@ -3131,6 +3140,7 @@ module.exports = class BruhBot {
         })
 
         for (const item of sortedEquipment) {
+            if (item.priority !== 'must' && !args.explicit) continue
             switch (item.type) {
                 case 'food': {
                     try {
@@ -3168,6 +3178,7 @@ module.exports = class BruhBot {
                                     localLocks: planningLocalLocks,
                                     remoteLocks: planningRemoteLocks,
                                     recursiveItems: [],
+                                    force: true,
                                 }, plans.flat(2))
                                 plans.push(plan.plan)
                                 const future = new tasks.gatherItem.PredictedEnvironment(plans.flat(2), bot.bot.registry)
@@ -3472,7 +3483,6 @@ module.exports = class BruhBot {
         if (this.chatAwaits.length > 0) {
             const chatAwait = this.chatAwaits[0]
             if (chatAwait.onChat(sender, message) || chatAwait.done) {
-                this.chatAwaits.shift()
                 return
             }
         }
@@ -3632,7 +3642,6 @@ module.exports = class BruhBot {
      * @returns {Array<{ item: import('./utils/other').ItemId; count: number; }>}
      */
     getTrashItems() {
-        // TODO: dump from offhands and armor slots
         const locked = this.lockedItems
             .filter(v => !v.isUnlocked)
             .map(v => ({ ...v }))

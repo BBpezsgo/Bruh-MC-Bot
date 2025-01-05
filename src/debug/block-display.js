@@ -46,19 +46,6 @@ module.exports = class BlockDisplay extends DisplayEntity {
 
     /**
      * @param {Commands} commands
-     * @param {import('./display-entity').DisplayEntityOptions<import('./debug').BlockDisplayEntityData> & {
-     *   uuid: string;
-     * }} options
-     */
-    static ensure(commands, options) {
-        if (!this._registry[options.uuid]) {
-            return new BlockDisplay(commands, options)
-        }
-        return this._registry[options.uuid]
-    }
-
-    /**
-     * @param {Commands} commands
      * @param {import('./display-entity').DisplayEntityOptions<import('./debug').BlockDisplayEntityData>} options
      */
     constructor(commands, options) {

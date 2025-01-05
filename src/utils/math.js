@@ -27,8 +27,7 @@ Math.lerp = function(a, b, t) {
 }
 
 Math.lerpDeg = function(a, b, t) {
-    const shortest_angle = ((((b - a) % 360) + 540) % 360) - 180
-    return shortest_angle * t
+    return (((((b - a) % 360) + 540) % 360) - 180) * t
 }
 
 Math.lerpRad = function(a, b, t) {
@@ -118,4 +117,8 @@ Math.lineDistanceSquared = function(point, a, b) {
         })
 }
 
-module.exports = { }
+Math.rgb2hex = function(r, g, b) {
+    return `#${Math.round(r * 255).toString(16).padStart(2, '0')}${Math.round(g * 255).toString(16).padStart(2, '0')}${Math.round(b * 255).toString(16).padStart(2, '0')}`
+}
+
+module.exports = {}

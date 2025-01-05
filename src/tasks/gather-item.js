@@ -179,6 +179,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  *   lockItems: boolean;
  *   localLocks: Array<ItemLock>;
  *   remoteLocks: Array<ItemLock>;
+ *   force: boolean;
  * }} PlanningContext
  */
 
@@ -514,7 +515,7 @@ function unlockPlanItems(plan) {
  *   bot: import('../bruh-bot'),
  *   item: import('../utils/other').ItemId,
  *   count: number,
- *   permissions : PermissionArgs & { force?: boolean },
+ *   permissions : PermissionArgs,
  *   context: PlanningContext,
  *   planSoFar: Plan
  * ) => (import('../task').Task<(PlanStep | Plan) | Array<PlanStep | Plan>> | null)>}
@@ -525,7 +526,7 @@ const planners = [
 
         if (!permissions.canUseInventory) { return null }
 
-        if (permissions.force) { return null }
+        if (context.force) { return null }
 
         const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
 
@@ -688,7 +689,6 @@ const planners = [
                 const ingredientCount = -ingredient.count * actualCraftCount
                 const subplan = yield* plan(bot, bot.mc.registry.items[ingredient.id].name, ingredientCount, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     depth: context.depth + 1,
@@ -696,6 +696,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...planSoFar, ...ingredientPlans])
                 const subplanResult = planResult(subplan, bot.mc.registry.items[ingredient.id].name)
                 if (subplanResult < ingredientCount) {
@@ -754,13 +755,13 @@ const planners = [
             if (!tableInWorld) {
                 const tablePlan = yield* plan(bot, 'crafting_table', 1, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     recursiveItems: [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...result, ...planSoFar])
                 if (planResult(tablePlan, 'crafting_table') <= 0) {
                     unlockPlanItems(tablePlan)
@@ -844,7 +845,6 @@ const planners = [
                 yield
                 const subplan = yield* plan(bot, ingredient, count, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     depth: context.depth + 1,
@@ -852,6 +852,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...planSoFar, ...ingredientPlans])
                 let goodItems
                 if (ingredient.startsWith('#')) {
@@ -930,6 +931,7 @@ const planners = [
                     ...context.recursiveItems,
                     item,
                 ],
+                force: false,
             })
 
         if (!fuelPlan) {
@@ -956,6 +958,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 })
         }
 
@@ -1015,7 +1018,6 @@ const planners = [
                 yield
                 const subplan = yield* plan(bot, ingredient, count, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     depth: context.depth + 1,
@@ -1023,6 +1025,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...planSoFar, ...ingredientPlans])
                 let goodItems
                 if (ingredient.startsWith('#')) {
@@ -1132,7 +1135,6 @@ const planners = [
         const visitRecipe = function*(recipe) {
             const ingredientPlan = yield* plan(bot, recipe.ingredient, count, {
                 ...permissions,
-                force: false,
             }, {
                 ...context,
                 depth: context.depth + 1,
@@ -1140,6 +1142,7 @@ const planners = [
                     ...context.recursiveItems,
                     recipe.result,
                 ],
+                force: false,
             }, [...planSoFar])
             if (!planResult(ingredientPlan, recipe.ingredient)) {
                 unlockPlanItems(ingredientPlan)
@@ -1149,7 +1152,6 @@ const planners = [
 
             const bottlePlan = yield* plan(bot, recipe.bottle, count, {
                 ...permissions,
-                force: false,
             }, {
                 ...context,
                 depth: context.depth + 1,
@@ -1157,6 +1159,7 @@ const planners = [
                     ...context.recursiveItems,
                     recipe.result,
                 ],
+                force: false,
             }, [...planSoFar])
             if (!planResult(bottlePlan, recipe.bottle)) {
                 unlockPlanItems(ingredientPlan)
@@ -1237,7 +1240,6 @@ const planners = [
 
                 const pricePlan1 = trade.inputItem1 ? yield* plan(bot, trade.inputItem1.name, trade.inputItem1.count * tradeCount, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     depth: context.depth + 1,
@@ -1246,11 +1248,11 @@ const planners = [
                         item,
                         trade.outputItem.name,
                     ],
+                    force: false,
                 }, planSoFar) : null
 
                 const pricePlan2 = trade.inputItem2 ? yield* plan(bot, trade.inputItem2.name, trade.inputItem2.count * tradeCount, {
                     ...permissions,
-                    force: false,
                 }, {
                     ...context,
                     depth: context.depth + 1,
@@ -1259,6 +1261,7 @@ const planners = [
                         item,
                         trade.outputItem.name,
                     ],
+                    force: false,
                 }, planSoFar) : null
 
                 const price1Result = trade.inputItem1 ? planResult([
@@ -1400,7 +1403,6 @@ const planners = [
             case 'milk_bucket': {
                 const bucketPlan = yield* plan(bot, 'bucket', 1, {
                     ...permissions,
-                    force: false,
                     canUseInventory: true,
                 }, {
                     ...context,
@@ -1409,6 +1411,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...planSoFar])
                 if (planResult(bucketPlan, 'bucket') <= 0) {
                     unlockPlanItems(bucketPlan)
@@ -1446,7 +1449,6 @@ const planners = [
             case 'mushroom_stew': {
                 const bowlPlan = yield* plan(bot, 'bowl', 1, {
                     ...permissions,
-                    force: false,
                     canUseInventory: true,
                 }, {
                     ...context,
@@ -1455,6 +1457,7 @@ const planners = [
                         ...context.recursiveItems,
                         item,
                     ],
+                    force: false,
                 }, [...planSoFar])
                 if (planResult(bowlPlan, 'bowl') <= 0) {
                     // throw `Can't milk mooshroom: aint have a bowl`
@@ -1503,6 +1506,7 @@ const planners = [
                 ...context.recursiveItems,
                 brew.makePotionItem('water'),
             ],
+            force: false,
         }, planSoFar)
         if (!planResult(bottlePlan, 'glass_bottle')) {
             unlockPlanItems(bottlePlan)
@@ -1544,6 +1548,7 @@ const planners = [
                 ...context.recursiveItems,
                 'water_bucket',
             ],
+            force: false,
         }, planSoFar)
 
         if (planResult(bucketPlan, 'bucket') <= 0) {
@@ -1702,7 +1707,7 @@ function* planAny(bot, item, count, permissions, context, planSoFar, postprocess
  * @param {import('../bruh-bot')} bot
  * @param {import('../utils/other').ItemId} item
  * @param {number} count
- * @param {PermissionArgs & { force?: boolean }} permissions
+ * @param {PermissionArgs} permissions
  * @param {PlanningContext} context
  * @param {Plan} planSoFar
  * @returns {import('../task').Task<Plan>}
@@ -1830,6 +1835,9 @@ function* evaluatePlan(bot, plan, args) {
                         yield* goto.task(bot, {
                             block: step.block.position,
                             reach: 3,
+                            options: {
+
+                            },
                             ...runtimeArgs(args),
                         })
                         let itemToFill = bot.searchInventoryItem(null, step.item)
@@ -2574,7 +2582,8 @@ const def = {
                         lockItems: false,
                         localLocks: planningLocalLocks,
                         remoteLocks: planningRemoteLocks,
-                        recursiveItems: []
+                        recursiveItems: [],
+                        force: false,
                     })
             } finally {
                 args.task?.focus()

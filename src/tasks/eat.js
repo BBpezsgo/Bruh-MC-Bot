@@ -7,6 +7,7 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  * @type {import('../task').TaskDef<'ok' | 'full', {
  *   sortBy?: 'foodPoints' | 'saturation';
  *   includeRaw?: boolean;
+ *   includeLocked?: boolean;
  * } | {
  *   food: Item;
  * }>}
@@ -19,7 +20,7 @@ module.exports = {
         if ('food' in args) {
             food = args.food
         } else {
-            const foods = bot.mc.filterFoods(bot.bot.inventory.items(), args.sortBy ?? 'foodPoints', args.includeRaw ?? false)
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), args.sortBy ?? 'foodPoints', args.includeRaw ?? false)
             if (foods.length === 0) { throw `I have no food` }
             food = foods[0]
         }
