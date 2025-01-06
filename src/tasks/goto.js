@@ -91,36 +91,10 @@ class GoalHawkeye extends goals.Goal {
 }
 
 class GoalEntity extends goals.Goal {
-    /**
-     * @private
-     * @type {import('prismarine-entity').Entity}
-     */
-    entity
-    /**
-     * @private
-     * @type {number}
-     */
-    rangeSq
-    /**
-     * @private
-     * @type {boolean}
-     */
-    isFlee
-    /**
-     * @private
-     * @type {number}
-     */
-    x
-    /**
-     * @private
-     * @type {number}
-     */
-    y
-    /**
-     * @private
-     * @type {number}
-     */
-    z
+    /** @private @type {import('prismarine-entity').Entity} */ entity
+    /** @private @type {number} */ rangeSq
+    /** @private @type {boolean} */ isFlee
+    /** @private @type {Vec3} */ lastPosition
 
 
     /**
@@ -130,9 +104,7 @@ class GoalEntity extends goals.Goal {
     constructor(entity, range) {
         super()
         this.entity = entity
-        this.x = entity.position.x
-        this.y = entity.position.y
-        this.z = entity.position.z
+        this.lastPosition = entity.position.clone()
         this.rangeSq = range * range
         this.isFlee = range < 0
     }
@@ -142,9 +114,9 @@ class GoalEntity extends goals.Goal {
      * @param {Vec3} node
      */
     heuristic(node) {
-        const dx = this.x - node.x
-        const dy = this.y - node.y
-        const dz = this.z - node.z
+        const dx = this.entity.position.x - node.x
+        const dy = this.entity.position.y - node.y
+        const dz = this.entity.position.z - node.z
         return (Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)) * (this.isFlee ? -1 : 1)
     }
 
@@ -163,17 +135,14 @@ class GoalEntity extends goals.Goal {
 
     /** @override */
     hasChanged() {
-        const d = this.entity.position.distanceTo(new Vec3(this.x, this.y, this.z))
-        return d > 0.5
+        return this.entity.position.distanceTo(this.lastPosition) > 2
     }
 
     /** @override */
     isValid() { return this.entity && this.entity.isValid }
 
     refresh() {
-        this.x = this.entity.position.x
-        this.y = this.entity.position.y
-        this.z = this.entity.position.z
+        this.lastPosition = this.entity.position.clone()
     }
 }
 
@@ -465,9 +434,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -488,9 +455,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -521,9 +486,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -544,9 +507,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -571,9 +532,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -597,9 +556,7 @@ module.exports = {
                                         yield* this.task(bot, {
                                             point: portal.position,
                                             distance: 0,
-                                            options: {
-                                                movements: movements,
-                                            },
+                                            options: args.options,
                                             ...runtimeArgs(args),
                                         })
                                         const timeout = new Timeout(10000)
@@ -664,7 +621,11 @@ module.exports = {
                         console.warn(`[Bot "${bot.username}"] Goal not reached`, lastError)
                         bot.bot.pathfinder.stop()
                         if (args.options.savePathError && lastError?.name === 'NoPath') bot.memory.theGoalIsUnreachable(_goal)
-                        throw `I can't get there`
+                        if (lastError?.name === 'NoPath') {
+                            throw `I can't get there`
+                        } else {
+                            throw `Looks like I can't get there`
+                        }
                     } else {
                         bot.bot.pathfinder.stop()
                         // console.log(`[Bot "${bot.username}"] Goal not reached, retrying (${i}/${retryCount}) ...`, lastError)
