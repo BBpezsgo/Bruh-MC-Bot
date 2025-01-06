@@ -31,6 +31,15 @@ module.exports = {
         const itemsToGiveOriginal = [...itemsToGive]
         const player = 'player' in args ? args.player : args.request.lock.by
 
+        if (player === bot.username) {
+            console.warn(`[Bot "${bot.username}"] Giving myself item (???)`)
+            if ('request' in args) {
+                args.request.status = 'served'
+            }
+            itemsToGive.filter(v => 'isUnlocked' in v).forEach(v => v.isUnlocked = true)
+            return tossedMap
+        }
+
         for (const itemToGive of itemsToGive) {
             const has = bot.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }
