@@ -115,6 +115,7 @@ module.exports = {
 
                     target = bot.env.getPlayerPosition(player)
                     if (!target) { throw `Can't find ${player}` }
+
                     const MAX_DISTANCE = 3
                     const MIN_DISTANCE = 2
 
@@ -138,6 +139,9 @@ module.exports = {
 
                     if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE + 1) continue
 
+                    target = bot.env.getPlayerPosition(player)
+                    if (!target) { throw `Can't find ${player}` }
+
                     yield* move.task(bot, {
                         goal: {
                             danger: bot.bot.movement.heuristic.new('danger'),
@@ -157,6 +161,11 @@ module.exports = {
                         freemotion: true,
                         ...runtimeArgs(args),
                     })
+
+                    target = bot.env.getPlayerPosition(player)
+                    if (!target) { throw `Can't find ${player}` }
+                    
+                    if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE) continue
                     break
                 }
 
