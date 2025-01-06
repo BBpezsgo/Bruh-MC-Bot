@@ -1393,7 +1393,7 @@ module.exports = class Environment {
     isDestinationOccupied(bot, point) {
         for (const other of this.bots) {
             if (other.bot.username === bot) { continue }
-            const goal = other.bot.pathfinder.goal
+            const goal = other.bot.pathfinder?.goal
             if (!goal) { continue }
             if (!goal.isValid()) { continue }
             if (goal instanceof goals.GoalNear) {

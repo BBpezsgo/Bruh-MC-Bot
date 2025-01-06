@@ -33,7 +33,7 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 /**
  * @template T
  * @param {Promise<T> | (() => Promise<T>)} promise
- * @param {import('./interrupt') | null} [interrupt=null]
+ * @param {import('./interrupt') | null} interrupt
  * @returns {import('../task').Task<T>}
  */
 function* wrap(promise, interrupt = null) {
@@ -41,10 +41,10 @@ function* wrap(promise, interrupt = null) {
 
     const onInterrupt = (/** @type {'cancel' | 'interrupt'} */ type) => {
         if (type === 'cancel') {
-            console.warn(`Task cancelled while a promise is running`)
+            console.warn(`Task cancelled while a promise is running`, promise)
             interrupt?.off(onInterrupt)
         } else {
-            console.warn(`Task interrupted while a promise is running`)
+            console.warn(`Task interrupted while a promise is running`, promise)
         }
     }
 

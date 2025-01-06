@@ -121,12 +121,10 @@ module.exports = class TaskManager {
     death() {
         for (let i = this.#tasks.length - 1; i >= 0; i--) {
             const task = this.#tasks[i]
-            if (task.priority < 100 || task.id === 'mlg' || task.id === 'eat') {
-                console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
-                this.#tasks.splice(i)
-                if (this.#previousTask === i) this.#previousTask = -1
-                else if (this.#previousTask > i) this.#previousTask--
-            }
+            console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
+            this.#tasks.splice(i)
+            if (this.#previousTask === i) this.#previousTask = -1
+            else if (this.#previousTask > i) this.#previousTask--
         }
     }
 

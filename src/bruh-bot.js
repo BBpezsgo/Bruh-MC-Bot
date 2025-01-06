@@ -863,6 +863,16 @@ module.exports = class BruhBot {
             this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.registry.blocksByName['oak_leaves'].id)
 
             console.log(`[Bot "${this.username}"] Ready`)
+
+            this.bot.on('physicsTick', () => {
+                if (tickInterval) {
+                    clearInterval(tickInterval)
+                    tickInterval = null
+                }
+                if (this.bot.entity?.isValid) {
+                    this.tick()
+                }
+            })
         })
 
         // this.bot.on('move', () => {
@@ -942,20 +952,10 @@ module.exports = class BruhBot {
         this.bot.on('mount', () => {
             if (!tickInterval) {
                 tickInterval = setInterval(() => {
-                    if (this.bot.entity) {
+                    if (this.bot.entity?.isValid) {
                         this.tick()
                     }
                 }, 50)
-            }
-        })
-
-        this.bot.on('physicsTick', () => {
-            if (tickInterval) {
-                clearInterval(tickInterval)
-                tickInterval = null
-            }
-            if (this.bot.entity) {
-                this.tick()
             }
         })
 
@@ -2417,7 +2417,7 @@ module.exports = class BruhBot {
                     humanReadableId: `Extinguish myself`,
                 }, {}, priorities.critical - 4, false, null, false)
             } else {
-                if (blockAt.name === 'fire') {
+                if (blockAt?.name === 'fire') {
                     this.tasks.push(this, {
                         task: function*(bot) {
                             yield* bot.dig(blockAt, 'ignore', false)
@@ -2816,7 +2816,7 @@ module.exports = class BruhBot {
     }
 
     doSimpleBoredomTasks() {
-        if (this.loadCrossbowsInterval.done()) {
+        if (this.loadCrossbowsInterval?.done()) {
             this.tasks.push(this, {
                 task: function*(bot, args) {
                     const crossbows =
@@ -2837,7 +2837,7 @@ module.exports = class BruhBot {
                 },
                 id: 'load-crossbow',
             }, {
-                silent: true
+                silent: true,
             }, priorities.low, false, null, false)
         }
 
