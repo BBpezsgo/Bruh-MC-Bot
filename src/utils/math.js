@@ -36,11 +36,20 @@ Math.lerpRad = function(a, b, t) {
 
 Math.lerpColor = function(a, b, t) {
     t = Math.clamp(t, 0, 1)
-    return [
+    const aBrightness = Math.distance({ x: a[0], y: a[1], z: a[2] }, { x: 0, y: 0, z: 0 })
+    const bBrightness = Math.distance({ x: b[0], y: b[1], z: b[2] }, { x: 0, y: 0, z: 0 })
+    const lerpedBirghtness = Math.lerp(aBrightness, bBrightness, t)
+    /** @type {[number, number, number]} */
+    const result = [
         a[0] + ((b[0] - a[0]) * t),
         a[1] + ((b[1] - a[1]) * t),
         a[2] + ((b[2] - a[2]) * t),
     ]
+    const resultBrightness = Math.distance({ x: result[0], y: result[1], z: result[2] }, { x: 0, y: 0, z: 0 })
+    result[0] /= resultBrightness * lerpedBirghtness
+    result[1] /= resultBrightness * lerpedBirghtness
+    result[2] /= resultBrightness * lerpedBirghtness
+    return result
 }
 
 // @ts-ignore
