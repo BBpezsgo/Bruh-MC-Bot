@@ -863,16 +863,6 @@ module.exports = class BruhBot {
             this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.registry.blocksByName['oak_leaves'].id)
 
             console.log(`[Bot "${this.username}"] Ready`)
-
-            this.bot.on('physicsTick', () => {
-                if (tickInterval) {
-                    clearInterval(tickInterval)
-                    tickInterval = null
-                }
-                if (this.bot.entity?.isValid) {
-                    this.tick()
-                }
-            })
         })
 
         // this.bot.on('move', () => {
@@ -947,16 +937,19 @@ module.exports = class BruhBot {
         /**
          * @type {null | NodeJS.Timeout}
          */
-        let tickInterval = null
-
-        this.bot.on('mount', () => {
-            if (!tickInterval) {
-                tickInterval = setInterval(() => {
-                    if (this.bot.entity?.isValid) {
-                        this.tick()
-                    }
-                }, 50)
+        let tickInterval = setInterval(() => {
+            if (this.bot.entity?.isValid) {
+                this.tick()
             }
+        }, 50)
+
+        this.bot.on('end', () => {
+            clearInterval(tickInterval)
+            tickInterval = null
+        })
+
+        this.bot.on('spawn', () => {
+            if (this.bot.entity) this.bot.entity.isValid = true
         })
 
         this.bot.on('death', () => {
@@ -2739,16 +2732,20 @@ module.exports = class BruhBot {
 
                 if (player && (
                     player.gamemode === 1 ||
-                    player.gamemode === 3
+                    player.gamemode === 3 ||
+                    bots[player.username]
                 )) {
                     console.warn(`[Bot "${this.username}"] Can't attack ${by.entity.name}`)
                     delete this.memory.hurtBy[entityId]
                     continue
                 }
 
-                if (!player && (by.entity.type === 'hostile' || by.entity.type === 'mob')) {
+                if (by.entity.type === 'hostile' || by.entity.type === 'mob') {
                     this.defendAgainst(by.entity)
-                } else if (Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), by.entity) < 4 && (by.entity.type === 'player')) {
+                    continue
+                }
+
+                if (player && Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), by.entity) < 4) {
                     console.log(`[Bot "${this.bot.username}"] Attacking ${by.entity.name ?? by.entity.uuid ?? by.entity.id}`)
                     this.bot.attack(by.entity)
                     delete this.memory.hurtBy[entityId]
