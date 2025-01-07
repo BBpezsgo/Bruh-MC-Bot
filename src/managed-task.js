@@ -148,6 +148,12 @@ class ManagedTask {
      */
     _isBackground
 
+    /**
+     * @readonly
+     * @type {string}
+     */
+    _stackTrace
+
     //#endregion
 
     /**
@@ -187,6 +193,13 @@ class ManagedTask {
         this._byPlayer = byPlayer
         this._isWhispered = isWhispered
         this._isBackground = false
+        this._stackTrace = new Error().stack.replace('Error', '')
+        this._stackTrace = this._stackTrace.split('\n').filter((v, i) => {
+            if (i > 2) return true
+            if (v.startsWith('    at new ManagedTask ')) return false
+            if (v.startsWith('    at TaskManager.push ')) return false
+            return true
+        }).join('\n')
     }
 
     /**
@@ -289,7 +302,11 @@ class ManagedTask {
             }
         } catch (error) {
             this._status = 'failed'
-            console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
+            if (!(error instanceof Error)) {
+                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error, this._stackTrace)
+            } else {
+                console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
+            }
             if (this._reject) { this._reject(error) }
             return true
         }

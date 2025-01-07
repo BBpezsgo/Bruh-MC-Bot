@@ -10,7 +10,14 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  *   includeLocked?: boolean;
  * } | {
  *   food: Item;
- * }>}
+ * }> & {
+ *   can: (bot: import('../bruh-bot'), args: {
+ *     includeRaw?: boolean;
+ *     includeLocked?: boolean;
+ *   } | {
+ *     food: Item;
+ *   }) => boolean;
+ * }}
  */
 module.exports = {
     task: function*(bot, args) {
@@ -71,4 +78,20 @@ module.exports = {
     id: 'eat',
     humanReadableId: `Eating`,
     definition: 'eat',
+    can: (bot, args) => {
+        if (bot.quietMode) return false
+
+        let food = null
+        if ('food' in args) {
+            food = args.food
+        } else {
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), 'foodPoints', args.includeRaw ?? false)
+            if (foods.length === 0) { return false }
+            food = foods[0]
+        }
+
+        if (!food) return false
+
+        return true
+    },
 }

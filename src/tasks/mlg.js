@@ -55,8 +55,10 @@ module.exports = {
             return equipped
         }
 
-        let equippedMlgItem = null
-        if (!(equippedMlgItem = yield* equipMlgItem())) {
+        yield* equipMlgItem()
+        yield* sleepTicks()
+        let equippedMlgItem = bot.bot.heldItem
+        if (!bot.bot.heldItem) {
             const chorusFruit = bot.searchInventoryItem(null, 'chorus_fruit')
             if (chorusFruit) {
                 const eatStarted = performance.now()
@@ -117,6 +119,7 @@ module.exports = {
 
                 const reference = bot.bot.blockAtCursor()
                 if (!reference) {
+                    if (bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) return 'failed'
                     // console.warn(`[Bot "${bot.username}"] [MLG] No reference block`)
                     continue
                 }
@@ -147,8 +150,16 @@ module.exports = {
 
                     yield* sleepTicks(2)
 
-                    const junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
-                    if (junkBlock && junkBlock.name === 'water') {
+                    let junkBlock = bot.bot.blockAt(reference.position.offset(0, 1, 0))
+                    if (!junkBlock || junkBlock.name !== 'water') {
+                        junkBlock = bot.bot.findBlock({
+                            matching: bot.bot.registry.blocksByName['water'].id,
+                            count: 1,
+                            point: reference.position.offset(0, 1, 0),
+                            maxDistance: 4,
+                        })
+                    }
+                    if (junkBlock) {
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
                         const bucket = bot.searchInventoryItem(null, 'bucket')
                         if (bucket) {
@@ -166,10 +177,6 @@ module.exports = {
                         }
                     } else {
                         console.error(`[Bot "${bot.username}"] [MLG] Water not saved`)
-                        // bot.memory.mlgJunkBlocks.push({
-                        //     type: 'water',
-                        //     position: new Vec3Dimension(reference.position.offset(0, 1, 0), bot.dimension),
-                        // })
                     }
                 } else if (Minecraft.mlg.boats.includes(bot.bot.heldItem.name)) {
                     console.log(`[Bot "${bot.username}"] [MLG] Activating item ...`)
