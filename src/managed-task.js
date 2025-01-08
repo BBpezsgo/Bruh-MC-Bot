@@ -268,11 +268,11 @@ class ManagedTask {
         if (this._status === 'cancelled') {
             console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled`)
             if (this._reject) { this._reject(new CancelledError()) }
-            return true
+            return false
         }
 
         if (this._status === 'interrupted') {
-            return false
+            return true
         }
 
         if (!this._task) {
@@ -295,10 +295,10 @@ class ManagedTask {
                     }
                 }
                 if (this._resolve) { this._resolve(v.value) }
-                return true
+                return false
             } else {
                 this._status = 'running'
-                return false
+                return true
             }
         } catch (error) {
             this._status = 'failed'
@@ -308,7 +308,7 @@ class ManagedTask {
                 console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)
             }
             if (this._reject) { this._reject(error) }
-            return true
+            return false
         }
     }
 

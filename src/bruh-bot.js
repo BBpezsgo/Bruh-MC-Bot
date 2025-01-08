@@ -56,6 +56,7 @@ const priorities = Object.freeze({
  *     host: string;
  *     port: number;
  *   }
+ *   debug?: boolean;
  * }} GeneralConfig
  */
 
@@ -64,10 +65,16 @@ const priorities = Object.freeze({
  *   bot: {
  *     username: string;
  *     behavior?: {
- *       pickupItemDistance?: number;
- *       autoSmeltItems?: boolean;
- *       autoHarvest?: boolean;
- *       idleLooking?: boolean;
+ *       instantLook?: boolean;
+ *       loadCrossbows?: boolean;
+ *       dumpTrash?: boolean;
+ *       sleep?: boolean;
+ *       ensureEquipment?: boolean;
+ *       harvest?: boolean;
+ *       restoreCrops?: boolean;
+ *       breedAnimals?: boolean;
+ *       parryTrajectories?: boolean;
+ *       checkQuiet?: boolean;
  *     }
  *   }
  * }} BotConfig
@@ -571,28 +578,35 @@ module.exports = class BruhBot {
         this.commands = new Commands(this.bot)
         this._currentPath = null
         this.lookAtPlayer = 0
-        this._lastImportantTaskTime = performance.now()
-        this.saveInterval = new Interval(30000)
         this._runningTask = null
-        this.instantLook = false
 
-        // this.saveTasksInterval = new Interval(5000)
-        // this.trySleepInterval = new Interval(5000)
-        // this.checkQuietInterval = new Interval(500)
+        this.instantLook = Boolean(config.bot.behavior?.instantLook)
 
-        this.randomLookInterval = new Interval(10000)
-        this.ensureEquipmentInterval = new Interval(60000)
-        this.goBackInterval = new Interval(20000)
-        this.loadCrossbowsInterval = new Interval(5000)
-        this.moveAwayInterval = new Interval(3000)
-        this.dumpTrashInterval = new Interval(20000)
-        this.lookAtPlayerTimeout = new Interval(5000)
+        this.saveInterval = new Interval(30000)
+        this.saveTasksInterval = new Interval(5000)
+
+        this.randomLookInterval = new Interval(5000)
+        this.lookAtPlayerTimeout = new Interval(3000)
+        this.moveAwayInterval = new Interval(1000)
+        this.clearHandInterval = new Interval(5000)
+        this.giveBackItemsInterval = new Interval(5000)
+
+        if (config.bot.behavior?.checkQuiet) this.checkQuietInterval = new Interval(500)
+        if (config.bot.behavior?.loadCrossbows) this.loadCrossbowsInterval = new Interval(5000)
+        if (config.bot.behavior?.dumpTrash) this.dumpTrashInterval = new Interval(5000)
+        if (config.bot.behavior?.dumpTrash) this.forceDumpTrashInterval = new Interval(120000)
+        if (config.bot.behavior?.sleep) this.trySleepInterval = new Interval(5000)
+
+        if (config.bot.behavior?.ensureEquipment) this.ensureEquipmentInterval = new Interval(60000)
+        if (config.bot.behavior?.harvest) this.tryAutoHarvestInterval = new Interval(5000)
+        if (config.bot.behavior?.restoreCrops) this.tryRestoreCropsInterval = new Interval(60000)
+        if (config.bot.behavior?.breedAnimals) this.breedAnimalsInterval = new Interval(60000)
 
         this.permissiveMovements = null
         this.restrictedMovements = null
         this.cutTreeMovements = null
 
-        this.debug = new Debug(this)
+        this.debug = new Debug(this, Boolean(config.debug))
 
         this.chatHandlers = this.setupChatHandlers()
 
@@ -847,7 +861,7 @@ module.exports = class BruhBot {
             console.log(`[Bot "${this.username}"] Spawned`)
             this.bot.clearControlStates()
 
-            this.bot.hawkEye?.startRadar()
+            if (config.bot.behavior?.parryTrajectories) this.bot.hawkEye?.startRadar()
 
             const mineflayerPathfinder = require('mineflayer-pathfinder')
             // @ts-ignore
@@ -860,7 +874,7 @@ module.exports = class BruhBot {
             this.mc.setPermissiveMovements(this.permissiveMovements)
             this.mc.setRestrictedMovements(this.restrictedMovements)
             this.mc.setRestrictedMovements(this.cutTreeMovements)
-            this.cutTreeMovements.blocksCanBreakAnyway.add(this.mc.registry.blocksByName['oak_leaves'].id)
+            this.cutTreeMovements.blocksCanBreakAnyway?.add(this.mc.registry.blocksByName['oak_leaves'].id)
 
             console.log(`[Bot "${this.username}"] Ready`)
         })
@@ -2164,7 +2178,26 @@ module.exports = class BruhBot {
      */
     tick() {
         if (Debug.enabled) {
-            if (false && this._currentPath) {
+            if (this._currentPath) {
+                for (let i = 0; i < this._currentPath.path.length; i++) {
+                    const node = this._currentPath.path[i]
+                    this.debug.label(node.offset(0, 0.5, 0), {
+                        text: node.cost.toFixed(2),
+                        // @ts-ignore
+                        color: Math.rgb2hex(...([
+                            [0.0, 1.0, 0.7],
+                            [0.0, 1.0, 0.0],
+                            [0.3, 1.0, 0.0],
+                            [0.6, 1.0, 0.0],
+                            [0.8, 0.6, 0.0],
+                        ][Math.ceil(node.cost)] ?? [1, 0, 0])),
+                    }, 100)
+                }
+                // this.debug.drawSolidLines([
+                //     // new (require('mineflayer-pathfinder/lib/move').Move)(this.bot.entity.position.x, this.bot.entity.position.y, this.bot.entity.position.z, 0, 0),
+                //     ...this._currentPath.path.map(v => v.offset(0, 0.5, 0)),
+                // ], 'white', 50)
+                /*
                 const a = [0.26, 0.72, 1]
                 const b = [0.04, 1, 0.51]
                 this.debug.drawLines([
@@ -2183,6 +2216,7 @@ module.exports = class BruhBot {
                         Math.lerp(a[2], b[2], cost),
                     ]
                 })
+                */
             }
             this.debug.tick()
         }
@@ -2697,9 +2731,7 @@ module.exports = class BruhBot {
         //#endregion
 
         //#region Eating
-        if (this.bot.food < 18 &&
-            !this.quietMode &&
-            this.mc.filterFoods(this.bot.inventory.items(), 'foodPoints', false).length > 0) {
+        if (this.bot.food < 18 && tasks.eat.can(this, { includeLocked: this.bot.food === 0 })) {
             this.tasks.push(this, tasks.eat, {
                 sortBy: 'foodPoints',
                 includeLocked: this.bot.food === 0,
@@ -2912,6 +2944,13 @@ module.exports = class BruhBot {
                     player: playerDeath.username,
                     items: playerDeath.items,
                 }, priorities.low - 1, false, null, false)
+                    ?.wait()
+                    .catch(error => {
+                        // TODO: better way of handling this
+                        if (error === `Don't have anything`) {
+                            playerDeath.items.forEach(v => v.isUnlocked = true)
+                        }
+                    })
             }
         }
     }

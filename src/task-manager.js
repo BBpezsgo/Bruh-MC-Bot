@@ -33,14 +33,14 @@ module.exports = class TaskManager {
     /** @returns {number} */
     get timeSinceImportantThinkingOrTask() { return performance.now() - this.#timeSinceImportantThinkingOrTask }
 
-    /** @type {number} */ #previousTask
+    /** @type {ManagedTask} */ #previousTask
     /** @readonly @type {Array<ManagedTask>} */ #tasks
     /** @type {boolean} */ #isStopping
     /** @type {number} */ #timeSinceImportantTask
     /** @type {number} */ #timeSinceImportantThinkingOrTask
 
     constructor() {
-        this.#previousTask = -1
+        this.#previousTask = null
         this.#tasks = []
         this.#isStopping = false
         this.#timeSinceImportantTask = 0
@@ -94,9 +94,9 @@ module.exports = class TaskManager {
             return isUpdated ? existingTask : null
         }
 
-        if (this.#tasks.length > 10) {
+        if (this.#tasks.length > 50) {
+            if (this.#previousTask === this.#tasks[0]) this.#previousTask = null
             this.#tasks.shift()
-            this.#previousTask--
             console.warn(`Too many tasks in queue`)
         }
 
@@ -113,7 +113,16 @@ module.exports = class TaskManager {
             isWhispered
         )
 
-        this.#tasks.push(newTask)
+        let added = false
+        for (let i = 0; i < this.#tasks.length; i++) {
+            const other = this.#tasks[i]
+            if (other.priority < newTask.priority) {
+                this.#tasks.splice(i, 0, newTask)
+                added = true
+                break
+            }
+        }
+        if (!added) this.#tasks.push(newTask)
 
         return newTask
     }
@@ -123,8 +132,7 @@ module.exports = class TaskManager {
             const task = this.#tasks[i]
             console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
             this.#tasks.splice(i)
-            if (this.#previousTask === i) this.#previousTask = -1
-            else if (this.#previousTask > i) this.#previousTask--
+            if (this.#previousTask === task) this.#previousTask = null
         }
     }
 
@@ -164,49 +172,41 @@ module.exports = class TaskManager {
         if (this.#tasks.length === 0) { return null }
 
         const backgroundTaskIndex = TaskManager.findImportantTask(this.#tasks, true)
+        const backgroundTask = this.#tasks[backgroundTaskIndex]
 
         if (backgroundTaskIndex !== -1) {
-            if (this.#tasks[backgroundTaskIndex].status === 'running') {
-                if (this.#tasks[backgroundTaskIndex].priority > 0) {
-                    this.#timeSinceImportantThinkingOrTask = performance.now()
-                }
-                this.#tasks[backgroundTaskIndex].tick()
-            } else {
-                this.#tasks[backgroundTaskIndex].focus()
+            if (backgroundTask.priority > 0) {
+                this.#timeSinceImportantThinkingOrTask = performance.now()
+            }
+
+            if (!backgroundTask.tick()) {
+                this.#tasks.splice(backgroundTaskIndex, 1)
             }
         }
 
         const focusedTaskIndex = TaskManager.findImportantTask(this.#tasks, false)
+        const focusedTask = this.#tasks[focusedTaskIndex]
 
         if (focusedTaskIndex !== -1) {
-            if (this.#previousTask !== focusedTaskIndex && this.#previousTask !== -1) {
-                const prev = this.#tasks[this.#previousTask]
-                if (prev) {
-                    prev.interrupt()
-                }
+            if (this.#previousTask && this.#previousTask !== focusedTask) {
+                this.#previousTask.interrupt()
             }
 
-            this.#previousTask = focusedTaskIndex
+            this.#previousTask = focusedTask
 
-            this.#tasks[focusedTaskIndex].resume()
+            focusedTask.resume()
 
-            if (this.#isStopping && this.#tasks[focusedTaskIndex].status === 'queued') {
-                this.#tasks.splice(focusedTaskIndex, 1)
-                this.#previousTask = -1
-                return null
-            }
-
-            if (this.#tasks[focusedTaskIndex].priority > 0) {
+            if (focusedTask.priority > 0) {
                 this.#timeSinceImportantTask = performance.now()
                 this.#timeSinceImportantThinkingOrTask = performance.now()
             }
 
-            if (this.#tasks[focusedTaskIndex].tick()) {
-                this.#tasks.splice(focusedTaskIndex, 1)
-                this.#previousTask = -1
-                return null
+            if (focusedTask.tick()) {
+                return focusedTask
             } else {
-                return this.#tasks[focusedTaskIndex]
+                this.#tasks.splice(focusedTaskIndex, 1)
+                this.#previousTask = null
+                return null
             }
         }
 

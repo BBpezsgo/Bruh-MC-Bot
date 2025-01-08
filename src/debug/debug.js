@@ -140,10 +140,8 @@ const ItemDisplay = require('./item-display')
 const lineMinDistance = 0.8
 
 module.exports = class Debug {
-    /**
-     * @readonly
-     */
-    static enabled = true
+    // TODO: better handling of on/off
+    static enabled = false
 
     /**
      * @typedef {[number, number, number]} Color
@@ -169,12 +167,14 @@ module.exports = class Debug {
 
     /**
      * @param {import('../bruh-bot')} bot
+     * @param {boolean} enabled
      */
-    constructor(bot) {
+    constructor(bot, enabled) {
         this._bot = bot
         // @ts-ignore
         this._bot.bot.debug = this
         this._pointQueue = []
+        Debug.enabled = enabled
     }
 
     /**
