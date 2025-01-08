@@ -175,6 +175,8 @@ module.exports = class TaskManager {
         const backgroundTask = this.#tasks[backgroundTaskIndex]
 
         if (backgroundTaskIndex !== -1) {
+            backgroundTask.resume()
+
             if (backgroundTask.priority > 0) {
                 this.#timeSinceImportantThinkingOrTask = performance.now()
             }
