@@ -5,6 +5,7 @@ const { Item } = require('prismarine-item')
 const { Recipe, RecipeItem } = require('prismarine-recipe')
 const getMcData = require('minecraft-data')
 const LocalMinecraftData = require('./local-minecraft-data')
+const { NBT2JSON } = require('./utils/other')
 
 /**
  * @typedef { 'sword' | 'shovel' | 'pickaxe' | 'axe' | 'hoe' } Tool
@@ -1726,27 +1727,33 @@ module.exports = class Minecraft {
     /**
      * @readonly
      */
+    static get nonoFoods() {
+        return [
+            'golden_apple',
+            'enchanted_golden_apple',
+            'cake',
+        ]
+    }
+
+    /**
+     * @readonly
+     */
+    static get sideEffectFoods() {
+        return [
+            'chorus_fruit',
+        ]
+    }
+
+    /**
+     * @readonly
+     */
     static get badFoods() {
         return [
-            // puffer fish - only gives negative effects
             'pufferfish',
-            // spider eye - gives poison effect
             'spider_eye',
-            // poisonous potato - gives poison effect
             'poisonous_potato',
-            // rotten flesh - gives hunger effect
             'rotten_flesh',
-            // chorus fruit - randomly teleports you
-            'chorus_fruit',
-            // raw chicken - 30% chance of getting hunger effect
             'chicken',
-            // suspicious stew - gives random effects (including hunger)
-            'suspicious_stew',
-            // golden apple - shouldn't be eaten unless the user wants to
-            'golden_apple',
-            'cake',
-            'honey_bottle',
-            'golden_carrot',
         ]
     }
 
@@ -1784,24 +1791,76 @@ module.exports = class Minecraft {
     }
 
     /**
+     * @readonly @type {Readonly<Record<string, number>>}
+     */
+    static effectIdToName = Object.freeze({
+        "speed": 0,
+        "slowness": 1,
+        "haste": 2,
+        "mining_fatigue": 3,
+        "strength": 4,
+        "instant_health": 5,
+        "instant_damage": 6,
+        "jump_boost": 7,
+        "nausea": 8,
+        "regeneration": 9,
+        "resistance": 10,
+        "fire_resistance": 11,
+        "water_breathing": 12,
+        "invisibility": 13,
+        "blindness": 14,
+        "night_vision": 15,
+        "hunger": 16,
+        "weakness": 17,
+        "poison": 18,
+        "wither": 19,
+        "health_boost": 20,
+        "absorption": 21,
+        "saturation": 22,
+        "glowing": 23,
+        "levitation": 24,
+        "luck": 25,
+        "unluck": 26,
+        "slow_falling": 27,
+        "conduit_power": 28,
+        "dolphins_grace": 29,
+        "bad_omen": 30,
+        "hero_of_the_village": 31,
+        "darkness": 32,
+    })
+
+    /**
      * @param {ReadonlyArray<Item>} foods
-     * @param {'foodPoints' | 'saturation'} sort
-     * @param {boolean} includeRaw
+     * @param {{
+     *   sortBy?: 'foodPoints' | 'saturation';
+     *   includeRaw?: boolean;
+     *   includeBadEffects?: boolean;
+     *   includeSideEffects?: boolean;
+     * }} options
      * @returns {Array<Item>}
      */
-    filterFoods(foods, sort, includeRaw) {
-        const goodFoods = Object.keys(this.registry.foodsByName)
+    filterFoods(foods, options) {
+        const _foods = foods
+            .filter(v => v.name in this.registry.foodsByName)
             .filter(v => {
-                if (Minecraft.badFoods.includes(v)) { return false }
-                if (!includeRaw && Minecraft.rawFoods.includes(v)) { return false }
+                const nbt = NBT2JSON(v.nbt)
+                if (!options.includeBadEffects && nbt && 'effects' in nbt) {
+                    for (const effect of nbt.effects) {
+                        const effectDetails = this.registry.effects[Minecraft.effectIdToName[effect.id.replace('minecraft:', '')] ?? -1]
+                        if (!effectDetails) continue
+                        if (effectDetails.type === 'bad') return false
+                    }
+                }
+                if (!options.includeSideEffects && nbt && 'effects' in nbt) return false
+                if (Minecraft.nonoFoods.includes(v.name)) return false
+                if (!options.includeRaw && Minecraft.rawFoods.includes(v.name)) return false
+                if (!options.includeSideEffects && Minecraft.sideEffectFoods.includes(v.name)) return false
+                if (!options.includeBadEffects && Minecraft.badFoods.includes(v.name)) return false
                 return true
             })
 
-        const _foods = foods
-            .filter(v => v.name in this.registry.foodsByName)
-            .filter(v => goodFoods.includes(v.name))
-        if (sort) {
-            return _foods.sort((a, b) => this.registry.foodsByName[b.name][sort] - this.registry.foodsByName[a.name][sort])
+        if (options.sortBy) {
+            return _foods.sort((a, b) => this.registry.foodsByName[b.name][options.sortBy] - this.registry.foodsByName[a.name][options.sortBy])
         } else {
             return _foods
         }

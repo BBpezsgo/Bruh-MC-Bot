@@ -7,12 +7,16 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  * @type {import('../task').TaskDef<'ok' | 'full', {
  *   sortBy?: 'foodPoints' | 'saturation';
  *   includeRaw?: boolean;
+ *   includeBadEffects?: boolean;
+ *   includeSideEffects?: boolean;
  *   includeLocked?: boolean;
  * } | {
  *   food: Item;
  * }> & {
  *   can: (bot: import('../bruh-bot'), args: {
  *     includeRaw?: boolean;
+ *     includeBadEffects?: boolean;
+ *     includeSideEffects?: boolean;
  *     includeLocked?: boolean;
  *   } | {
  *     food: Item;
@@ -27,7 +31,12 @@ module.exports = {
         if ('food' in args) {
             food = args.food
         } else {
-            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), args.sortBy ?? 'foodPoints', args.includeRaw ?? false)
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), {
+                sortBy: args.sortBy,
+                includeRaw: args.includeRaw,
+                includeBadEffects: args.includeBadEffects,
+                includeSideEffects: args.includeSideEffects,
+            })
             if (foods.length === 0) { throw `I have no food` }
             food = foods[0]
         }
@@ -85,7 +94,11 @@ module.exports = {
         if ('food' in args) {
             food = args.food
         } else {
-            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), 'foodPoints', args.includeRaw ?? false)
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), {
+                includeRaw: args.includeRaw,
+                includeBadEffects: args.includeBadEffects,
+                includeSideEffects: args.includeSideEffects,
+            })
             if (foods.length === 0) { return false }
             food = foods[0]
         }
