@@ -125,7 +125,11 @@ module.exports = {
                     }
 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                        throw `Can't harvest ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
+                        throw `Can't dig ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
+                    }
+
+                    if (current.name === 'air') {
+                        throw `Can't dig air`
                     }
 
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
