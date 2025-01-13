@@ -2406,10 +2406,33 @@ function organizePlan(plan) {
 
     indexedSteps.forEach(v => delete v.i)
 
-    return [
+    const res = [
         ...unorderedSteps,
         ...orderedSteps,
     ]
+
+    const compressed = []
+
+    for (let i = 0; i < res.length; i++) {
+        const item = res[i]
+        if (compressed.length === 0) {
+            compressed.push(item)
+            continue
+        }
+        const last = compressed[compressed.length - 1]
+        if (last.type === 'campfire' && item.type === 'campfire' &&
+            last.recipe.ingredient === item.recipe.ingredient &&
+            last.isOptional === item.isOptional
+        ) {
+            const canAdd = Math.max(item.count, 4 - last.count)
+            last.count += canAdd
+            item.count -= canAdd
+            if (item.count <= 0) continue
+        }
+        compressed.push(item)
+    }
+
+    return compressed
 }
 
 /**

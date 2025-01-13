@@ -1023,10 +1023,10 @@ module.exports = {
                     if (!isAlive(target)) { break }
                     targetScore = calculateScore(target)
 
-                    if (Debug.enabled) {
-                        const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
-                        label.lockOn(target.id)
-                        label.text = { text: `${targetScore.toFixed(2)}` }
+                    if (bot.debug.enabled) {
+                        // const label = TextDisplay.ensure(bot.commands, `attack-${target.id}`)
+                        // label.lockOn(target.id)
+                        // label.text = { text: `${targetScore.toFixed(2)}` }
                     }
                 } else {
                     const targetIds = Object.keys(args.targets).map(v => Number.parseInt(v))
@@ -1040,10 +1040,10 @@ module.exports = {
 
                         const candidateScore = calculateScore(candidate)
 
-                        if (Debug.enabled) {
-                            const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
-                            label.lockOn(candidate.id)
-                            label.text = { text: `${candidateScore.toFixed(2)}` }
+                        if (bot.debug.enabled) {
+                            // const label = TextDisplay.ensure(bot.commands, `attack-${candidate.id}`)
+                            // label.lockOn(candidate.id)
+                            // label.text = { text: `${candidateScore.toFixed(2)}` }
                         }
 
                         if (!target || candidateScore > targetScore) {
@@ -1067,8 +1067,8 @@ module.exports = {
 
                 // console.log(`[Bot "${bot.username}"] Attack ${target.name}`)
 
-                if (Debug.enabled) {
-                    TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
+                if (bot.debug.enabled) {
+                    // TextDisplay.registry[`attack-${target.id}`].text = { text: `${targetScore.toFixed(2)}`, color: 'red' }
                 }
 
                 const distance = Math.entityDistance(bot.bot.entity.position.offset(0, 1.6, 0), target)
@@ -1149,16 +1149,16 @@ module.exports = {
                     }
 
                     if (now <= cooldownEndAt + extraCooldown) {
-                        console.log(`Attack cooldown ...`)
+                        // console.log(`Attack cooldown ...`)
                         continue
                     }
 
                     if (isEntityHurting(target)) {
-                        console.log(`Target is hurting ...`)
+                        // console.log(`Target is hurting ...`)
                         continue
                     }
 
-                    console.log(`[Bot "${bot.username}"] Attacking ${target.name ?? target.uuid ?? target.id}`)
+                    // console.log(`[Bot "${bot.username}"] Attacking ${target.name ?? target.uuid ?? target.id}`)
                     bot.bot.attack(target)
                     bot.leftHand.isActivated = false
                     cooldownEndAt = now + cooldown
@@ -1191,6 +1191,7 @@ module.exports = {
                             if (!grade) return true
                             if (!grade.blockInTrayect) return true
                             if (projectilRadar.trajectoryCollisions(
+                                bot.bot,
                                 grade.arrowTrajectoryPoints,
                                 Object.values(bot.bot.players)
                                     .map(v => v.entity)

@@ -34,10 +34,10 @@ module.exports = {
 
             const farmPosition = args.farmPosition.xyz(bot.dimension) ?? bot.bot.entity.position.clone()
 
-            let crops = bot.env.getCrops(bot, farmPosition, false, 1, config.bonemealing.cropSearchRadius)
+            let crops = yield* bot.env.getCrops(bot, farmPosition, false, 1, config.bonemealing.cropSearchRadius)
                 .filter(v => Minecraft.cropsByBlockName[v.name].canUseBonemeal)
                 .map(v => v.position)
-                .toArray()
+                .toArrayAsync()
 
             if (crops.length === 0) { break }
 

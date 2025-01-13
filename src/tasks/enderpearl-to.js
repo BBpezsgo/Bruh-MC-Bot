@@ -39,6 +39,10 @@ module.exports = {
             position: args.destination,
             isValid: false,
         }, new Vec3(0, 0, 0), Weapons.ender_pearl)
+        // const d = args.destination.clone().subtract(bot.bot.entity.position).normalize()
+        // grade.yaw = Math.atan2(d.y, d.x)
+        bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
+        // args.response.respond(`${Math.atan2(d.y, d.x)}(${grade.yaw * (180 / Math.PI)}) ${grade.pitch * (180 / Math.PI)}`)
         if (!grade) {
             throw `No`
         }

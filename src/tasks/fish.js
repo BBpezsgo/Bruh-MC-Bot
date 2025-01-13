@@ -153,7 +153,7 @@ module.exports = {
             })
 
             const grade = bot.bot.hawkEye.getMasterGrade({
-                position: water.offset(0.5, 0.5, 0.5),
+                position: water.offset(0.5, 1, 0.5),
                 isValid: false,
             }, new Vec3(0, 0, 0), Weapons.bobber)
 

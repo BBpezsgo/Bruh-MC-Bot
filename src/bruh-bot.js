@@ -409,6 +409,7 @@ module.exports = class BruhBot {
                 'pathfinder': require('mineflayer-pathfinder').pathfinder,
                 'armor_manager': require('mineflayer-armor-manager'),
                 'hawkeye': require('minecrafthawkeye').default,
+                'blocks-fast': require('../plugins/blocks'),
                 // @ts-ignore
                 'movement': MineFlayerMovement.plugin,
                 'freemotion': require('../plugins/freemotion'),
@@ -598,7 +599,7 @@ module.exports = class BruhBot {
         if (config.bot.behavior?.sleep) this.trySleepInterval = new Interval(5000)
 
         if (config.bot.behavior?.ensureEquipment) this.ensureEquipmentInterval = new Interval(60000)
-        if (config.bot.behavior?.harvest) this.tryAutoHarvestInterval = new Interval(5000)
+        if (config.bot.behavior?.harvest) this.tryAutoHarvestInterval = new Interval(60000)
         if (config.bot.behavior?.restoreCrops) this.tryRestoreCropsInterval = new Interval(60000)
         if (config.bot.behavior?.breedAnimals) this.breedAnimalsInterval = new Interval(60000)
 
@@ -860,8 +861,6 @@ module.exports = class BruhBot {
         this.bot.once('spawn', () => {
             console.log(`[Bot "${this.username}"] Spawned`)
             this.bot.clearControlStates()
-
-            if (config.bot.behavior?.parryTrajectories) this.bot.hawkEye?.startRadar()
 
             const mineflayerPathfinder = require('mineflayer-pathfinder')
             // @ts-ignore
@@ -1629,42 +1628,7 @@ module.exports = class BruhBot {
             match: 'scan crops',
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
-                    task: function*(bot) {
-                        for (let i = bot.env.crops.length - 1; i >= 0; i--) {
-                            yield
-                            const savedCrop = bot.env.crops[i]
-                            if (savedCrop.position.dimension !== bot.dimension) { continue }
-                            const block = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
-                            if (!block) { continue }
-                            if (savedCrop.block !== block.name) {
-                                bot.env.crops.splice(i, 1)
-                                bot.debug.label(block.position.offset(0.5, 1, 0.5), { text: `crop removed`, color: 'red' }, 10000)
-                            }
-                        }
-                        const blocks = bot.findBlocks({
-                            matching: new Set(
-                                Object.keys(Minecraft.cropsByBlockName)
-                                    .map(v => bot.mc.registry.blocksByName[v].id)
-                            ),
-                            count: Infinity,
-                            maxDistance: config.scanCrops.radius,
-                            force: true,
-                            filter: (block) => Minecraft.isCropRoot(bot.bot, block),
-                        })
-                        /** @type {Freq<string>} */
-                        const scanned = new Freq((a, b) => a === b)
-                        for (const block of blocks) {
-                            yield
-                            if (!block) { continue }
-                            bot.debug.label(block.position.offset(0.5, 1, 0.5), block.name, 30000)
-                            bot.env.crops.push({
-                                block: block.name,
-                                position: new Vec3Dimension(block.position, bot.dimension),
-                            })
-                            scanned.add(block.name, 1)
-                        }
-                        return scanned
-                    },
+                    task: BruhBot.scanCrops,
                     id: `scan-crops`,
                     humanReadableId: `Scanning crops`,
                 }, {}, priorities.user, true, sender, isWhispered)
@@ -2177,7 +2141,7 @@ module.exports = class BruhBot {
      * @private
      */
     tick() {
-        if (Debug.enabled) {
+        if (this.debug.enabled) {
             if (this._currentPath) {
                 for (let i = 0; i < this._currentPath.path.length; i++) {
                     const node = this._currentPath.path[i]
@@ -2452,6 +2416,15 @@ module.exports = class BruhBot {
                         id: `extinguish-myself`,
                         humanReadableId: `Extinguish myself`,
                     }, {}, priorities.critical - 3, false, null, false)
+                } else if (blockAt?.name === 'campfire') {
+                    this.tasks.push(this, {
+                        task: tasks.goto.task,
+                        id: `get-out-campfire`,
+                        humanReadableId: `Extinguish myself`,
+                    }, {
+                        flee: blockAt.position,
+                        distance: 2,
+                    }, priorities.critical - 3, false, null, false)
                 }
             }
         }
@@ -2957,13 +2930,11 @@ module.exports = class BruhBot {
 
     doBoredomTasks() {
         if (this.tasks.isIdle && this.tryAutoHarvestInterval?.done()) {
-            if (this.env.getCrop(this, this.bot.entity.position.clone(), true, config.harvest.cropSearchradius)) {
-                this.tasks.push(this, {
-                    task: BruhBot.tryHarvestCrops,
-                    id: `harvest-crops`,
-                    humanReadableId: 'Harvest crops',
-                }, {}, priorities.unnecessary, false, null, false)
-            }
+            this.tasks.push(this, {
+                task: BruhBot.tryHarvestCrops,
+                id: `harvest-crops`,
+                humanReadableId: 'Harvest crops',
+            }, {}, priorities.unnecessary, false, null, false)
         }
 
         if (this.tasks.isIdle && this.tryRestoreCropsInterval?.done()) {
@@ -3014,10 +2985,8 @@ module.exports = class BruhBot {
     }
 
     doNothing() {
-        const idleTime = this.tasks.timeSinceImportantTask
-
-        if (idleTime > 10000 &&
-            this.tasks.isIdle &&
+        if (this.tasks.timeSinceImportantTask > 10000 &&
+            this.tasks.isIdleOrThinking &&
             this.memory.idlePosition &&
             this.dimension === this.memory.idlePosition.dimension &&
             this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)) > 10) {
@@ -3065,17 +3034,17 @@ module.exports = class BruhBot {
                 }
             }
 
-            if ((!this.tasks.isIdleOrThinking || idleTime > 1000) && this.lookAtNearestPlayer()) {
+            if ((!this.tasks.isIdleOrThinking || this.tasks.timeSinceImportantTask > 1000) && this.lookAtNearestPlayer()) {
                 this.randomLookInterval?.restart()
                 return
             }
 
-            if ((!this.tasks.isIdle || idleTime > 1000) && this.randomLookInterval?.done()) {
+            if ((!this.tasks.isIdle || this.tasks.timeSinceImportantTask > 1000) && this.randomLookInterval?.done()) {
                 this.lookRandomly()
                 return
             }
 
-            if ((!this.tasks.isIdleOrThinking || idleTime > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
+            if ((!this.tasks.isIdleOrThinking || this.tasks.timeSinceImportantTask > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
                 this.tryUnequip()
                     .then(v => v ? console.log(`[Bot "${this.username}"] Hand cleared`) : console.log(`[Bot "${this.username}"] Failed to clear hand`))
                     .catch(v => console.error(`[Bot "${this.username}"]`, v))
@@ -3331,6 +3300,7 @@ module.exports = class BruhBot {
      * @type {import('./task').SimpleTaskDef}
      */
     static *tryRestoreCrops(bot, args) {
+        args.task?.blur()
         /** @type {Array<import('./environment').SavedCrop>} */
         const crops = []
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
@@ -3340,6 +3310,7 @@ module.exports = class BruhBot {
             if (blockAt.name === 'air') { crops.push(crop) }
         }
         if (crops.length === 0) { return }
+        args.task?.focus()
         yield* tasks.plantSeed.task(bot, {
             harvestedCrops: crops,
             locks: [],
@@ -3356,15 +3327,20 @@ module.exports = class BruhBot {
         })
 
         for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+            yield
             const blockAt = bot.bot.blockAt(crop.position.xyz(bot.dimension))
             if (!blockAt) { continue }
             if (blockAt.name !== 'air') { continue }
             return 0
         }
 
-        yield* tasks.compost.task(bot, {
-            ...taskUtils.runtimeArgs(args),
-        })
+        try {
+            yield* tasks.compost.task(bot, {
+                ...taskUtils.runtimeArgs(args),
+            })
+        } catch (error) {
+            console.warn(`[Bot "${bot.username}"]`, error)
+        }
 
         return harvested
     }
@@ -3389,6 +3365,72 @@ module.exports = class BruhBot {
         }
         if (!n && _error) { throw _error }
         return n
+    }
+
+    /**
+     * @type {import('./task').SimpleTaskDef<Freq<string>>}
+     */
+    static *scanCrops(bot, args) {
+        args.task?.blur()
+
+        for (let i = bot.env.crops.length - 1; i >= 0; i--) {
+            yield
+            const savedCrop = bot.env.crops[i]
+            if (savedCrop.position.dimension !== bot.dimension) continue
+            const block = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
+            if (!block) continue
+            if (savedCrop.block !== block.name) {
+                bot.env.crops.splice(i, 1)
+                bot.debug.label(block.position.offset(0.5, 1, 0.5), { text: `- ${savedCrop.block}`, color: 'red' }, 10000)
+            }
+        }
+
+        const blocks = bot.findBlocks({
+            matching: new Set(
+                Object.keys(Minecraft.cropsByBlockName)
+                    .map(v => bot.mc.registry.blocksByName[v].id)
+            ),
+            count: Infinity,
+            maxDistance: config.scanCrops.radius,
+            force: true,
+            filter: (block) => Minecraft.isCropRoot(bot.bot, block),
+        })
+
+        /** @type {Freq<string>} */
+        const scanned = new Freq((a, b) => a === b)
+        for (const block of blocks) {
+            yield
+            if (!block) continue
+
+            let alreadySaved = false
+            for (let i = 0; i < bot.env.crops.length; i++) {
+                if (bot.env.crops[i].position.equals(new Vec3Dimension(block.position, bot.dimension))) {
+                    alreadySaved = true
+                    if (bot.env.crops[i].block !== block.name) {
+                        bot.debug.label(block.position.offset(0.5, 1, 0.5), { text: `c ${block.name}`, color: 'yellow' }, 30000)
+                        bot.env.crops[i] = {
+                            block: block.name,
+                            position: new Vec3Dimension(block.position, bot.dimension),
+                        }
+                    } else {
+                        bot.debug.label(block.position.offset(0.5, 1, 0.5), `${block.name}`, 5000)
+                    }
+                    scanned.add(block.name, 1)
+                    break
+                }
+            }
+
+            if (!alreadySaved) {
+                bot.debug.label(block.position.offset(0.5, 1, 0.5), { text: `+ ${block.name}`, color: 'green' }, 30000)
+                bot.env.crops.push({
+                    block: block.name,
+                    position: new Vec3Dimension(block.position, bot.dimension),
+                })
+                scanned.add(block.name, 1)
+            }
+        }
+
+        return scanned
     }
 
     /**

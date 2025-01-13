@@ -55,12 +55,12 @@ module.exports = {
         if ('harvestedCrops' in args) {
             const cropsInDimension = args.harvestedCrops.filter(v => v.position.dimension === bot.dimension)
 
-            const seedsNeed = new Freq(isItemEquals)
-            for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
-                const crop = Minecraft.cropsByBlockName[savedCrop.block]
-                if (!crop) { continue }
-                seedsNeed.add(crop.seed, 1)
-            }
+            // const seedsNeed = new Freq(isItemEquals)
+            // for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
+            //     const crop = Minecraft.cropsByBlockName[savedCrop.block]
+            //     if (!crop) { continue }
+            //     seedsNeed.add(crop.seed, 1)
+            // }
 
             for (const savedCrop of basicRouteSearch(bot.bot.entity.position, cropsInDimension, v => v.position.xyz(bot.dimension))) {
                 if (args.interrupt.isCancelled) { break }
@@ -84,7 +84,7 @@ module.exports = {
                 let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${crop.seed}": Couldn't find a good spot`)
+                    console.warn(`[Bot "${bot.username}"] Can't replant "${crop.seed}": There is already something else`)
                     continue
                 }
 
@@ -121,7 +121,7 @@ module.exports = {
                 const seed = yield* bot.ensureItem({
                     ...runtimeArgs(args),
                     item: crop.seed,
-                    count: seedsNeed.get(crop.seed),
+                    count: 1,
                 })
                 if (!seed) {
                     console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${crop.seed}"`)
@@ -132,12 +132,14 @@ module.exports = {
                 yield* plant(bot, placeOn.block, placeOn.faceVector, seed, {
                     ...runtimeArgs(args),
                 })
-                seedsNeed.set(crop.seed, -1)
+                // seedsNeed.add(crop.seed, -1)
                 plantedCount++
                 continue
             }
         } else {
+            debugger
             while (true) {
+                yield
                 if (args.interrupt.isCancelled) { break }
 
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)

@@ -38,13 +38,14 @@ function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
  */
 function* wrap(promise, interrupt = null) {
     if (typeof promise === 'function') { promise = promise() }
+    const stacktrace = new Error().stack.replace('Error', '')
 
     const onInterrupt = (/** @type {'cancel' | 'interrupt'} */ type) => {
         if (type === 'cancel') {
-            console.warn(`Task cancelled while a promise is running`, promise)
+            console.warn(`Task cancelled while a promise is running`, stacktrace)
             interrupt?.off(onInterrupt)
         } else {
-            console.warn(`Task interrupted while a promise is running`, promise)
+            console.warn(`Task interrupted while a promise is running`, stacktrace)
         }
     }
 

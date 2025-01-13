@@ -92,6 +92,16 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { break }
 
+            /**
+             * @param {import('../utils/interrupt').InterruptType} type
+             */
+            const onInterrupt = (type) => {
+                if (type === 'cancel') {
+                    bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
+                }
+            }
+
+            args.interrupt.on(onInterrupt)
             try {
                 if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
                     // console.log(`[Bot "${bot.username}"] Digging ${current.displayName} ${current.position} ...`)
@@ -140,8 +150,7 @@ module.exports = {
                         position: current.position.clone(),
                         loot: loot,
                     })
-                } else {
-                    console.log(`[Bot "${bot.username}"] Block will be digged by someone else, skipping`)
+                    bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
                 }
             } catch (error) {
                 if (!args.alsoTheNeighbors) {
@@ -151,6 +160,7 @@ module.exports = {
                 }
                 lastError = error
             } finally {
+                args.interrupt.off(onInterrupt)
                 if (args.alsoTheNeighbors) {
                     current = bot.bot.findBlock({
                         point: current.position.clone(),

@@ -18,26 +18,25 @@ module.exports = {
         if (args.interrupt.isCancelled) { return [] }
 
         const recipes = args.recipes.filter(v => v.type === 'campfire')
+
         let campfire = bot.findBlocks({
             matching: 'campfire',
             count: 1,
             maxDistance: 48,
             filter: (campfire) => Boolean(campfire.getProperties()['lit']),
         }).filter(Boolean).first()
-
         if (!campfire) { throw `No campfire nearby` }
 
-        yield* goto.task(bot, {
-            block: campfire.position,
-            ...runtimeArgs(args),
-        })
-
-        let blockLock = null
-        while (!(blockLock = bot.env.tryLockBlock(bot.username, campfire.position))) {
-            yield sleepTicks()
-        }
+        args.task?.blur()
+        const blockLock = yield* bot.env.waitLock(bot.username, campfire.position)
+        args.task?.focus()
 
         try {
+            yield* goto.task(bot, {
+                block: campfire.position,
+                ...runtimeArgs(args),
+            })
+    
             campfire = bot.bot.blockAt(campfire.position)
             if (!campfire) { throw `Campfire disappeared` }
 

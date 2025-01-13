@@ -140,9 +140,6 @@ const ItemDisplay = require('./item-display')
 const lineMinDistance = 0.8
 
 module.exports = class Debug {
-    // TODO: better handling of on/off
-    static enabled = false
-
     /**
      * @typedef {[number, number, number]} Color
      */
@@ -166,6 +163,12 @@ module.exports = class Debug {
     _isFirstTick = true
 
     /**
+     * @readonly
+     * @type {boolean}
+     */
+    enabled
+
+    /**
      * @param {import('../bruh-bot')} bot
      * @param {boolean} enabled
      */
@@ -174,7 +177,7 @@ module.exports = class Debug {
         // @ts-ignore
         this._bot.bot.debug = this
         this._pointQueue = []
-        Debug.enabled = enabled
+        this.enabled = enabled
     }
 
     /**
@@ -184,7 +187,7 @@ module.exports = class Debug {
      * @param {number} [scale]
      */
     drawPoint(position, color, endColor = undefined, scale = 1) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         this._pointQueue.push({
             position: position,
             color: color,
@@ -204,7 +207,7 @@ module.exports = class Debug {
      * @param {number} [scale]
      */
     drawBox(position, size, color, endColor = undefined, scale = 1) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         const step = 0.5
         for (let x = 0; x <= size.x; x += step) {
             this.drawPoint(position.offset(x, 0, 0), color, endColor, scale)
@@ -235,7 +238,7 @@ module.exports = class Debug {
      * @param {number} [scale]
      */
     drawLine(a, b, color, endColor = undefined, scale = 1) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         const offset = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z)
         const length = Math.sqrt((offset.x * offset.x) + (offset.y * offset.y) + (offset.z * offset.z))
         offset.normalize()
@@ -258,7 +261,7 @@ module.exports = class Debug {
      * @param {number} [scale]
      */
     drawLines(points, color, endColor = undefined, scale = 1) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         if (typeof color === 'function') {
             let l = 0
             for (let i = 1; i < points.length; i++) {
@@ -296,7 +299,7 @@ module.exports = class Debug {
      * @param {number} [thickness]
      */
     drawSolidLines(points, color, time, thickness = 0.05) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         for (let i = 1; i < points.length; i++) {
             this.drawSolidLine(points[i - 1], points[i], color, time, thickness)
         }
@@ -310,7 +313,7 @@ module.exports = class Debug {
      * @param {number} [thickness]
      */
     drawSolidLine(a, b, color, time, thickness = 0.05) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         const target = new Vec3(b.x - a.x, b.y - a.y, b.z - a.z).normalize()
         const forward = new Vec3(0, 0, 1)
         const distance = Math.distance(a, b)
@@ -370,7 +373,7 @@ module.exports = class Debug {
      * @param {Color} color
      */
     drawPoints(points, color) {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
         for (let i = 0; i < points.length; i++) {
             this.drawPoint(points[i], color)
         }
@@ -381,10 +384,10 @@ module.exports = class Debug {
      * @param {string | JsonTextComponent} text
      * @param {number} [time]
      * @param {Array<string>} [tags]
-     * @returns {(typeof Debug)['enabled'] extends true ? TextDisplay : null}
+     * @returns {TextDisplay | null}
      */
     label(point, text, time = 30000, tags = []) {
-        if (!Debug.enabled) { return null }
+        if (!this.enabled) { return null }
 
         /** @type {TextDisplayEntityData} */
         const data = {
@@ -416,10 +419,10 @@ module.exports = class Debug {
      * @param {number} [time]
      * @param {Array<string>} [tags]
      * @param {DisplayEntityData['transformation']} [transformation]
-     * @returns {(typeof Debug)['enabled'] extends true ? BlockDisplay : null}
+     * @returns {BlockDisplay | null}
      */
     block(point, block, time = 30000, tags = [], transformation = undefined) {
-        if (!Debug.enabled) { return null }
+        if (!this.enabled) { return null }
 
         const data = {
             block_state: (typeof block === 'string') ? { Name: block } : block,
@@ -448,10 +451,10 @@ module.exports = class Debug {
      * @param {string} item
      * @param {number} [time]
      * @param {Array<string>} [tags]
-     * @returns {(typeof Debug)['enabled'] extends true ? ItemDisplay : null}
+     * @returns {ItemDisplay | null}
      */
     item(point, item, time = 30000, tags = []) {
-        if (!Debug.enabled) { return null }
+        if (!this.enabled) { return null }
 
         // @ts-ignore
         return new ItemDisplay(this._bot.commands, {
@@ -467,7 +470,7 @@ module.exports = class Debug {
     }
 
     tick() {
-        if (!Debug.enabled) { return }
+        if (!this.enabled) { return }
 
         if (this._isFirstTick) {
             this._isFirstTick = false

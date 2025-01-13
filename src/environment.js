@@ -4,7 +4,7 @@ const { Vec3 } = require('vec3')
 const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./utils/serializing')
-const { wrap, sleepG, runtimeArgs } = require('./utils/tasks')
+const { wrap, sleepG, runtimeArgs, sleepTicks } = require('./utils/tasks')
 const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor, isItemEquals } = require('./utils/other')
 const { Block } = require('prismarine-block')
 const Minecraft = require('./minecraft')
@@ -239,6 +239,18 @@ module.exports = class Environment {
         this.animalBreedTimes = data.animalBreedTimes ?? this.animalBreedTimes
         this.minePositions = data.minePositions ?? this.minePositions
         console.log(`[Environment] Loaded`)
+
+        /** @type {Array<SavedCrop>} */
+        const uniqueCrops = []
+        for (const crop of this.crops) {
+            let alreadyAdded = uniqueCrops.find(v => v.position.equals(crop.position))
+            if (alreadyAdded) {
+                alreadyAdded.block = crop.block
+            } else {
+                uniqueCrops.push(crop)
+            }
+        }
+        this.crops = uniqueCrops
     }
 
     /**
@@ -290,12 +302,16 @@ module.exports = class Environment {
                 let isSaved = false
                 for (const crop of this.crops) {
                     if (crop.position.equals(oldBlock.position)) {
+                        if (crop.block !== oldBlock.name) {
+                            bot.debug.label(oldBlock.position.offset(0.5, 1, 0.5), { text: `c ${oldBlock.name}`, color: 'yellow' }, 1000)
+                        }
                         crop.block = oldBlock.name
                         isSaved = true
                         break
                     }
                 }
                 if (!isSaved) {
+                    bot.debug.label(oldBlock.position.offset(0.5, 1, 0.5), { text: `+ ${oldBlock.name}`, color: 'green' }, 1000)
                     this.crops.push({
                         position: new Vec3Dimension(oldBlock.position, dimension),
                         block: oldBlock.name,
@@ -308,12 +324,16 @@ module.exports = class Environment {
             let isSaved = false
             for (const crop of this.crops) {
                 if (crop.position.equals(newBlock.position)) {
+                    if (crop.block !== newBlock.name) {
+                        bot.debug.label(newBlock.position.offset(0.5, 1, 0.5), { text: `c ${newBlock.name}`, color: 'yellow' }, 1000)
+                    }
                     crop.block = newBlock.name
                     isSaved = true
                     break
                 }
             }
             if (!isSaved) {
+                bot.debug.label(newBlock.position.offset(0.5, 1, 0.5), { text: `+ ${newBlock.name}`, color: 'green' }, 1000)
                 this.crops.push({
                     position: new Vec3Dimension(newBlock.position, dimension),
                     block: newBlock.name,
@@ -817,6 +837,7 @@ module.exports = class Environment {
             // TODO: this
             return null
         }
+
         const growsOnBlock = plant.growsOnBlock.map(v => bot.mc.registry.blocksByName[v].id)
         if (!exactBlock && plant.growsOnBlock.includes('farmland')) {
             const hoeableBlocks = [
@@ -830,53 +851,63 @@ module.exports = class Environment {
                 }
             }
         }
-        const bestBlock = bot.bot.findBlock({
-            matching: growsOnBlock,
-            point: plantPosition,
-            maxDistance: exactPosition ? 1 : config.getPlantableBlock.searchRadius,
-            useExtraInfo: (/** @type {Block} */ block) => {
-                if (plant.type === 'spread' && (
-                    plant.seed === 'brown_mushroom' ||
-                    plant.seed === 'red_mushroom')) {
-                    let n = 0
-                    for (let x = -4; x <= 4; x++) {
-                        for (let y = -1; y <= 1; y++) {
-                            for (let z = -4; z <= 4; z++) {
-                                const other = bot.bot.blockAt(block.position.offset(x, y, z))
-                                if (!other || other.name !== plant.seed) { continue }
-                                n++
-                            }
+
+        /**
+         * @param {import('prismarine-block').Block} block
+         */
+        const filter = (block) => {
+            if (plant.type === 'spread' && (
+                plant.seed === 'brown_mushroom' ||
+                plant.seed === 'red_mushroom')) {
+                let n = 0
+                for (let x = -4; x <= 4; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -4; z <= 4; z++) {
+                            const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                            if (!other || other.name !== plant.seed) { continue }
+                            n++
                         }
                     }
-                    if (n >= 5 - 1) {
-                        return false
+                }
+                if (n >= 5 - 1) {
+                    return false
+                }
+            }
+            if (plant.type === 'up' && plant.needsWater) {
+                let hasWater = false
+                for (const neighbor of directBlockNeighbors(block.position.offset(0, -1, 0), 'side')) {
+                    if (bot.bot.blockAt(neighbor)?.name === 'water') {
+                        hasWater = true
+                        break
                     }
                 }
-                if (plant.type === 'up' && plant.needsWater) {
-                    let hasWater = false
-                    for (const neighbor of directBlockNeighbors(bestBlock.position, 'side')) {
-                        if (bot.bot.blockAt(neighbor)?.name === 'water') {
-                            hasWater = true
-                            break
-                        }
-                    }
-                    if (!hasWater) return false
-                }
-                const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
-                for (const neighbor of neighbors) {
-                    const neighborBlock = bot.bot.blockAt(neighbor)
-                    if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
-                    return true
-                }
-                return false
-            },
-        })
-        if (!bestBlock) {
-            return null
+                if (!hasWater) return false
+            }
+            const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
+            for (const neighbor of neighbors) {
+                const neighborBlock = bot.bot.blockAt(neighbor)
+                if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
+                return true
+            }
+            return false
         }
-        if (!growsOnBlock.includes(bestBlock.type)) {
-            return null
+
+        let bestBlock = null
+        if (!exactPosition) {
+            bestBlock = bot.bot.findBlock({
+                matching: growsOnBlock,
+                point: plantPosition,
+                maxDistance: config.getPlantableBlock.searchRadius,
+                useExtraInfo: filter,
+            })
+            if (!bestBlock) return null
+        } else {
+            bestBlock = bot.bot.blockAt(plantPosition.offset(0, -1, 0))
+            if (!bestBlock) return null
+            if (!growsOnBlock.includes(bestBlock.type)) return null
+            if (!filter(bestBlock)) return null
         }
+
         const neighbors = directBlockNeighbors(bestBlock.position, plant.growsOnSide)
         for (const neighbor of neighbors) {
             const neighborBlock = bot.bot.blockAt(neighbor)
@@ -1057,25 +1088,88 @@ module.exports = class Environment {
 
     /**
      * @param {import('./bruh-bot')} bot
-     * @param {Vec3} farmPosition
-     * @param {boolean} grown
-     * @param {number} maxDistance
-     * @returns {Block | null}
+     * @param {SavedCrop} crop
      */
-    getCrop(bot, farmPosition, grown, maxDistance) {
-        /**
-         * @type {Array<Vec3>}
-         */
-        const mushrooms = []
+    getCropHarvestPositions(bot, crop) {
+        const v = Minecraft.resolveCrop(crop.block)
+        const p = crop.position.xyz(bot.dimension)
+        switch (v.type) {
+            case 'grows_block': {
+                for (const neighbor of directBlockNeighbors(p, 'side')) {
+                    const neighborBlock = bot.bot.blockAt(neighbor)
+                    if (!neighborBlock || neighborBlock.name !== v.grownBlock) continue
+                    return neighborBlock
+                }
+                return null
+            }
+            case 'grows_fruit': {
+                const block = bot.bot.blockAt(p)
+                if (!block) return null
+                switch (block.name) {
+                    case 'cave_vines':
+                    case 'cave_vines_plant':
+                        const berries = Boolean(block.getProperties()?.['berries'])
+                        if (berries) return block
+                        return null
+                    case 'sweet_berry_bush':
+                        const age = Number(block.getProperties()?.['age'])
+                        if (age >= 3) return block
+                        return null
+                    default:
+                        console.warn(`Unimplemented fruit crop "${block.name}"`)
+                        return null
+                }
+            }
+            case 'seeded':
+            case 'simple': {
+                const block = bot.bot.blockAt(p)
+                if (!block) return null
+                const age = Number(block.getProperties()?.['age'])
+                if (age >= v.grownAge) return block
+                return null
+            }
+            case 'up': {
+                const above = bot.bot.blockAt(p.offset(0, 1, 0))
+                if (above.name === v.cropName) return above
+                return null
+            }
+            case 'spread': {
+                const block = bot.bot.blockAt(p)
+                if (!block) return null
 
-        return bot.findBlocks({
-            matching: bot.mc.cropBlockIds,
-            filter: block => this.cropFilter(bot, grown, block, mushrooms),
-            point: farmPosition,
-            count: 1,
-            maxDistance: maxDistance,
-            force: true,
-        }).filter(v => !!v).first() ?? null
+                if (block.name === 'brown_mushroom' ||
+                    block.name === 'red_mushroom') {
+                    let nearby = 0
+                    for (let x = -4; x <= 4; x++) {
+                        for (let y = -1; y <= 1; y++) {
+                            for (let z = -4; z <= 4; z++) {
+                                if (!x && !y && !z) continue
+                                const other = bot.bot.blockAt(p.offset(x, y, z))
+                                if (!other || other.name !== block.name) continue
+                                if (this.getAllocatedBlock(new Vec3Dimension(p.offset(x, y, z), bot.dimension))) continue
+                                nearby++
+                                if (nearby > 2) return block
+                            }
+                        }
+                    }
+                    return null
+                }
+
+                if (block.name === 'air') return null
+
+                console.warn(`Unimplemented spread crop "${block.name}"`)
+                return null
+            }
+            case 'tree': {
+                const block = bot.bot.blockAt(p)
+                if (!block) return null
+
+                if (v.log !== block.name) return null
+                if (v.size !== 'small') return null
+                return block
+            }
+            default: return null
+        }
     }
 
     /**
@@ -1176,6 +1270,18 @@ module.exports = class Environment {
         }
         this.lockedBlocks.push(newLock)
         return newLock
+    }
+
+    /**
+     * @param {string} by
+     * @param {Point3} block
+     */
+    *waitLock(by, block) {
+        let lock = null
+        while (!(lock = this.tryLockBlock(by, block))) {
+            yield* sleepTicks()
+        }
+        return lock
     }
 
     /**

@@ -114,37 +114,25 @@ module.exports = {
             recipe = best.recipes[0]
         }
 
-        if (!furnaceBlock) { throw `Furnace disappeared` }
-
-        yield* goto.task(bot, {
-            block: furnaceBlock.position,
-            ...runtimeArgs(args),
-        })
-        if (args.interrupt.isCancelled) { return [] }
-
-        furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
-
-        if (!furnaceBlock) { throw `Furnace disappeared` }
-
-        if (args.interrupt.isCancelled) { return [] }
-
         let shouldTakeEverything = false
         const outputs = []
 
-        let blockLock = null
-        try {
-            args.task?.blur()
-            while (!(blockLock = bot.env.tryLockBlock(bot.username, furnaceBlock.position))) {
-                yield sleepTicks()
-            }
-        } finally {
-            args.task?.focus()
-        }
+        args.task?.blur()
+        const blockLock = yield* bot.env.waitLock(bot.username, furnaceBlock.position)
+        args.task?.focus()
 
         /** @type {import('mineflayer').Furnace | null} */
         let furnace = null
 
         try {
+            furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
+            if (!furnaceBlock) { throw `Furnace disappeared` }
+    
+            yield* goto.task(bot, {
+                block: furnaceBlock.position,
+                ...runtimeArgs(args),
+            })
+    
             furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock), args.interrupt)
             furnace.once('close', () => {
                 furnace = null
@@ -245,7 +233,7 @@ module.exports = {
                 if (furnace.outputItem()) { yield* wrap(furnace.takeOutput(), args.interrupt) }
             }
             furnace?.close()
-            bot.env.unlockBlock(bot.username, blockLock.block)
+            blockLock.isUnlocked = true
         }
     },
     id: function(args) {

@@ -20,12 +20,7 @@ module.exports = {
         if (args.interrupt.isCancelled) { return 0 }
         if (bot.quietMode) { throw `Can't harvest in quiet mode` }
 
-        if (args.farmPosition) {
-            yield* goto.task(bot, {
-                dimension: args.farmPosition.dimension,
-                ...runtimeArgs(args),
-            })
-        }
+        args.task.blur()
 
         let n = 0
         /**
@@ -42,213 +37,135 @@ module.exports = {
         while (true) {
             yield
 
-            if (args.interrupt.isCancelled) { break }
+            if (args.interrupt.isCancelled) break
 
-            let cropPositions = bot.env.getCrops(bot, farmPosition, true, 128, config.harvest.cropSearchradius).map(v => v.position).toArray()
-            if (cropPositions.length === 0) { break }
-            // cropPositions = cropPositions.map(b => ({ b: b, d: b.distanceTo(bot.bot.entity.position) })).sort((a, b) => a.d - b.d).map(b => b.b)
+            const cropPositions = bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.position.xyz(bot.dimension).distanceTo(farmPosition) < 32)
+            if (cropPositions.length === 0) break
 
-            // console.log(`[Bot "${bot.username}"] Harvesting ${cropPositions.length} crops ...`)
-            for (const cropPosition of basicRouteSearch(bot.bot.entity.position, cropPositions)) {
-                // yield
+            let didSomething = false
 
-                if (args.interrupt.isCancelled) { break }
+            for (const cropPosition of basicRouteSearch(bot.bot.entity.position, cropPositions, v => v.position.xyz(bot.dimension))) {
+                yield
+                if (args.interrupt.isCancelled) break
 
-                const cropBlock = bot.bot.blockAt(cropPosition)
-                if (!cropBlock) { continue }
-                // console.log(`[Bot "${bot.username}"] Harvesting ${cropBlock.name} ...`)
+                const crop = Minecraft.resolveCrop(cropPosition.block)
+                const grownBlock = bot.env.getCropHarvestPositions(bot, cropPosition)
+                if (!grownBlock) continue
 
-                const cropInfo = Minecraft.resolveCrop(cropBlock.name)
-                if (!cropInfo) {
-                    console.warn(`[Bot "${bot.username}"] This aint a crop`)
-                    continue
-                }
+                const p = cropPosition.position
+                if (bot.env.getAllocatedBlock(p)) continue
 
-                if (cropInfo.type !== 'spread' && !bot.env.cropFilter(bot, true, cropBlock, [])) {
-                    console.warn(`[Bot "${bot.username}"] This crop aint good`)
-                    continue
-                }
+                args.task?.focus()
 
-                const p = new Vec3Dimension(cropPosition, bot.dimension)
-
-                const gotoCrop = function*() {
-                    // console.log(`[Bot "${bot.username}"] Goto block ...`)
-                    try {
-                        yield* goto.task(bot, {
-                            block: cropPosition,
-                            ...runtimeArgs(args),
-                        })
-                        return true
-                    } catch (error) {
-                        if (error instanceof Error && error.name === 'NoPath') {
-                            console.error(`[Bot "${bot.username}"] No path`)
-                        } else if (error instanceof Error && error.name === 'GoalChanged') {
-                            console.error(`[Bot "${bot.username}"] Goal changed`)
-                        } else {
-                            console.error(error)
+                try {
+                    switch (crop.type) {
+                        case 'seeded':
+                        case 'simple':
+                        case 'up':
+                        case 'grows_block':
+                        case 'spread': {
+                            yield* dig.task(bot, {
+                                block: grownBlock,
+                                alsoTheNeighbors: false,
+                                pickUpItems: true,
+                                ...runtimeArgs(args),
+                            })
+                            break
                         }
-                        return farmPosition
+                        case 'grows_fruit': {
+                            yield* goto.task(bot, {
+                                block: grownBlock.position,
+                                ...runtimeArgs(args),
+                            })
+                            yield* bot.activate(grownBlock)
+                            break
+                        }
+                        case 'tree': {
+                            if (crop.log !== grownBlock.name) {
+                                console.warn(`[Bot "${bot.username}"] This tree aint right`)
+                                continue
+                            }
+                            if (crop.size !== 'small') {
+                                console.warn(`[Bot "${bot.username}"] This tree is too big for me`)
+                                continue
+                            }
+                            yield* dig.task(bot, {
+                                block: grownBlock,
+                                alsoTheNeighbors: true,
+                                pickUpItems: true,
+                                ...runtimeArgs(args),
+                            })
+                            break
+                        }
+                        default:
+                            debugger
+                            continue
                     }
-                }
+                    n++
+                    didSomething = true
 
-                // console.log(`[Bot "${bot.username}"] Actually harvesting ...`)
+                    if (Minecraft.isCropRoot(bot.bot, grownBlock)) {
+                        let isSaved = false
 
-                switch (cropInfo.type) {
-                    case 'seeded':
-                    case 'simple':
-                    case 'up': {
-                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
-                        yield* bot.dig(cropBlock)
-                        break
-                    }
-                    case 'grows_fruit': {
-                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
-                        yield* bot.activate(cropBlock)
-                        break
-                    }
-                    case 'grows_block': {
-                        let fruitBlock = null
-                        for (const neighbor of directBlockNeighbors(cropBlock.position)) {
-                            const neighborBlock = bot.bot.blockAt(neighbor)
-                            if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
-                                fruitBlock = neighborBlock
+                        for (const savedCrop of bot.env.crops) {
+                            if (savedCrop.position.equals(p)) {
+                                savedCrop.block = crop.cropName
+                                isSaved = true
                                 break
                             }
                         }
-                        if (!fruitBlock) {
-                            console.warn(`[Bot "${bot.username}"] This block isn't grown`)
-                            continue
+
+                        if (!isSaved) {
+                            bot.debug.label(p, crop.cropName, 30000)
+                            bot.env.crops.push({
+                                position: p,
+                                block: crop.cropName,
+                            })
                         }
-                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
-                        yield* goto.task(bot, {
-                            block: fruitBlock.position,
-                            ...runtimeArgs(args),
-                        })
-                        yield* bot.dig(fruitBlock)
-                        break
                     }
-                    case 'tree': {
-                        if (cropInfo.log !== cropBlock.name) {
-                            console.warn(`[Bot "${bot.username}"] This tree aint right`)
-                            continue
-                        }
-                        if (cropInfo.size !== 'small') {
-                            console.warn(`[Bot "${bot.username}"] This tree is too big for me`)
-                            continue
-                        }
-                        yield* dig.task(bot, {
-                            block: cropBlock,
-                            alsoTheNeighbors: true,
-                            pickUpItems: true,
-                            ...runtimeArgs(args),
+
+                    harvestedPoints.push(p.xyz(bot.dimension))
+
+                    if (crop.type === 'grows_block') continue
+                    if (crop.type === 'grows_fruit') continue
+                    if (crop.type === 'spread') continue
+                    if (crop.type === 'up') continue
+
+                    if (!replantDuringHarvesting) {
+                        replantPositions.push({
+                            position: p,
+                            block: crop.cropName,
                         })
-                        break
-                    }
-                    case 'spread': {
-                        if (!bot.env.getAllocatedBlock(p) && !(yield* gotoCrop())) continue
-                        yield* dig.task(bot, {
-                            block: cropBlock,
-                            alsoTheNeighbors: false,
-                            pickUpItems: true,
-                            ...runtimeArgs(args),
-                        })
-                        break
-                    }
-                    default:
-                        debugger
                         continue
-                }
-                n++
-
-                if (Minecraft.isCropRoot(bot.bot, cropBlock)) {
-                    let isSaved = false
-
-                    for (const crop of bot.env.crops) {
-                        if (crop.position.equals(cropPosition)) {
-                            crop.block = cropInfo.cropName
-                            isSaved = true
-                            break
-                        }
                     }
 
-                    if (isSaved) {
-                        // console.log(`[Bot "${bot.username}"] Crop already saved`)
-                    } else {
-                        // console.log(`[Bot "${bot.username}"] Crop saved`)
-                        bot.env.crops.push({
-                            position: new Vec3Dimension(cropPosition, bot.dimension),
-                            block: cropInfo.cropName,
+                    try {
+                        const seed = bot.searchInventoryItem(null, crop.seed)
+                        if (!seed) { throw `Can't replant this: doesn't have "${crop.seed}"` }
+
+                        const placeOn = bot.env.getPlantableBlock(bot, p.xyz(bot.dimension), crop, true, true)
+                        if (!placeOn) { throw `Place on is null` }
+
+                        yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed, args)
+                    } catch (error) {
+                        replantPositions.push({
+                            position: p,
+                            block: crop.cropName,
                         })
-                    }
-                }
-
-                harvestedPoints.push(cropPosition)
-
-                if (cropInfo.type === 'grows_block') {
-                    continue
-                }
-
-                if (cropInfo.type === 'grows_fruit') {
-                    continue
-                }
-
-                if (cropInfo.type === 'spread') {
-                    continue
-                }
-
-                if (cropInfo.type === 'up') {
-                    continue
-                }
-
-                if (!replantDuringHarvesting) {
-                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
-                    replantPositions.push({
-                        position: new Vec3Dimension(cropPosition, bot.dimension),
-                        block: cropInfo.cropName,
-                    })
-                    continue
-                }
-
-                try {
-                    // console.log(`[Bot "${bot.username}"] Try replant "${cropInfo.seed}" at ${cropBlock.position}`)
-
-                    const seed = bot.searchInventoryItem(null, cropInfo.seed)
-                    if (!seed) {
-                        throw `Can't replant this: doesn't have "${cropInfo.seed}"`
+                        console.warn(`[Bot "${bot.username}"]`, error)
                     }
 
-                    const placeOn = bot.env.getPlantableBlock(bot, cropBlock.position, cropInfo, true, true)
-                    if (!placeOn) {
-                        throw `Place on is null`
-                    }
-
-                    // console.log(`[Bot "${bot.username}"] Replant on ${placeOn.block.name}`)
-
-                    yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed, args)
-
-                    // console.log(`[Bot "${bot.username}"] Seed ${cropInfo.seed} replanted`)
-                } catch (error) {
-                    // console.log(`[Bot "${bot.username}"] Crop position saved`)
-                    replantPositions.push({
-                        position: new Vec3Dimension(cropPosition, bot.dimension),
-                        block: cropInfo.cropName,
-                    })
-                    // console.warn(error)
+                } finally {
+                    args.task?.blur()
                 }
             }
 
-            // try {
-            //     yield* pickupItem.task(bot, {
-            //         inAir: true,
-            //         maxDistance: 8,
-            //         point: farmPosition,
-            //     })
-            // } catch (error) {
-            //     console.warn(error)
-            // }
+            if (!didSomething) break
         }
 
         if (args.interrupt.isCancelled) { return n }
+
+        args.task?.focus()
 
         yield* plantSeed.task(bot, {
             harvestedCrops: replantPositions,

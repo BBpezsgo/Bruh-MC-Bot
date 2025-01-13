@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap, waitForEvent, runtimeArgs } = require('../utils/tasks')
+const { wrap, waitForEvent, runtimeArgs, sleepTicks } = require('../utils/tasks')
 const { NBT2JSON, stringifyItemH } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
@@ -373,24 +373,21 @@ module.exports = {
             count: 1,
             maxDistance: 64,
         }).filter(v => !!v).first()
-
         if (!brewingStand) { throw `No brewing stand found` }
 
-        yield* goto.task(bot, {
-            block: brewingStand.position,
-            ...runtimeArgs(args),
-        })
-
-        let blockLock = null
-        while (!(blockLock = bot.env.tryLockBlock(bot.username, brewingStand.position))) {
-
-        }
+        args.task?.blur()
+        const blockLock = yield* bot.env.waitLock(bot.username, brewingStand.position)
+        args.task?.focus()
 
         /** @type {import('mineflayer').BrewingStand | null} */
         let window = null
         try {
+            yield* goto.task(bot, {
+                block: brewingStand.position,
+                ...runtimeArgs(args),
+            })
+    
             brewingStand = bot.bot.blockAt(brewingStand.position, true)
-
             if (!brewingStand) { throw `Brewing stand disappeared` }
 
             const slot1 = 0
