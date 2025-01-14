@@ -446,14 +446,14 @@ module.exports = class Minecraft {
 
     static {
         // @ts-ignore
-        this.sortedFuels = Object.entries(this.fuels)
-            .map(([item, value]) => ({
-                item: item,
-                time: value.time,
-                no: value.no,
-                simple: value.simple,
-            }))
-            .sort((a, b) => a.time - b.time)
+        this.sortedFuels = Object.freeze(
+            Object.entries(this.fuels)
+                .map(([item, value]) => ({
+                    item: item,
+                    ...value,
+                }))
+                .sort((a, b) => a.time - b.time)
+        )
     }
 
     /**
@@ -658,7 +658,7 @@ module.exports = class Minecraft {
      * @readonly
      * @type {Record<string, AnyCrop>}
      */
-    static cropsByBlockName = {
+    static cropsByBlockName = Object.freeze({
         'potatoes': {
             type: 'simple',
             seed: 'potato',
@@ -706,6 +706,26 @@ module.exports = class Minecraft {
             lightLevel: { min: 9 },
         },
         'pumpkin_stem': {
+            type: 'grows_block',
+            seed: 'pumpkin_seeds',
+            grownBlock: 'pumpkin',
+            attachedCropName: 'attached_pumpkin_stem',
+            growsOnBlock: ['farmland'],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+            lightLevel: { min: 9 },
+        },
+        'attached_melon_stem': {
+            type: 'grows_block',
+            seed: 'melon_seeds',
+            grownBlock: 'melon',
+            attachedCropName: 'attached_melon_stem',
+            growsOnBlock: ['farmland'],
+            growsOnSide: 'top',
+            canUseBonemeal: true,
+            lightLevel: { min: 9 },
+        },
+        'attached_pumpkin_stem': {
             type: 'grows_block',
             seed: 'pumpkin_seeds',
             grownBlock: 'pumpkin',
@@ -963,7 +983,7 @@ module.exports = class Minecraft {
             needsWater: false,
             seed: 'cactus',
         },
-    }
+    })
 
     /**
      * @param {import('mineflayer').Bot} bot
@@ -995,7 +1015,7 @@ module.exports = class Minecraft {
 
     /**
      * @readonly
-     * @type {Readonly<Record<string, {
+     * @type {Readonly<Record<string, Readonly<{
      *   rangeOfSight: number;
      *   meleeAttack?: {
      *     range: number;
@@ -1008,478 +1028,476 @@ module.exports = class Minecraft {
      *     cooldown: number;
      *   };
      *   alwaysAngry: boolean;
-     * }>>}
+     * }>>>}
      */
-    static get hostiles() {
-        return ({
-            'snow_golem': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: 0 },
-                    cooldown: 1,
-                    range: 16, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 16,
+    static hostiles = Object.freeze({
+        'snow_golem': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: 0 },
+                cooldown: 1,
+                range: 16, // ?
             },
-            'shulker_bullet': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: 4 },
-                    range: 2,
-                    cooldown: 1, // ?
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            alwaysAngry: false,
+            rangeOfSight: 16,
+        },
+        'shulker_bullet': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: 4 },
+                range: 2,
+                cooldown: 1, // ?
             },
-            'ender_dragon': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
-                    range: 8, // ?
-                    cooldown: 1, // ?
-                },
-                rangeAttack: {
-                    damage: { type: 'physical', amount: 12 },
-                    cooldown: 6, // ?
-                    range: 64,
-                },
-                rangeOfSight: 150,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'ender_dragon': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
+                range: 8, // ?
+                cooldown: 1, // ?
             },
-            'breeze': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: 6 },
-                    cooldown: 3, // ?
-                    range: 16, // ?
-                },
-                alwaysAngry: true,
-                rangeOfSight: 16, // ?
+            rangeAttack: {
+                damage: { type: 'physical', amount: 12 },
+                cooldown: 6, // ?
+                range: 64,
             },
-            'evoker_fangs': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: 6 },
-                    cooldown: 1, // ?
-                    range: 1, // ?
-                },
-                alwaysAngry: true,
-                rangeOfSight: 3, // ?
+            rangeOfSight: 150,
+            alwaysAngry: true,
+        },
+        'breeze': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: 6 },
+                cooldown: 3, // ?
+                range: 16, // ?
             },
-            'elder_guardian': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                    cooldown: 3, // ?
-                    range: 15,
-                },
-                alwaysAngry: true,
-                rangeOfSight: 16, // ?
+            alwaysAngry: true,
+            rangeOfSight: 16, // ?
+        },
+        'evoker_fangs': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: 6 },
+                cooldown: 1, // ?
+                range: 1, // ?
             },
-            'guardian': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
-                    cooldown: 3 + 5,
-                    range: 15,
-                },
-                alwaysAngry: true,
-                rangeOfSight: 16, // ?
+            alwaysAngry: true,
+            rangeOfSight: 3, // ?
+        },
+        'elder_guardian': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                cooldown: 3, // ?
+                range: 15,
             },
-            'panda': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
-                    cooldown: 1, // ?
-                    range: 2, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 16, // ?
+            alwaysAngry: true,
+            rangeOfSight: 16, // ?
+        },
+        'guardian': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                cooldown: 3 + 5,
+                range: 15,
             },
-            'wither': {
-                rangeAttack: {
-                    damage: [
-                        { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                        // { type: 'explosion', amount: 5 },
-                        { type: 'effect', effect: 'wither', time: 40000, level: 2 },
-                    ],
-                    range: 24, // ?
-                    cooldown: 1, // ?
-                },
-                alwaysAngry: true,
-                rangeOfSight: 32, // ?
+            alwaysAngry: true,
+            rangeOfSight: 16, // ?
+        },
+        'panda': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                cooldown: 1, // ?
+                range: 2, // ?
             },
-            'polar_bear': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
-                    cooldown: 1, // ?
-                    range: 2, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 16, // ?
+            alwaysAngry: false,
+            rangeOfSight: 16, // ?
+        },
+        'wither': {
+            rangeAttack: {
+                damage: [
+                    { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                    // { type: 'explosion', amount: 5 },
+                    { type: 'effect', effect: 'wither', time: 40000, level: 2 },
+                ],
+                range: 24, // ?
+                cooldown: 1, // ?
             },
-            'iron_golem': {
-                meleeAttack: {
-                    damage: { type: 'physical', amount: { easy: 11.75, normal: 21.5, hard: 32.25 } },
-                    cooldown: 1, // ?
-                    range: 3, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 16, // ?
+            alwaysAngry: true,
+            rangeOfSight: 32, // ?
+        },
+        'polar_bear': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                cooldown: 1, // ?
+                range: 2, // ?
             },
-            'trader_llama': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: 1 },
-                    cooldown: 3, // ?
-                    range: 4, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 4, // ?
+            alwaysAngry: false,
+            rangeOfSight: 16, // ?
+        },
+        'iron_golem': {
+            meleeAttack: {
+                damage: { type: 'physical', amount: { easy: 11.75, normal: 21.5, hard: 32.25 } },
+                cooldown: 1, // ?
+                range: 3, // ?
             },
-            'llama': {
-                rangeAttack: {
-                    damage: { type: 'physical', amount: 1 },
-                    cooldown: 3, // ?
-                    range: 4, // ?
-                },
-                alwaysAngry: false,
-                rangeOfSight: 4, // ?
+            alwaysAngry: false,
+            rangeOfSight: 16, // ?
+        },
+        'trader_llama': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: 1 },
+                cooldown: 3, // ?
+                range: 4, // ?
             },
-            'vex': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5.5, normal: 9, hard: 13.5 } },
-                    cooldown: 1, // ?
-                },
-                rangeOfSight: 16, // ?
-                alwaysAngry: true,
+            alwaysAngry: false,
+            rangeOfSight: 4, // ?
+        },
+        'llama': {
+            rangeAttack: {
+                damage: { type: 'physical', amount: 1 },
+                cooldown: 3, // ?
+                range: 4, // ?
             },
-            'shulker': {
-                rangeAttack: {
-                    range: 16,
-                    damage: { type: 'physical', amount: 4 },
-                    cooldown: 1000, // 1000 - 5500
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            alwaysAngry: false,
+            rangeOfSight: 4, // ?
+        },
+        'vex': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5.5, normal: 9, hard: 13.5 } },
+                cooldown: 1, // ?
             },
-            'blaze': {
-                meleeAttack: {
-                    range: 1,
-                    damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
-                    cooldown: 1000,
-                },
-                rangeAttack: {
-                    range: 48,
-                    damage: [
-                        { type: 'physical', amount: 5 },
-                        { type: 'fire', time: 5000 },
-                    ],
-                    cooldown: 5000, // burstCooldown: 300
-                },
-                rangeOfSight: 48,
-                alwaysAngry: true,
+            rangeOfSight: 16, // ?
+            alwaysAngry: true,
+        },
+        'shulker': {
+            rangeAttack: {
+                range: 16,
+                damage: { type: 'physical', amount: 4 },
+                cooldown: 1000, // 1000 - 5500
             },
-            'drowned': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
-                },
-                rangeAttack: {
-                    range: 20,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                    cooldown: 1500,
-                },
-                rangeOfSight: 24,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'blaze': {
+            meleeAttack: {
+                range: 1,
+                damage: { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                cooldown: 1000,
             },
-            'illusioner': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeAttack: {
+                range: 48,
+                damage: [
+                    { type: 'physical', amount: 5 },
+                    { type: 'fire', time: 5000 },
+                ],
+                cooldown: 5000, // burstCooldown: 300
             },
-            'phantom': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                },
-                rangeOfSight: 64,
-                alwaysAngry: true,
+            rangeOfSight: 48,
+            alwaysAngry: true,
+        },
+        'drowned': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
             },
-            'warden': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 16, normal: 30, hard: 45 } },
-                    cooldown: 900,
-                },
-                rangeAttack: {
-                    range: 20,
-                    damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
-                    cooldown: 5,
-                },
-                rangeOfSight: 16,
-                alwaysAngry: false,
+            rangeAttack: {
+                range: 20,
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                cooldown: 1500,
             },
-            'evoker': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: 24 },
-                },
-                rangeOfSight: 12,
-                alwaysAngry: true,
+            rangeOfSight: 24,
+            alwaysAngry: true,
+        },
+        'illusioner': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
             },
-            'creeper': {
-                meleeAttack: {
-                    range: 3,
-                    damage: { type: 'explosion', level: 7 },
-                },
-                rangeOfSight: 15,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'phantom': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
             },
-            'skeleton': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } }
-                },
-                rangeAttack: {
-                    range: 15,
-                    damage: { type: 'physical', amount: { easy: 4, normal: 4, hard: 5 } },
-                    cooldown: 2000, // hard: 1000
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 64,
+            alwaysAngry: true,
+        },
+        'warden': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 16, normal: 30, hard: 45 } },
+                cooldown: 900,
             },
-            'cave_spider': {
-                meleeAttack: {
-                    range: 2,
-                    damage: [
-                        { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                        { type: 'effect', effect: 'poison', time: 15000, level: 1 },
-                    ],
-                },
-                rangeOfSight: 16,
-                alwaysAngry: false,
+            rangeAttack: {
+                range: 20,
+                damage: { type: 'physical', amount: { easy: 6, normal: 10, hard: 15 } },
+                cooldown: 5,
             },
-            'endermite': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: false,
+        },
+        'evoker': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: 24 },
             },
-            'hoglin': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: false,
+            rangeOfSight: 12,
+            alwaysAngry: true,
+        },
+        'creeper': {
+            meleeAttack: {
+                range: 3,
+                damage: { type: 'explosion', level: 7 },
             },
-            'magma_cube': {
-                meleeAttack: {
-                    range: 2,
-                    damage: {
-                        type: 'physical',
-                        amount: function(entity) {
-                            const size = entity.metadata[16]
-                            switch (size) {
-                                case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
-                                case 1: return { easy: 3, normal: 5, hard: 6 }
-                                case 2: return { easy: 4, normal: 6, hard: 9 }
-                                default: return { easy: 4, normal: 6, hard: 9 }
-                            }
-                        },
+            rangeOfSight: 15,
+            alwaysAngry: true,
+        },
+        'skeleton': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } }
+            },
+            rangeAttack: {
+                range: 15,
+                damage: { type: 'physical', amount: { easy: 4, normal: 4, hard: 5 } },
+                cooldown: 2000, // hard: 1000
+            },
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'cave_spider': {
+            meleeAttack: {
+                range: 2,
+                damage: [
+                    { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
+                    { type: 'effect', effect: 'poison', time: 15000, level: 1 },
+                ],
+            },
+            rangeOfSight: 16,
+            alwaysAngry: false,
+        },
+        'endermite': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
+            },
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'hoglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+            },
+            rangeOfSight: 16,
+            alwaysAngry: false,
+        },
+        'magma_cube': {
+            meleeAttack: {
+                range: 2,
+                damage: {
+                    type: 'physical',
+                    amount: function(entity) {
+                        const size = entity.metadata[16]
+                        switch (size) {
+                            case 0: return { easy: 2.5, normal: 3, hard: 4.5 }
+                            case 1: return { easy: 3, normal: 5, hard: 6 }
+                            case 2: return { easy: 4, normal: 6, hard: 9 }
+                            default: return { easy: 4, normal: 6, hard: 9 }
+                        }
                     },
                 },
-                rangeOfSight: 16,
-                alwaysAngry: true,
             },
-            'slime': {
-                meleeAttack: {
-                    range: 2,
-                    damage: {
-                        type: 'physical',
-                        amount: function(entity) {
-                            const size = entity.metadata[16]
-                            switch (size) {
-                                case 0: return { easy: 0, normal: 0, hard: 0 }
-                                case 1: return { easy: 2, normal: 2, hard: 3 }
-                                case 2: return { easy: 3, normal: 4, hard: 6 }
-                                default: return { easy: 3, normal: 4, hard: 6 }
-                            }
-                        },
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'slime': {
+            meleeAttack: {
+                range: 2,
+                damage: {
+                    type: 'physical',
+                    amount: function(entity) {
+                        const size = entity.metadata[16]
+                        switch (size) {
+                            case 0: return { easy: 0, normal: 0, hard: 0 }
+                            case 1: return { easy: 2, normal: 2, hard: 3 }
+                            case 2: return { easy: 3, normal: 4, hard: 6 }
+                            default: return { easy: 3, normal: 4, hard: 6 }
+                        }
                     },
                 },
-                rangeOfSight: 16,
-                alwaysAngry: true,
             },
-            'wither_skeleton': {
-                meleeAttack: {
-                    range: 2,
-                    damage: [
-                        // armed
-                        { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                        // unarmed
-                        // { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                        { type: 'effect', effect: 'wither', time: 10000, level: 1 },
-                    ],
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'wither_skeleton': {
+            meleeAttack: {
+                range: 2,
+                damage: [
+                    // armed
+                    { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+                    // unarmed
+                    // { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
+                    { type: 'effect', effect: 'wither', time: 10000, level: 1 },
+                ],
             },
-            'witch': {
-                rangeAttack: {
-                    range: 8,
-                    damage: { type: 'physical', amount: 6 }, // harming potion
-                    cooldown: 3000,
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'witch': {
+            rangeAttack: {
+                range: 8,
+                damage: { type: 'physical', amount: 6 }, // harming potion
+                cooldown: 3000,
             },
-            'spider': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: false,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'spider': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
             },
-            'stray': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
-                },
-                rangeAttack: {
-                    range: 15,
-                    damage: [
-                        { type: 'physical', amount: { easy: 4, normal: 5, hard: 8 } },
-                        { type: 'effect', effect: 'slowness', time: 30000, level: 1 },
-                    ],
-                    cooldown: 2, // ?
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: false,
+        },
+        'stray': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2, normal: 2, hard: 3 } },
             },
-            'ravager': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 7, normal: 12, hard: 18 } },
-                },
-                // roar: 6
-                rangeOfSight: 32,
-                alwaysAngry: true,
+            rangeAttack: {
+                range: 15,
+                damage: [
+                    { type: 'physical', amount: { easy: 4, normal: 5, hard: 8 } },
+                    { type: 'effect', effect: 'slowness', time: 30000, level: 1 },
+                ],
+                cooldown: 2, // ?
             },
-            'husk': {
-                meleeAttack: {
-                    range: 2,
-                    damage: [
-                        { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
-                        { type: 'effect', effect: 'hunger', level: 1, time: 7000 /* Regional */ },
-                    ],
-                },
-                rangeOfSight: 35,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'ravager': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 7, normal: 12, hard: 18 } },
             },
-            'zombie_villager': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
-                },
-                rangeOfSight: 35,
-                alwaysAngry: true,
+            // roar: 6
+            rangeOfSight: 32,
+            alwaysAngry: true,
+        },
+        'husk': {
+            meleeAttack: {
+                range: 2,
+                damage: [
+                    { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
+                    { type: 'effect', effect: 'hunger', level: 1, time: 7000 /* Regional */ },
+                ],
             },
-            'zombie': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
-                },
-                rangeOfSight: 35,
-                alwaysAngry: true,
+            rangeOfSight: 35,
+            alwaysAngry: true,
+        },
+        'zombie_villager': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
             },
-            'piglin': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                },
-                rangeAttack: {
-                    range: 16, // ?
-                    damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
-                    cooldown: 2,
-                },
-                rangeOfSight: 16,
-                alwaysAngry: false,
+            rangeOfSight: 35,
+            alwaysAngry: true,
+        },
+        'zombie': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 2.5, normal: 3, hard: 4.5 } },
             },
-            'piglin_brute': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
-                },
-                // also can be unarmed
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 35,
+            alwaysAngry: true,
+        },
+        'piglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
             },
-            'pillager': {
-                rangeAttack: {
-                    range: 8,
-                    damage: { type: 'physical', amount: { easy: 3.5, normal: 4, hard: 4.5 } },
-                    cooldown: 2, // ?
-                },
-                rangeOfSight: 64,
-                alwaysAngry: true,
+            rangeAttack: {
+                range: 16, // ?
+                damage: { type: 'physical', amount: { easy: 5, normal: 5, hard: 5 } },
+                cooldown: 2,
             },
-            'silverfish': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 1, normal: 1, hard: 1.5 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 16,
+            alwaysAngry: false,
+        },
+        'piglin_brute': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
             },
-            'zoglin': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                },
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            // also can be unarmed
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'pillager': {
+            rangeAttack: {
+                range: 8,
+                damage: { type: 'physical', amount: { easy: 3.5, normal: 4, hard: 4.5 } },
+                cooldown: 2, // ?
             },
-            'vindicator': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
-                },
-                // also can be unarmed
-                rangeOfSight: 16,
-                alwaysAngry: true,
+            rangeOfSight: 64,
+            alwaysAngry: true,
+        },
+        'silverfish': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 1, normal: 1, hard: 1.5 } },
             },
-            'enderman': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 4.5, normal: 7, hard: 10.5 } },
-                },
-                rangeOfSight: 64,
-                alwaysAngry: false,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'zoglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
             },
-            'zombified_piglin': {
-                meleeAttack: {
-                    range: 2,
-                    damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
-                },
-                // also can be unarmed
-                rangeOfSight: 55,
-                alwaysAngry: false,
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'vindicator': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 7.5, normal: 13, hard: 19.5 } },
             },
-            'ghast': {
-                rangeAttack: {
-                    range: 64,
-                    damage: [
-                        { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
-                        { type: 'explosion', level: 1 },
-                    ],
-                    cooldown: 3000
-                },
-                rangeOfSight: 64,
-                alwaysAngry: true,
+            // also can be unarmed
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
+        'enderman': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 4.5, normal: 7, hard: 10.5 } },
             },
-        })
-    }
+            rangeOfSight: 64,
+            alwaysAngry: false,
+        },
+        'zombified_piglin': {
+            meleeAttack: {
+                range: 2,
+                damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
+            },
+            // also can be unarmed
+            rangeOfSight: 55,
+            alwaysAngry: false,
+        },
+        'ghast': {
+            rangeAttack: {
+                range: 64,
+                damage: [
+                    { type: 'physical', amount: { easy: 4, normal: 6, hard: 9 } },
+                    { type: 'explosion', level: 1 },
+                ],
+                cooldown: 3000
+            },
+            rangeOfSight: 64,
+            alwaysAngry: true,
+        },
+    })
 
     /**
      * @param {string} blockName
@@ -1727,68 +1745,58 @@ module.exports = class Minecraft {
     /**
      * @readonly
      */
-    static get nonoFoods() {
-        return [
-            'golden_apple',
-            'enchanted_golden_apple',
-            'cake',
-        ]
-    }
+    static nonoFoods = [
+        'golden_apple',
+        'enchanted_golden_apple',
+        'cake',
+    ]
 
     /**
      * @readonly
      */
-    static get sideEffectFoods() {
-        return [
-            'chorus_fruit',
-        ]
-    }
+    static sideEffectFoods = [
+        'chorus_fruit',
+    ]
 
     /**
      * @readonly
      */
-    static get badFoods() {
-        return [
-            'pufferfish',
-            'spider_eye',
-            'poisonous_potato',
-            'rotten_flesh',
-            'chicken',
-        ]
-    }
+    static badFoods = [
+        'pufferfish',
+        'spider_eye',
+        'poisonous_potato',
+        'rotten_flesh',
+        'chicken',
+    ]
 
     /**
      * @readonly
      */
-    static get cookedFoods() {
-        return [
-            'baked_potato',
-            'cooked_beef',
-            'cooked_porkchop',
-            'cooked_mutton',
-            'cooked_chicken',
-            'cooked_rabbit',
-            'cooked_cod',
-            'cooked_salmon',
-            'dried_kelp',
-        ]
-    }
+    static cookedFoods = [
+        'baked_potato',
+        'cooked_beef',
+        'cooked_porkchop',
+        'cooked_mutton',
+        'cooked_chicken',
+        'cooked_rabbit',
+        'cooked_cod',
+        'cooked_salmon',
+        'dried_kelp',
+    ]
 
     /**
      * @readonly
      */
-    static get rawFoods() {
-        return [
-            'potato',
-            'beef',
-            'porkchop',
-            'mutton',
-            'chicken',
-            'rabbit',
-            'cod',
-            'salmon',
-        ]
-    }
+    static rawFoods = [
+        'potato',
+        'beef',
+        'porkchop',
+        'mutton',
+        'chicken',
+        'rabbit',
+        'cod',
+        'salmon',
+    ]
 
     /**
      * @readonly @type {Readonly<Record<string, number>>}

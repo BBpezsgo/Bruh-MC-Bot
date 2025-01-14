@@ -330,7 +330,7 @@ function setOptions(bot, args) {
     if (args.timeout !== null && args.timeout !== undefined) {
         bot.bot.pathfinder.thinkTimeout = args.timeout
     } else {
-        bot.bot.pathfinder.thinkTimeout = 60000
+        bot.bot.pathfinder.thinkTimeout = Infinity
     }
     if (args.searchRadius !== null && args.searchRadius !== undefined) {
         bot.bot.pathfinder.searchRadius = args.searchRadius
@@ -338,7 +338,7 @@ function setOptions(bot, args) {
         bot.bot.pathfinder.searchRadius = Infinity
     }
     bot.bot.pathfinder.tickTimeout = 10
-    bot.bot.pathfinder.enablePathShortcut = true
+    bot.bot.pathfinder.enablePathShortcut = false
     bot.bot.pathfinder.lookAtTarget = (!('lookAtTarget' in args) || args.lookAtTarget)
 
     const originalMovements = args.movements ?? bot.restrictedMovements

@@ -2115,12 +2115,6 @@ module.exports = class BruhBot {
             match: 'leave',
             command: (sender, message, response, isWhispered) => {
                 this._isLeaving = true
-                if (this.tasks.tasks.length === 0) {
-                } else if (this.tasks.tasks.length === 1) {
-                    response.respond(`I will leave before finishing this one task`)
-                } else {
-                    response.respond(`I will leave before finishing these ${this.tasks.tasks.length} tasks`)
-                }
                 this.tasks.cancel()
                     .then(() => this.bot.quit(`${sender} asked me to leave`))
             }
@@ -3144,8 +3138,32 @@ module.exports = class BruhBot {
             return _b - _a
         })
 
+        /** @type {import('./tasks/gather-item').PermissionArgs} */
+        const permissionsForMust = {
+            canCraft: true,
+            canSmelt: true,
+            canBrew: true,
+            canDigGenerators: true,
+            canKill: false,
+            canUseChests: true,
+            canUseInventory: true,
+            canRequestFromBots: true,
+            canTrade: true,
+            canHarvestMobs: true,
+        }
+
+        /** @type {import('./tasks/gather-item').PermissionArgs} */
+        const permissionsForMaybe = {
+            canCraft: true,
+            canUseChests: true,
+            canUseInventory: true,
+            canRequestFromBots: true,
+            canTrade: true,
+            canHarvestMobs: true,
+        }
+
         for (const item of sortedEquipment) {
-            if (item.priority !== 'must' && !args.explicit) continue
+            const permissions = (item.priority === 'must' || args.explicit) ? permissionsForMust : permissionsForMaybe
             switch (item.type) {
                 case 'food': {
                     try {
@@ -3153,20 +3171,6 @@ module.exports = class BruhBot {
                         // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const foods = bot.mc.getGoodFoods(false).map(v => v.name)
                         // console.warn(`[Bot "${bot.username}"] Low on food`)
-                        const permissions = {
-                            canCraft: true,
-                            canSmelt: item.priority === 'must' || args.explicit,
-                            canBrew: item.priority === 'must' || args.explicit,
-                            canDigGenerators: item.priority === 'must' || args.explicit,
-                            canDigEnvironment: false,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canRequestFromBots: true,
-                            canTrade: true,
-                            canHarvestMobs: true,
-                        }
                         /** @type {Array<import('./tasks/gather-item').Plan>} */
                         const plans = []
                         /** @type {Array<ItemLock>} */
@@ -3199,8 +3203,8 @@ module.exports = class BruhBot {
                             const res = yield* tasks.gatherItem.task(bot, {
                                 force: true,
                                 plan: plans.flat(),
-                                ...taskUtils.runtimeArgs(args),
                                 ...permissions,
+                                ...taskUtils.runtimeArgs(args),
                             })
                         } finally {
                             planningRemoteLocks.forEach(v => v.isUnlocked = true)
@@ -3218,18 +3222,7 @@ module.exports = class BruhBot {
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
-                            canCraft: true,
-                            canSmelt: item.priority === 'must' || args.explicit,
-                            canBrew: item.priority === 'must' || args.explicit,
-                            canDigGenerators: item.priority === 'must' || args.explicit,
-                            canDigEnvironment: false,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canRequestFromBots: true,
-                            canTrade: true,
-                            canHarvestMobs: true,
+                            ...permissions,
                             ...taskUtils.runtimeArgs(args),
                         })
                         // console.log(`[Bot "${bot.username}"] Equipment ${item.item} gathered`, res)
@@ -3245,18 +3238,7 @@ module.exports = class BruhBot {
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.prefer,
                             count: item.count === 'any' ? 1 : item.count,
-                            canCraft: true,
-                            canSmelt: item.priority === 'must' || args.explicit,
-                            canBrew: item.priority === 'must' || args.explicit,
-                            canDigGenerators: item.priority === 'must' || args.explicit,
-                            canDigEnvironment: false,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canRequestFromBots: true,
-                            canTrade: true,
-                            canHarvestMobs: true,
+                            ...permissions,
                             ...taskUtils.runtimeArgs(args),
                         })
                         // console.log(`[Bot "${bot.username}"] Preferred equipment ${item.prefer} gathered`, res)
@@ -3269,18 +3251,7 @@ module.exports = class BruhBot {
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.item,
                             count: item.count === 'any' ? 1 : item.count,
-                            canCraft: true,
-                            canSmelt: item.priority === 'must' || args.explicit,
-                            canBrew: item.priority === 'must' || args.explicit,
-                            canDigGenerators: item.priority === 'must' || args.explicit,
-                            canDigEnvironment: false,
-                            canKill: false,
-                            canUseChests: true,
-                            canUseInventory: true,
-                            canRequestFromPlayers: false && item.priority === 'must',
-                            canRequestFromBots: true,
-                            canTrade: true,
-                            canHarvestMobs: true,
+                            ...permissions,
                             ...taskUtils.runtimeArgs(args),
                         })
                         // console.log(`[Bot "${bot.username}"] Equipment gathered`, res)
