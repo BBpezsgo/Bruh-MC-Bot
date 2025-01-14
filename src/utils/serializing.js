@@ -3,7 +3,7 @@
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('./vec3-dimension')
 const Freq = require('./freq')
-const ItemLock = require('../item-lock')
+const ItemLock = require('../locks/item-lock')
 
 /**
  * @this {any}

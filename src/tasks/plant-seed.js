@@ -37,7 +37,7 @@ function* plant(bot, placeOn, placeVector, seedItem, args) {
 /**
  * @type {import('../task').TaskDef<number, {
  *   fallbackToNear?: boolean;
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
 * } & ({
  *   harvestedCrops: ReadonlyArray<import('../environment').SavedCrop>;
  * } | {

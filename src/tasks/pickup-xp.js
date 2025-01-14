@@ -55,7 +55,7 @@ module.exports = {
                 yield* sleepG(100)
             }
         } finally {
-            entityLock.isUnlocked = true
+            entityLock.unlock()
         }
     },
     id: function(args) {

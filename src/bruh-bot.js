@@ -32,7 +32,7 @@ const { Vec3 } = require('vec3')
 const Iterable = require('./utils/iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
-const ItemLock = require('./item-lock')
+const ItemLock = require('./locks/item-lock')
 const CancelledError = require('./errors/cancelled-error')
 
 //#endregion
@@ -317,7 +317,7 @@ module.exports = class BruhBot {
 
     /**
      * @readonly
-     * @type {Array<import('./item-lock')>}
+     * @type {Array<import('./locks/item-lock')>}
      */
     lockedItems
 
@@ -1470,8 +1470,8 @@ module.exports = class BruhBot {
                             remoteLocks: planningRemoteLocks,
                             force: false,
                         })
-                        planningLocalLocks.forEach(v => v.isUnlocked = true)
-                        planningRemoteLocks.forEach(v => v.isUnlocked = true)
+                        planningLocalLocks.forEach(v => v.unlock())
+                        planningRemoteLocks.forEach(v => v.unlock())
                         const organizedPlan = plan.plan.flat()
                         const planResult = tasks.gatherItem.planResult(organizedPlan, plan.item)
                         const planCost = tasks.gatherItem.planCost(organizedPlan)
@@ -2783,7 +2783,7 @@ module.exports = class BruhBot {
                 .catch(reason => {
                     console.error(`[Bot "${this.username}"] Failed to serve \"${request.lock.by}\" with ${stringifyItem(request.lock.item)}:`, reason)
                     request.status = 'failed'
-                    request.lock.isUnlocked = true
+                    request.lock.unlock()
                 })
         }
 
@@ -2915,7 +2915,7 @@ module.exports = class BruhBot {
                     .catch(error => {
                         // TODO: better way of handling this
                         if (error === `Don't have anything`) {
-                            playerDeath.items.forEach(v => v.isUnlocked = true)
+                            playerDeath.items.forEach(v => v.unlock())
                         }
                     })
             }
@@ -3154,12 +3154,9 @@ module.exports = class BruhBot {
 
         /** @type {import('./tasks/gather-item').PermissionArgs} */
         const permissionsForMaybe = {
-            canCraft: true,
             canUseChests: true,
             canUseInventory: true,
             canRequestFromBots: true,
-            canTrade: true,
-            canHarvestMobs: true,
         }
 
         for (const item of sortedEquipment) {
@@ -3198,7 +3195,7 @@ module.exports = class BruhBot {
                         } finally {
                             args.task?.focus()
                         }
-                        planningLocalLocks.forEach(v => v.isUnlocked = true)
+                        planningLocalLocks.forEach(v => v.unlock())
                         try {
                             const res = yield* tasks.gatherItem.task(bot, {
                                 force: true,
@@ -3207,11 +3204,11 @@ module.exports = class BruhBot {
                                 ...taskUtils.runtimeArgs(args),
                             })
                         } finally {
-                            planningRemoteLocks.forEach(v => v.isUnlocked = true)
+                            planningRemoteLocks.forEach(v => v.unlock())
                         }
                         // console.log(`[Bot "${bot.username}"] Food gathered`, res)
                     } catch (error) {
-                        console.error(`[Bot "${bot.username}"]`, error)
+                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
@@ -3227,7 +3224,7 @@ module.exports = class BruhBot {
                         })
                         // console.log(`[Bot "${bot.username}"] Equipment ${item.item} gathered`, res)
                     } catch (error) {
-                        console.error(`[Bot "${bot.username}"]`, error)
+                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
@@ -3244,7 +3241,7 @@ module.exports = class BruhBot {
                         // console.log(`[Bot "${bot.username}"] Preferred equipment ${item.prefer} gathered`, res)
                         break
                     } catch (error) {
-                        console.error(`[Bot "${bot.username}"]`, error)
+                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
                     }
 
                     try {
@@ -3257,7 +3254,7 @@ module.exports = class BruhBot {
                         // console.log(`[Bot "${bot.username}"] Equipment gathered`, res)
                         break
                     } catch (error) {
-                        console.error(`[Bot "${bot.username}"]`, error)
+                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
                     }
                     break
                 }
@@ -3707,7 +3704,7 @@ module.exports = class BruhBot {
      * @param {string} by
      * @param {import('./utils/other').ItemId} item
      * @param {number} count
-     * @returns {import('./item-lock')}
+     * @returns {import('./locks/item-lock')}
      */
     forceLockItem(by, item, count) {
         if (!count) { return null }
@@ -3721,7 +3718,7 @@ module.exports = class BruhBot {
      * @param {string} by
      * @param {import('./utils/other').ItemId} item
      * @param {number} count
-     * @returns {import('./item-lock') | null}
+     * @returns {import('./locks/item-lock') | null}
      */
     tryLockItem(by, item, count) {
         if (!count) { return null }

@@ -4,7 +4,7 @@ const Freq = require('../utils/freq')
 const { stringifyItem, isItemEquals, stringifyItemH } = require('../utils/other')
 const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
-const ItemLock = require('../item-lock')
+const ItemLock = require('../locks/item-lock')
 const move = require('./move')
 const pickupItem = require('./pickup-item')
 
@@ -36,7 +36,7 @@ module.exports = {
             if ('request' in args) {
                 args.request.status = 'served'
             }
-            itemsToGive.filter(v => 'isUnlocked' in v).forEach(v => v.isUnlocked = true)
+            itemsToGive.filter(v => 'isUnlocked' in v).forEach(v => v.unlock())
             return tossedMap
         }
 

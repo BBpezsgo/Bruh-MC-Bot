@@ -76,7 +76,7 @@ function* findBestFurnace(bot, recipes) {
  * @type {import('../task').TaskDef<Array<Item>, {
  *   recipe: Exclude<import('../local-minecraft-data').CookingRecipe, import('../local-minecraft-data').CampfireRecipe>;
  *   count: number;
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
  *   furnace?: Point3;
  * }> & {
  *   findBestFurnace: findBestFurnace;
@@ -233,7 +233,7 @@ module.exports = {
                 if (furnace.outputItem()) { yield* wrap(furnace.takeOutput(), args.interrupt) }
             }
             furnace?.close()
-            blockLock.isUnlocked = true
+            blockLock.unlock()
         }
     },
     id: function(args) {

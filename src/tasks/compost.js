@@ -104,7 +104,7 @@ module.exports = {
                 composted++
             }
         } finally {
-            blockLock.isUnlocked = true
+            blockLock.unlock()
         }
 
         if (composted) {

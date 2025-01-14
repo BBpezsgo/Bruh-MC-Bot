@@ -10,7 +10,7 @@ const pickupItem = require('./pickup-item')
  * @type {import('../task').TaskDef<Array<Item>, {
  *   recipes: ReadonlyArray<import('../local-minecraft-data').CookingRecipe>;
  *   count: 1 | 2 | 3 | 4;
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
  * }>}
  */
 module.exports = {
@@ -168,7 +168,7 @@ module.exports = {
 
             return pickedUp
         } finally {
-            blockLock.isUnlocked = true
+            blockLock.unlock()
         }
     },
     id: function(args) {

@@ -316,7 +316,7 @@ const recipes = (() => {
  * }) & {
  *   count: 1 | 2 | 3;
  *   brewingStand?: Vec3Dimension;
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
  * }> & {
  *   recipes: typeof recipes;
  *   potions: typeof potions;
@@ -476,7 +476,7 @@ module.exports = {
             return res
         } finally {
             if (window) bot.bot.closeWindow(window)
-            blockLock.isUnlocked = true
+            blockLock.unlock()
         }
     },
     id: function(args) {

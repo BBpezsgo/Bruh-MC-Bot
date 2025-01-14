@@ -59,7 +59,7 @@ module.exports = class Memory {
     /**
      * @type {Array<{
      *   username: string;
-     *   items: Array<import('./item-lock')>;
+     *   items: Array<import('./locks/item-lock')>;
      * }>}
      */
     playerDeathLoots

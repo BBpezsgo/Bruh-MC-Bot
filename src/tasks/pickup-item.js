@@ -168,7 +168,7 @@ module.exports = {
             throw error
         } finally {
             bot.bot.off('playerCollect', listener)
-            entityLock.isUnlocked = true
+            entityLock.unlock()
         }
 
         if (!isCollected) { throw `Couldn't pick up the item` }

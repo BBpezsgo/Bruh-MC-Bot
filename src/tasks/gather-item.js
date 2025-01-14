@@ -15,7 +15,7 @@ const dig = require('./dig')
 const smelt = require('./smelt')
 const campfire = require('./campfire')
 const config = require('../config')
-const ItemLock = require('../item-lock')
+const ItemLock = require('../locks/item-lock')
 const BruhBot = require('../bruh-bot')
 const Freq = require('../utils/freq')
 const brew = require('./brew')
@@ -124,7 +124,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  *   };
  *   'request': {
  *     type: 'request';
- *     remoteLock: import('../item-lock');
+ *     remoteLock: import('../locks/item-lock');
  *   };
  *   'trade': {
  *     type: 'trade';
@@ -504,9 +504,9 @@ function unlockPlanItems(plan) {
     if (!plan) { return }
     for (const step of plan.flat()) {
         if ('locks' in step) for (const lock of step.locks) {
-            lock.isUnlocked = true
+            lock.unlock()
         }
-        if ('remoteLock' in step) step.remoteLock.isUnlocked = true
+        if ('remoteLock' in step) step.remoteLock.unlock()
     }
 }
 
@@ -1794,7 +1794,7 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
  * @param {import('../bruh-bot')} bot
  * @param {OrganizedPlan} plan
  * @param {import('../task').RuntimeArgs<{
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
  * }>} args
  * @returns {import('../task').Task<void>}
  */
@@ -1804,11 +1804,13 @@ function* evaluatePlan(bot, plan, args) {
      */
     let openedChest = null
 
-    console.log(`[Bot "${bot.username}"] Evaluating plan`)
+    if (planningLogs) console.log(`[Bot "${bot.username}"] Evaluating plan`)
 
     try {
         for (const step of plan) {
             yield
+
+            args.task?.focus()
 
             // console.log(`[Bot "${bot.username}"]`, step.type, step)
 
@@ -2515,49 +2517,52 @@ function lockPlanItems(bot, plan) {
  */
 const def = {
     task: function*(bot, args) {
+        args.task?.blur()
         if ('plan' in args) {
             const bestPlan = args.plan
 
             const _organizedPlan = organizePlan(bestPlan)
-            console.log(`[Bot "${bot.username}"] Plan for something:`)
-            console.log(stringifyPlan(bot, _organizedPlan))
-            console.log(`[Bot "${bot.username}"] Environment in the future:`)
-            {
-                let builder = ''
-                const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
+            if (planningLogs) {
+                console.log(`[Bot "${bot.username}"] Plan for something:`)
+                console.log(stringifyPlan(bot, _organizedPlan))
+                console.log(`[Bot "${bot.username}"] Environment in the future:`)
+                {
+                    let builder = ''
+                    const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
 
-                let inventoryBuilder = ''
-                for (const name of future.inventory.keys) {
-                    const delta = future.inventory.get(name)
-                    if (!delta) { continue }
-                    inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
-                }
-                if (inventoryBuilder) {
-                    builder += 'Inventory:\n'
-                    builder += inventoryBuilder
-                }
-
-                let chestsBuilder = ''
-                for (const position in future.chests) {
-                    /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
-                    const chest = future.chests[position]
-                    chestsBuilder += `  at "${chest.location}"`
-                    for (const name of chest.delta.keys) {
-                        const delta = chest.delta.get(name)
+                    let inventoryBuilder = ''
+                    for (const name of future.inventory.keys) {
+                        const delta = future.inventory.get(name)
                         if (!delta) { continue }
-                        chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                        inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
                     }
-                }
-                if (chestsBuilder) {
-                    builder += 'Chests:\n'
-                    builder += chestsBuilder
-                }
+                    if (inventoryBuilder) {
+                        builder += 'Inventory:\n'
+                        builder += inventoryBuilder
+                    }
 
-                console.log(builder)
+                    let chestsBuilder = ''
+                    for (const position in future.chests) {
+                        /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
+                        const chest = future.chests[position]
+                        chestsBuilder += `  at "${chest.location}"`
+                        for (const name of chest.delta.keys) {
+                            const delta = chest.delta.get(name)
+                            if (!delta) { continue }
+                            chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${name}\n`
+                        }
+                    }
+                    if (chestsBuilder) {
+                        builder += 'Chests:\n'
+                        builder += chestsBuilder
+                    }
+
+                    console.log(builder)
+                }
             }
 
-            console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
-            _organizedPlan.filter(v => 'locks' in v).map(v => v.locks).flat().forEach(v => v.isUnlocked = true)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
+            _organizedPlan.filter(v => 'locks' in v).map(v => v.locks).flat().forEach(v => v.unlock())
             const locks = lockPlanItems(bot, _organizedPlan)
             bot.lockedItems.push(...locks)
             locks.push(..._organizedPlan.filter(v => v.type === 'request').map(v => v.remoteLock))
@@ -2565,7 +2570,7 @@ const def = {
             const cleanup = (type) => {
                 if (type !== 'cancel') { return }
                 for (const lock of locks) {
-                    lock.isUnlocked = true
+                    lock.unlock()
                 }
             }
             args.interrupt.on(cleanup)
@@ -2586,89 +2591,85 @@ const def = {
         } else {
             args.item = [args.item].flat()
 
-            let bestPlan = null
             /** @type {Array<ItemLock>} */
             const planningLocalLocks = []
             /** @type {Array<ItemLock>} */
             const planningRemoteLocks = []
-            try {
-                console.log(`[Bot "${bot.username}"] Planning ...`, args.count, args.item)
-                args.task?.blur()
-                bestPlan = yield* planAny(
-                    bot,
-                    args.item,
-                    args.count,
-                    args,
-                    {
-                        depth: 0,
-                        isOptional: false,
-                        lockItems: false,
-                        localLocks: planningLocalLocks,
-                        remoteLocks: planningRemoteLocks,
-                        recursiveItems: [],
-                        force: false,
-                    })
-            } finally {
-                args.task?.focus()
-            }
+            if (planningLogs) console.log(`[Bot "${bot.username}"] Planning ...`, args.count, args.item)
+            const bestPlan = yield* planAny(
+                bot,
+                args.item,
+                args.count,
+                args,
+                {
+                    depth: 0,
+                    isOptional: false,
+                    lockItems: false,
+                    localLocks: planningLocalLocks,
+                    remoteLocks: planningRemoteLocks,
+                    recursiveItems: [],
+                    force: false,
+                })
 
             yield
 
-            planningLocalLocks.forEach(v => v.isUnlocked = true)
+            planningLocalLocks.forEach(v => v.unlock())
 
             const _organizedPlan = organizePlan(bestPlan.plan)
             const _planResult = planResult(_organizedPlan, bestPlan.item)
 
             if (_planResult <= 0) {
-                planningRemoteLocks.forEach(v => v.isUnlocked = true)
+                planningRemoteLocks.forEach(v => v.unlock())
                 throw `Can't gather ${stringifyItemH(bestPlan.item)}`
             }
 
             if (_planResult < args.count) {
-                planningRemoteLocks.forEach(v => v.isUnlocked = true)
+                planningRemoteLocks.forEach(v => v.unlock())
                 throw `I can only gather ${_planResult} ${stringifyItemH(bestPlan.item)}`
             }
 
-            console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${stringifyItem(bestPlan.item)}:`)
-            console.log(stringifyPlan(bot, _organizedPlan))
-            console.log(`[Bot "${bot.username}"] Environment in the future:`)
-            {
-                let builder = ''
-                const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
+            if (planningLogs) {
+                console.log(`[Bot "${bot.username}"] Plan for ${args.count} of ${stringifyItem(bestPlan.item)}:`)
+                console.log(stringifyPlan(bot, _organizedPlan))
+                console.log(`[Bot "${bot.username}"] Environment in the future:`)
+                {
+                    let builder = ''
+                    const future = new PredictedEnvironment(_organizedPlan, bot.mc.registry)
 
-                let inventoryBuilder = ''
-                for (const name of future.inventory.keys) {
-                    const delta = future.inventory.get(name)
-                    if (!delta) { continue }
-                    inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
-                }
-                if (inventoryBuilder) {
-                    builder += 'Inventory:\n'
-                    builder += inventoryBuilder
-                }
-
-                let chestsBuilder = ''
-                for (const position in future.chests) {
-                    /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
-                    const chest = future.chests[position]
-                    chestsBuilder += `  at "${chest.location}"`
-                    for (const name of chest.delta.keys) {
-                        const delta = chest.delta.get(name)
+                    let inventoryBuilder = ''
+                    for (const name of future.inventory.keys) {
+                        const delta = future.inventory.get(name)
                         if (!delta) { continue }
-                        chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
+                        inventoryBuilder += `  ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
                     }
-                }
-                if (chestsBuilder) {
-                    builder += 'Chests:\n'
-                    builder += chestsBuilder
-                }
+                    if (inventoryBuilder) {
+                        builder += 'Inventory:\n'
+                        builder += inventoryBuilder
+                    }
 
-                console.log(builder)
+                    let chestsBuilder = ''
+                    for (const position in future.chests) {
+                        /** @type {typeof future.chests[keyof typeof future.chests]} */ // @ts-ignore
+                        const chest = future.chests[position]
+                        chestsBuilder += `  at "${chest.location}"`
+                        for (const name of chest.delta.keys) {
+                            const delta = chest.delta.get(name)
+                            if (!delta) { continue }
+                            chestsBuilder += ` ${(delta < 0) ? delta : ('+' + delta)} ${stringifyItem(name)}\n`
+                        }
+                    }
+                    if (chestsBuilder) {
+                        builder += 'Chests:\n'
+                        builder += chestsBuilder
+                    }
+
+                    console.log(builder)
+                }
             }
 
             const itemsBefore = bot.inventoryItemCount(null, bestPlan.item)
 
-            console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
+            if (planningLogs) console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
             const locks = lockPlanItems(bot, _organizedPlan)
             locks.push(new ItemLock(bot.username, bestPlan.item, args.count))
             bot.lockedItems.push(...locks)
@@ -2676,8 +2677,8 @@ const def = {
             /** @param {'interrupt' | 'cancel'} type */
             const cleanup = (type) => {
                 if (type !== 'cancel') { return }
-                locks.forEach(v => v.isUnlocked = true)
-                planningRemoteLocks.forEach(v => v.isUnlocked = true)
+                locks.forEach(v => v.unlock())
+                planningRemoteLocks.forEach(v => v.unlock())
             }
             args.interrupt.on(cleanup)
             try {

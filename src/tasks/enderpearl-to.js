@@ -9,7 +9,7 @@ const goto = require('./goto')
 /**
  * @type {import('../task').TaskDef<'here' | 'ok', {
  *   destination: Vec3;
- *   locks: ReadonlyArray<import('../item-lock')>;
+ *   locks: ReadonlyArray<import('../locks/item-lock')>;
  * }>}
  */
 module.exports = {

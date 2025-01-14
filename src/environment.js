@@ -16,6 +16,8 @@ const { EntityPose } = require('./entity-metadata')
 const Iterable = require('./utils/iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
+const BlockLock = require('./locks/block-lock')
+const EntityLock = require('./locks/entity-lock')
 
 /**
  * @typedef {{
@@ -105,13 +107,13 @@ module.exports = class Environment {
 
     /**
      * @readonly
-     * @type {Array<{ block: Point3; by: string; isUnlocked: boolean; }>}
+     * @type {Array<BlockLock>}
      */
     lockedBlocks
 
     /**
      * @readonly
-     * @type {Array<{ entity: import('prismarine-entity').Entity; by: string; isUnlocked: boolean; }>}
+     * @type {Array<EntityLock>}
      */
     lockedEntities
 
@@ -166,7 +168,7 @@ module.exports = class Environment {
     /**
      * @readonly
      * @type {Array<{
-     *   lock: import('./item-lock');
+     *   lock: import('./locks/item-lock');
      *   priority?: number;
      *   status?: 'on-the-way' | 'dropped' | 'served' | 'failed';
      *   itemEntity?: import('prismarine-entity').Entity;
@@ -537,13 +539,13 @@ module.exports = class Environment {
 
         for (const lock of this.lockedBlocks) {
             if (lock.by === bot.bot.username) {
-                lock.isUnlocked = true
+                lock.unlock()
             }
         }
 
         for (const lock of this.lockedEntities) {
             if (lock.by === bot.bot.username) {
-                lock.isUnlocked = true
+                lock.unlock()
             }
         }
     }
@@ -1253,6 +1255,7 @@ module.exports = class Environment {
     /**
      * @param {string} by
      * @param {Point3} block
+     * @returns {BlockLock}
      */
     tryLockBlock(by, block) {
         for (const lock of this.lockedBlocks) {
@@ -1263,11 +1266,7 @@ module.exports = class Environment {
                 return null
             }
         }
-        const newLock = {
-            by: by,
-            block: block,
-            isUnlocked: false,
-        }
+        const newLock = new BlockLock(by, block)
         this.lockedBlocks.push(newLock)
         return newLock
     }
@@ -1295,7 +1294,7 @@ module.exports = class Environment {
                 lock.block.y === block.y &&
                 lock.block.z === block.z &&
                 (!by || by === lock.by)) {
-                lock.isUnlocked = true
+                lock.unlock()
             }
             if (lock.isUnlocked) {
                 this.lockedBlocks.splice(i, 1)
@@ -1318,6 +1317,7 @@ module.exports = class Environment {
     /**
      * @param {string} by
      * @param {import('prismarine-entity').Entity} entity
+     * @returns {EntityLock}
      */
     tryLockEntity(by, entity) {
         for (const lock of this.lockedEntities) {
@@ -1326,11 +1326,7 @@ module.exports = class Environment {
                 return null
             }
         }
-        const newLock = {
-            by: by,
-            entity: entity,
-            isUnlocked: false,
-        }
+        const newLock = new EntityLock(by, entity)
         this.lockedEntities.push(newLock)
         return newLock
     }
@@ -1344,7 +1340,7 @@ module.exports = class Environment {
             const lock = this.lockedEntities[i]
             if (lock.entity.id === entity.id &&
                 (!by || by === lock.by)) {
-                lock.isUnlocked = true
+                lock.unlock()
             }
             if (lock.isUnlocked) {
                 this.lockedEntities.splice(i, 1)
