@@ -76,35 +76,35 @@ module.exports = {
 
         if (!composter) { throw `There is no composter` }
 
-        while (true) {
-            yield
+        args.task?.blur()
+        const blockLock = yield* bot.env.waitLock(bot.username, composter.position)
+        args.task?.focus()
 
-            if (args.interrupt.isCancelled) { break }
+        try {
+            while (true) {
+                yield
 
-            const item = getItem(bot, false)
-            if (!item) { break }
+                const item = getItem(bot, false)
+                if (!item) { break }
 
-            yield* goto.task(bot, {
-                block: composter.position,
-                ...runtimeArgs(args),
-            })
+                yield* goto.task(bot, {
+                    block: composter.position,
+                    ...runtimeArgs(args),
+                })
 
-            if (args.interrupt.isCancelled) { break }
+                composter = bot.bot.blockAt(composter.position)
+                if (!composter) { throw `Composter destroyed while I was trying to get there` }
 
-            composter = bot.bot.blockAt(composter.position)
-            if (composter.type !== bot.mc.registry.blocksByName['composter'].id) {
-                throw `Composter destroyed while I was trying to get there`
+                yield* waitCompost(bot, composter, args)
+
+                yield* wrap(bot.bot.equip(item, 'hand'), args.interrupt)
+                if (!bot.bot.heldItem) { continue }
+
+                yield* wrap(bot.bot.activateBlock(composter), args.interrupt)
+                composted++
             }
-
-            yield* waitCompost(bot, composter, args)
-
-            if (args.interrupt.isCancelled) { break }
-
-            yield* wrap(bot.bot.equip(item, 'hand'), args.interrupt)
-            if (!bot.bot.heldItem) { continue }
-
-            yield* wrap(bot.bot.activateBlock(composter), args.interrupt)
-            composted++
+        } finally {
+            blockLock.isUnlocked = true
         }
 
         if (composted) {
