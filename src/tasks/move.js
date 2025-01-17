@@ -26,7 +26,7 @@ const angle = require('mineflayer-movement/src/angle')
  */
 function setControlState(bot, args) {
     bot.bot.movement.setGoal(args.goal)
-    const { yaw } = bot.bot.movement.getYaw(args.fov ?? (args.freemotion ? 360 : 160), args.rotations ?? 15, args.blend ?? 2)
+    const yaw = bot.bot.movement.getYaw(args.fov ?? (args.freemotion ? 360 : 160), args.rotations ?? 15, args.blend ?? 2)
     if (args.freemotion) {
         bot.bot.freemotion.moveTowards(yaw)
         if (angle.difference(bot.bot.entity.yaw, yaw) < Math.PI * 0.75) {

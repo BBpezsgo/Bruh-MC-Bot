@@ -16,7 +16,7 @@ function checkTreasure(bot, waterPosition) {
     for (let x = -2; x <= 2; x++) {
         for (let z = -2; z <= 2; z++) {
             for (let y = -2; y < 1; y++) {
-                const block = bot.bot.blockAt(waterPosition.offset(x, y, z))
+                const block = bot.bot.blocks.at(waterPosition.offset(x, y, z))
                 if (!block || block.name !== 'water') {
                     // if (block) bot.debug.drawPoint(block.position, [1, 0, 0])
                     return false
@@ -24,7 +24,7 @@ function checkTreasure(bot, waterPosition) {
                 // bot.debug.drawPoint(block.position, [0, 1, 0])
             }
             for (let y = 1; y <= 2; y++) {
-                const block = bot.bot.blockAt(waterPosition.offset(x, y, z))
+                const block = bot.bot.blocks.at(waterPosition.offset(x, y, z))
                 if (!block || block.name !== 'air') {
                     // if (block) bot.debug.drawPoint(block.position, [1, 0, 0])
                     return false
@@ -46,7 +46,7 @@ function findWater(bot, preferTreasure) {
         maxDistance: config.fishing.waterSearchRadius,
         count: 64,
         useExtraInfo: (/** @type {Block} */ water) => {
-            if (bot.bot.blockAt(water.position.offset(0, 1, 0)).type !== bot.mc.registry.blocksByName['air'].id) {
+            if (bot.bot.blocks.at(water.position.offset(0, 1, 0)).name !== 'air') {
                 return false
             }
             if (Number(water.getProperties()['level']) !== 0) {

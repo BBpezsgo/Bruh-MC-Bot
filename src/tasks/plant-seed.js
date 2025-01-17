@@ -18,7 +18,7 @@ const { runtimeArgs } = require('../utils/tasks')
  * @param {import('../task').RuntimeArgs<{}>} args
  */
 function* plant(bot, placeOn, placeVector, seedItem, args) {
-    const above = bot.bot.blockAt(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
+    const above = bot.bot.blocks.at(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
 
     if (bot.quietMode) { throw `Can't plant in quiet mode` }
 
@@ -70,7 +70,7 @@ module.exports = {
                 if (!crop) { continue }
                 // console.log(`[Bot "${bot.username}"] Try plant "${savedCrop.block}" at ${savedCrop.position}`)
 
-                const at = bot.bot.blockAt(savedCrop.position.xyz(bot.dimension))
+                const at = bot.bot.blocks.at(savedCrop.position.xyz(bot.dimension))
 
                 if (at && Minecraft.replaceableBlocks[at.name] !== 'yes') {
                     console.warn(`[Bot "${bot.username}"] There is something else there`)

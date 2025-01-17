@@ -13,7 +13,4 @@ const plugin = function(bot) {
     })
 }
 
-// @ts-ignore
-plugin.pluginName = 'blocks-fast'
-
 module.exports = plugin

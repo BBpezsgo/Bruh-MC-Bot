@@ -65,7 +65,7 @@ module.exports = {
                         case 'grows_block':
                         case 'spread': {
                             yield* dig.task(bot, {
-                                block: grownBlock,
+                                block: cropPosition.position.xyz(bot.dimension),
                                 alsoTheNeighbors: false,
                                 pickUpItems: true,
                                 ...runtimeArgs(args),
@@ -73,15 +73,16 @@ module.exports = {
                             break
                         }
                         case 'grows_fruit': {
+                            const _grownBlock = bot.bot.blockAt(cropPosition.position.xyz(bot.dimension))
                             yield* goto.task(bot, {
-                                block: grownBlock.position,
+                                block: _grownBlock.position,
                                 ...runtimeArgs(args),
                             })
-                            yield* bot.activate(grownBlock)
+                            yield* bot.activate(_grownBlock)
                             break
                         }
                         case 'tree': {
-                            if (crop.log !== grownBlock.name) {
+                            if (crop.log !== bot.bot.blocks.at(grownBlock)?.name) {
                                 console.warn(`[Bot "${bot.username}"] This tree aint right`)
                                 continue
                             }
@@ -104,7 +105,7 @@ module.exports = {
                     n++
                     didSomething = true
 
-                    if (Minecraft.isCropRoot(bot.bot, grownBlock)) {
+                    if (Minecraft.isCropRoot(bot.bot, bot.bot.blockAt(grownBlock))) {
                         let isSaved = false
 
                         for (const savedCrop of bot.env.crops) {

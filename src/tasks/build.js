@@ -86,7 +86,7 @@ function* findPosition(bot, blocks, confirmationCallback) {
         for (const block of blocks) {
             yield
             const position = block.position.offset(x, y, z)
-            const blockAt = bot.bot.blockAt(position)
+            const blockAt = bot.bot.blocks.at(position)
             if (!blockAt || (blockAt.name !== 'air' && blockAt.name !== 'short_grass' && blockAt.name !== 'tall')) {
                 bot.debug.drawPoint(position, [1, 0, 0])
                 return false
@@ -171,29 +171,32 @@ function* findPosition(bot, blocks, confirmationCallback) {
             for (const y of incrementalNeighbors(botPosition.y, config.build.positionSearchRadiusV)) {
                 let isOnGround = true
                 for (const floorBlock of floorBlocks) {
-                    const belowBlock = bot.bot.blockAt(floorBlock.offset(x, y - 1, z))
+                    const belowPos = floorBlock.offset(x, y - 1, z)
+                    const belowBlock = bot.bot.blocks.at(belowPos)
                     if (!belowBlock || belowBlock.name !== 'grass_block') {
                         isOnGround = false
-                        if (belowBlock) bot.debug.drawPoint(belowBlock.position, [0, 0, 1])
+                        if (belowBlock) bot.debug.drawPoint(belowPos, [0, 0, 1])
                         break
                     }
                 }
                 if (!isOnGround) { continue }
                 for (const floorMarginBlock of floorMarginBlocks) {
-                    const belowBlock = bot.bot.blockAt(floorMarginBlock.offset(x, y - 1, z))
+                    const belowPos = floorMarginBlock.offset(x, y - 1, z)
+                    const belowBlock = bot.bot.blocks.at(belowPos)
                     if (!belowBlock || belowBlock.name !== 'grass_block') {
                         isOnGround = false
-                        if (belowBlock) bot.debug.drawPoint(belowBlock.position, [0, 0, 1])
+                        if (belowBlock) bot.debug.drawPoint(belowPos, [0, 0, 1])
                         break
                     }
                 }
                 if (!isOnGround) { continue }
                 let marginCheck = true
                 for (const marginBlock of marginBlocks) {
-                    const belowBlock = bot.bot.blockAt(marginBlock.offset(x, y, z))
+                    const belowPos = marginBlock.offset(x, y, z)
+                    const belowBlock = bot.bot.blocks.at(belowPos)
                     if (!belowBlock || belowBlock.name !== 'air') {
                         marginCheck = false
-                        if (belowBlock) bot.debug.drawPoint(belowBlock.position, [0, 0, 1])
+                        if (belowBlock) bot.debug.drawPoint(belowPos, [0, 0, 1])
                         break
                     }
                 }
@@ -270,7 +273,7 @@ module.exports = {
         }
 
         for (const block of blocks) {
-            if (bot.bot.blockAt(block.position)?.name !== 'air') {
+            if (bot.bot.blocks.at(block.position)?.name !== 'air') {
                 yield* wrap(bot.commands.sendAsync(`/setblock ${block.position.x} ${block.position.y} ${block.position.z} minecraft:air`), args.interrupt)
                 yield* sleepG(50)
             }

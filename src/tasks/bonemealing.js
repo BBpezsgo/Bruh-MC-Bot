@@ -62,9 +62,9 @@ module.exports = {
 
                 bot.bot.equip(bonemeal, 'hand')
 
-                const cropBlock = bot.bot.blockAt(crop)
+                const cropBlock = bot.bot.blocks.at(crop)
                 if (cropBlock && cropBlock.name !== 'air') {
-                    yield* wrap(bot.bot.activateBlock(cropBlock), args.interrupt)
+                    yield* wrap(bot.bot.activateBlock({ position: crop }), args.interrupt)
                     n++
                 }
             }

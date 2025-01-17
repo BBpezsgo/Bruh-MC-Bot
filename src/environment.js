@@ -82,12 +82,6 @@ module.exports = class Environment {
     bots
 
     /**
-     * @readonly
-     * @type {Partial<import('mineflayer').Shared>}
-     */
-    shared
-
-    /**
      * @private @readonly
      * @type {string}
      */
@@ -216,7 +210,6 @@ module.exports = class Environment {
         this.itemRequests = []
         this.villagers = {}
         this.entityOwners = {}
-        this.shared = {}
         this.minePositions = []
         this.lockedBlocks = []
         this.lockedEntities = []
@@ -567,7 +560,7 @@ module.exports = class Environment {
         for (let i = this.#chests.length - 1; i >= 0; i--) {
             const chest = this.#chests[i]
             if (chest.position.dimension !== bot.dimension) { continue }
-            const blockAt = bot.bot.blockAt(chest.position.xyz(bot.dimension))
+            const blockAt = bot.bot.blocks.at(chest.position.xyz(bot.dimension))
             if (!blockAt) { continue }
             if (blockAt.name !== 'chest') {
                 console.log(`[Bot "${bot.username}"] Chest at ${chest.position} disappeared`)
@@ -865,7 +858,7 @@ module.exports = class Environment {
                 for (let x = -4; x <= 4; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -4; z <= 4; z++) {
-                            const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                            const other = bot.bot.blocks.at(block.position.offset(x, y, z))
                             if (!other || other.name !== plant.seed) { continue }
                             n++
                         }
@@ -878,7 +871,7 @@ module.exports = class Environment {
             if (plant.type === 'up' && plant.needsWater) {
                 let hasWater = false
                 for (const neighbor of directBlockNeighbors(block.position.offset(0, -1, 0), 'side')) {
-                    if (bot.bot.blockAt(neighbor)?.name === 'water') {
+                    if (bot.bot.blocks.at(neighbor)?.name === 'water') {
                         hasWater = true
                         break
                     }
@@ -887,7 +880,7 @@ module.exports = class Environment {
             }
             const neighbors = directBlockNeighbors(block.position, plant.growsOnSide)
             for (const neighbor of neighbors) {
-                const neighborBlock = bot.bot.blockAt(neighbor)
+                const neighborBlock = bot.bot.blocks.at(neighbor)
                 if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
                 return true
             }
@@ -912,7 +905,7 @@ module.exports = class Environment {
 
         const neighbors = directBlockNeighbors(bestBlock.position, plant.growsOnSide)
         for (const neighbor of neighbors) {
-            const neighborBlock = bot.bot.blockAt(neighbor)
+            const neighborBlock = bot.bot.blocks.at(neighbor)
             if (Minecraft.replaceableBlocks[neighborBlock.name] !== 'yes') { continue }
             return {
                 block: bestBlock,
@@ -949,7 +942,7 @@ module.exports = class Environment {
             case 'grows_block': {
                 let fruitBlock = null
                 for (const neighbor of directBlockNeighbors(block.position, 'side')) {
-                    const neighborBlock = bot.bot.blockAt(neighbor)
+                    const neighborBlock = bot.bot.blocks.at(neighbor)
                     if (neighborBlock && neighborBlock.name === cropInfo.grownBlock) {
                         fruitBlock = neighborBlock
                         break
@@ -962,10 +955,10 @@ module.exports = class Environment {
                 if (cropInfo.root && block.name === cropInfo.root) {
                     isGrown = false
                 } else {
-                    const below1 = bot.bot.blockAt(block.position.offset(0, -1, 0))
-                    const below2 = bot.bot.blockAt(block.position.offset(0, -2, 0))
-                    if (block.type === below1.type && block.type === below2.type) return false
-                    if (below1.type !== block.type) {
+                    const below1 = bot.bot.blocks.at(block.position.offset(0, -1, 0))
+                    const below2 = bot.bot.blocks.at(block.position.offset(0, -2, 0))
+                    if (block.type === below1.id && block.type === below2.id) return false
+                    if (below1.id !== block.type) {
                         isGrown = false
                     } else {
                         isGrown = true
@@ -1032,10 +1025,11 @@ module.exports = class Environment {
                 for (let x = -1; x <= 1; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -1; z <= 1; z++) {
-                            const other = bot.bot.blockAt(block.position.offset(x, y, z))
+                            const pos = block.position.offset(x, y, z)
+                            const other = bot.bot.blocks.at(pos)
                             if (!other || other.name !== cropInfo.cropName) { continue }
-                            if (mushrooms.find(v => v.equals(other.position))) { continue }
-                            if (isDirectNeighbor(block.position, other.position)) {
+                            if (mushrooms.find(v => v.equals(pos))) { continue }
+                            if (isDirectNeighbor(block.position, pos)) {
                                 neighbors++
                             }
                         }
@@ -1091,6 +1085,7 @@ module.exports = class Environment {
     /**
      * @param {import('./bruh-bot')} bot
      * @param {SavedCrop} crop
+     * @returns {Vec3}
      */
     getCropHarvestPositions(bot, crop) {
         const v = Minecraft.resolveCrop(crop.block)
@@ -1098,9 +1093,9 @@ module.exports = class Environment {
         switch (v.type) {
             case 'grows_block': {
                 for (const neighbor of directBlockNeighbors(p, 'side')) {
-                    const neighborBlock = bot.bot.blockAt(neighbor)
+                    const neighborBlock = bot.bot.blocks.at(neighbor)
                     if (!neighborBlock || neighborBlock.name !== v.grownBlock) continue
-                    return neighborBlock
+                    return neighbor
                 }
                 return null
             }
@@ -1111,11 +1106,11 @@ module.exports = class Environment {
                     case 'cave_vines':
                     case 'cave_vines_plant':
                         const berries = Boolean(block.getProperties()?.['berries'])
-                        if (berries) return block
+                        if (berries) return p
                         return null
                     case 'sweet_berry_bush':
                         const age = Number(block.getProperties()?.['age'])
-                        if (age >= 3) return block
+                        if (age >= 3) return p
                         return null
                     default:
                         console.warn(`Unimplemented fruit crop "${block.name}"`)
@@ -1127,16 +1122,16 @@ module.exports = class Environment {
                 const block = bot.bot.blockAt(p)
                 if (!block) return null
                 const age = Number(block.getProperties()?.['age'])
-                if (age >= v.grownAge) return block
+                if (age >= v.grownAge) return p
                 return null
             }
             case 'up': {
-                const above = bot.bot.blockAt(p.offset(0, 1, 0))
-                if (above.name === v.cropName) return above
+                const above = bot.bot.blocks.at(p.offset(0, 1, 0))
+                if (above.name === v.cropName) return p.offset(0, 1, 0)
                 return null
             }
             case 'spread': {
-                const block = bot.bot.blockAt(p)
+                const block = bot.bot.blocks.at(p)
                 if (!block) return null
 
                 if (block.name === 'brown_mushroom' ||
@@ -1146,11 +1141,11 @@ module.exports = class Environment {
                         for (let y = -1; y <= 1; y++) {
                             for (let z = -4; z <= 4; z++) {
                                 if (!x && !y && !z) continue
-                                const other = bot.bot.blockAt(p.offset(x, y, z))
+                                const other = bot.bot.blocks.at(p.offset(x, y, z))
                                 if (!other || other.name !== block.name) continue
                                 if (this.getAllocatedBlock(new Vec3Dimension(p.offset(x, y, z), bot.dimension))) continue
                                 nearby++
-                                if (nearby > 2) return block
+                                if (nearby > 2) return p
                             }
                         }
                     }
@@ -1163,12 +1158,12 @@ module.exports = class Environment {
                 return null
             }
             case 'tree': {
-                const block = bot.bot.blockAt(p)
+                const block = bot.bot.blocks.at(p)
                 if (!block) return null
 
                 if (v.log !== block.name) return null
                 if (v.size !== 'small') return null
-                return block
+                return p
             }
             default: return null
         }
@@ -1461,7 +1456,7 @@ module.exports = class Environment {
         let blockAt = null
         for (const bot of this.bots) {
             if (bot.dimension !== blockPosition.dimension) { continue }
-            blockAt = bot.bot.blockAt(blockPosition.xyz(bot.dimension))
+            blockAt = bot.bot.blocks.at(blockPosition.xyz(bot.dimension))
             if (blockAt) { break }
         }
         if (!blockAt) {
@@ -1526,18 +1521,6 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {Vec3 | Vec3Dimension} position
-     */
-    blockAt(position) {
-        for (const bot of this.bots) {
-            if ('dimension' in position && position.dimension !== bot.dimension) { continue }
-            const block = bot.bot.blockAt('dimension' in position ? position.xyz(bot.dimension) : position)
-            if (block) { return block }
-        }
-        return null
-    }
-
-    /**
      * @param {import('prismarine-entity').Entity} entity
      */
     static isGoodFarmAnimal(entity) {
@@ -1580,7 +1563,7 @@ module.exports = class Environment {
                     break
                 }
             }
-            const fencing = yield* bot.env.scanFencing(farmAnimal.position)
+            const fencing = yield* bot.env.scanFencing(bot, farmAnimal.position)
             if (!fencing) { continue }
             fencings.push(fencing)
         }
@@ -1588,10 +1571,11 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {import('./bruh-bot')} bot
      * @param {Point3} origin
      * @returns {import('./task').Task<Fencing | null>}
      */
-    *scanFencing(origin) {
+    *scanFencing(bot, origin) {
         if (!origin) { return { positions: [], mobs: {} } }
 
         /** @type {Array<{ p: Vec3; v: boolean; }>} */
@@ -1600,7 +1584,7 @@ module.exports = class Environment {
         const mustVisit = [new Vec3(origin.x, origin.y - 1, origin.z).floored()]
         const maxSize = config.fencing.maxSize
 
-        const isEmpty = (/** @type {import('prismarine-block').Block} */ block) => {
+        const isEmpty = (/** @type {{ type: number; }} */ block) => {
             return (
                 this.bots[0].bot.pathfinder.movements.emptyBlocks.has(block.type) ||
                 this.bots[0].bot.pathfinder.movements.carpets.has(block.type) ||
@@ -1622,14 +1606,14 @@ module.exports = class Environment {
 
         const visit = (/** @type {Vec3} */ p) => {
             if (!p) { return }
-            const block = this.blockAt(p)
+            const block = bot.bot.blocks.at(p)
             if (!block) { return }
             if (visited.find(other => other.p.equals(p))) { return }
             const node = { p: p, v: false }
             visited.push(node)
-            if (isEmpty(block)) { return }
-            const above = this.blockAt(p.offset(0, 1, 0))
-            if (!isEmpty(above)) {
+            if (isEmpty({ type: block.id })) { return }
+            const above = bot.bot.blocks.at(p.offset(0, 1, 0))
+            if (!isEmpty({ type: above.id })) {
                 if (fences.includes(above.name)) {
                     this.bots[0].debug.drawPoint(p.offset(0, 2, 0), [0, 0, 1])
                     node.v = true

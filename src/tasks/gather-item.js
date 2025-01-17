@@ -143,7 +143,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  *   };
  *   'dig': {
  *     type: 'dig';
- *     block: { position: Vec3Dimension; block: import('prismarine-block').Block; };
+ *     block: { position: Vec3Dimension; block: { name: string; }; };
  *     loot: { item: string; count: number; }
  *     count: number
  *     retryCount: number;
@@ -313,25 +313,27 @@ class PredictedEnvironment {
     }
 
     /**
-     * @param {ReadonlyArray<{ name: string; count: number; }>} items
+     * @template {{ count: number; }} T
+     * @param {ReadonlyArray<T>} items
      * @param {Freq<import('../utils/other').ItemId>} delta
-     * @returns {Array<{ name: string; count: number; }>}
+     * @param {(a: T, b: import('../utils/other').ItemId) => boolean} comparer
+     * @returns {Array<T>}
      */
-    static applyDelta(items, delta) {
-        const _items = items.map(v => ({ ...v }))
+    static applyDelta(items, delta, comparer) {
+        const result = items.map(v => ({ ...v }))
         for (const item of delta.keys) {
             const count = delta.get(item)
-            for (let i = _items.length - 1; i >= 0; i--) {
-                if (_items[i].name !== item) continue
-                const remove = Math.min(_items[i].count, count)
-                _items[i].count -= remove
+            for (let i = result.length - 1; i >= 0; i--) {
+                if (!comparer(result[i], item)) continue
+                const remove = Math.min(result[i].count, count)
+                result[i].count -= remove
                 delta.add(item, -remove)
-                if (_items[i].count <= 0) {
-                    _items.splice(i, 1)
+                if (result[i].count <= 0) {
+                    result.splice(i, 1)
                 }
             }
         }
-        return _items
+        return result
     }
 }
 
@@ -1344,12 +1346,12 @@ const planners = [
             maxDistance: config.gatherItem.cobblestoneGeneratorSearchRadius,
             useExtraInfo: (block) => {
                 for (const lavaNeighborPosition of directBlockNeighbors(block.position, 'side')) {
-                    const lavaNeighbor = bot.bot.blockAt(lavaNeighborPosition)
+                    const lavaNeighbor = bot.bot.blocks.at(lavaNeighborPosition)
                     if (!lavaNeighbor || lavaNeighbor.name !== 'cobblestone') { continue }
                     if (future.harvestedBlocks.some(v => v.equals(new Vec3Dimension(lavaNeighborPosition, bot.dimension)))) { continue }
 
                     let isNextToWater = false
-                    for (const cobblestoneNeighborPosition of directBlockNeighbors(lavaNeighbor.position, 'side')) {
+                    for (const cobblestoneNeighborPosition of directBlockNeighbors(lavaNeighborPosition, 'side')) {
                         if (cobblestoneNeighborPosition.equals(block.position)) { continue }
 
                         const cobblestoneNeighbor = bot.bot.blockAt(cobblestoneNeighborPosition)
@@ -1360,7 +1362,7 @@ const planners = [
 
                         if (waterLevel !== 1) { continue }
 
-                        const blockBelowFlowingWater = bot.bot.blockAt(cobblestoneNeighborPosition.offset(0, -1, 0))
+                        const blockBelowFlowingWater = bot.bot.blocks.at(cobblestoneNeighborPosition.offset(0, -1, 0))
                         if (!blockBelowFlowingWater) { continue }
                         if (blockBelowFlowingWater.name !== 'water') { continue }
 
@@ -1387,7 +1389,7 @@ const planners = [
             type: 'dig',
             block: {
                 position: found,
-                block: bot.bot.blockAt(found.xyz(bot.dimension)),
+                block: bot.bot.blocks.at(found.xyz(bot.dimension)),
             },
             loot: { item: 'cobblestone', count: 1 },
             count: count,
@@ -2199,7 +2201,8 @@ function* evaluatePlan(bot, plan, args) {
                                         })
                                     }
 
-                                    let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                    const pos = step.block.position.xyz(bot.dimension)
+                                    let block = bot.bot.blocks.at(pos)
                                     while (!block || block.name !== step.block.block.name) {
                                         yield* sleepG(100)
                                         if (!block) {
@@ -2207,7 +2210,7 @@ function* evaluatePlan(bot, plan, args) {
                                                 block: step.block.position,
                                                 ...runtimeArgs(args),
                                             })
-                                            block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                            block = bot.bot.blocks.at(pos)
                                         }
 
                                         if (!block) { break }
@@ -2215,7 +2218,7 @@ function* evaluatePlan(bot, plan, args) {
                                         const timeout = new Timeout(5000)
                                         while (!timeout.done() && block && block.name !== step.block.block.name) {
                                             yield* sleepG(100)
-                                            block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                                            block = bot.bot.blocks.at(pos)
                                         }
                                     }
 
@@ -2228,7 +2231,7 @@ function* evaluatePlan(bot, plan, args) {
                                     }
 
                                     const digResult = yield* dig.task(bot, {
-                                        block: block,
+                                        block: pos,
                                         alsoTheNeighbors: false,
                                         pickUpItems: true,
                                         ...runtimeArgs(args),

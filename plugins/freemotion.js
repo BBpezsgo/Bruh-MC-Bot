@@ -47,7 +47,4 @@ const plugin = function(bot) {
     })
 }
 
-// @ts-ignore
-plugin.pluginName = 'freemotion'
-
 module.exports = plugin

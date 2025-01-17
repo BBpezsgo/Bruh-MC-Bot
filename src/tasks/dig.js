@@ -15,7 +15,7 @@ const { isItemEquals } = require('../utils/other')
  *   digged: Array<Vec3>;
  *   itemsDelta: Freq<import('../utils/other').ItemId>;
  * }, {
- *   block: Block;
+ *   block: Vec3;
  *   alsoTheNeighbors: boolean;
  *   pickUpItems: boolean;
  * }>}
@@ -33,7 +33,7 @@ module.exports = {
         /**
          * @type {Block | null}
          */
-        let current = args.block
+        let current = bot.bot.blockAt(args.block)
 
         const itemsBefore = bot.inventoryItems().toArray().reduce((map, item) => {
             map.add(item.name, -item.count)
@@ -48,7 +48,7 @@ module.exports = {
             if (args.interrupt.isCancelled) { break }
 
             if (bot.bot.entity.position.floored().offset(0, -1, 0).equals(current.position)) {
-                const belowTargetBlock = bot.bot.blockAt(current.position.offset(0, -1, 0))
+                const belowTargetBlock = bot.bot.blocks.at(current.position.offset(0, -1, 0))
                 let shouldMoveAway = false
                 if (!belowTargetBlock) shouldMoveAway = true
                 else if (belowTargetBlock.name === 'air' ||
@@ -65,10 +65,10 @@ module.exports = {
                     shouldMoveAway = true
                 } else {
                     const [a, b, c, d] = [
-                        bot.bot.blockAt(current.position.offset(1, 1, 0)),
-                        bot.bot.blockAt(current.position.offset(-1, 1, 0)),
-                        bot.bot.blockAt(current.position.offset(0, 1, 1)),
-                        bot.bot.blockAt(current.position.offset(0, 1, -1)),
+                        bot.bot.blocks.at(current.position.offset(1, 1, 0)),
+                        bot.bot.blocks.at(current.position.offset(-1, 1, 0)),
+                        bot.bot.blocks.at(current.position.offset(0, 1, 1)),
+                        bot.bot.blocks.at(current.position.offset(0, 1, -1)),
                     ]
                     if (!a && !b && !c && !d) {
                         shouldMoveAway = true
@@ -229,7 +229,7 @@ module.exports = {
         }
     },
     id: function(args) {
-        return `dig-${args.block.position.x}-${args.block.position.y}-${args.block.position.z}`
+        return `dig-${args.block.x}-${args.block.y}-${args.block.z}`
     },
     humanReadableId: `Digging`,
     definition: 'dig',

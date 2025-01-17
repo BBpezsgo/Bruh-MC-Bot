@@ -17,15 +17,34 @@ declare module 'mineflayer' {
         //     start?: () => Promise<void>
         //     stop?: () => Promise<void>
         // }
-		
-		parseBedMetadata(block: Block): {
+		jumpQueued: boolean
+
+		_placeBlockWithOptions(referenceBlock: any, faceVector: any, options: any): Promise<void>
+		parseBedMetadata(bedBlock: Block): {
 		    part: boolean;
 		    occupied: number;
 		    facing: number;
 		    headOffset: Vec3;
 		}
-
+		_playerFromUUID(uuid: string): any
+		readonly uuidToUsername: any
+		_genericPlace(referenceBlock: import("prismarine-block").Block, faceVector: import("vec3").Vec3, options: {
+			half?: "top" | "bottom";
+			delta?: import("vec3").Vec3;
+			forceLook?: boolean | "ignore";
+			offhand?: boolean;
+			swingArm?: "right" | "left";
+			showHand?: boolean;
+		}): Promise<Vec3>
+		jumpTicks: number
 		jumpQueued: boolean
+		placeEntityWithOptions(referenceBlock: import("prismarine-block").Block, faceVector: import("vec3").Vec3, options: {
+			forceLook?: boolean | "ignore";
+			offhand?: boolean;
+			swingArm?: "right" | "left";
+			showHand?: boolean;
+		}): Promise<Entity>
+		readonly QUICK_BAR_START: number
     }
     
 	interface BotEvents {
@@ -51,3 +70,24 @@ declare module 'prismarine-world' {
 		intersect: Vec3
 	})
 }
+
+module 'prismarine-entity' {
+	interface Entity {
+	  isInWater: boolean
+	  isInLava: boolean
+	  isInWeb: boolean
+	  isCollidedHorizontally: boolean
+	  isCollidedVertically: boolean
+	  eyeHeight: number
+  
+	  attributes: Record<string, {
+		value: number
+		modifiers: Array<{
+			amount: number
+			operation: 0 | 1 | 2
+			uuid: string,
+		}>
+	  }>
+	}
+  }
+  

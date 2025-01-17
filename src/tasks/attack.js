@@ -1105,7 +1105,7 @@ module.exports = {
                             .target(target.position)
                             .avoid(distance < 3)
                         bot.bot.movement.setGoal(newGoal)
-                        const { yaw } = bot.bot.movement.getYaw(160, 15, 2)
+                        const yaw = bot.bot.movement.getYaw(160, 15, 2)
                         bot.bot.freemotion.moveTowards(yaw)
                         bot.bot.setControlState('sprint', true)
                         const rotation = Math.rotationToVectorRad(0, yaw)
@@ -1143,7 +1143,7 @@ module.exports = {
                     const now = performance.now()
 
                     if (bot.bot.entity.onGround &&
-                        bot.bot.blockAt(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland' &&
+                        bot.bot.blocks.at(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland' &&
                         now + Minecraft.general.jumpTotalTime > cooldownEndAt + extraCooldown) {
                         bot.bot.jumpQueued = true
                     }

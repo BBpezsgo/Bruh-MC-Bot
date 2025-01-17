@@ -91,7 +91,7 @@ module.exports = {
                     }
 
                     yield* dig.task(bot, {
-                        block: junkBlock,
+                        block: junkBlock.position,
                         alsoTheNeighbors: false,
                         pickUpItems: true,
                         ...runtimeArgs(args),

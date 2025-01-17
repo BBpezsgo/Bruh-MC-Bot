@@ -998,9 +998,9 @@ module.exports = class Minecraft {
             if (crop.root && block.name === crop.root) {
                 return true
             } else {
-                const below = bot.blockAt(block.position.offset(0, -1, 0))
+                const below = bot.blocks.at(block.position.offset(0, -1, 0))
                 if (!below) return null
-                return below.type !== block.type
+                return below.name !== block.name
             }
         } else {
             return true

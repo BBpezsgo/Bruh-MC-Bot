@@ -135,7 +135,7 @@ module.exports = {
 
             yield* equipHoe()
             yield
-            yield* wrap(bot.bot.activateBlock(dirt, null, null, true), args.interrupt)
+            yield* wrap(bot.bot.activateBlock(dirt, null, null, bot.instantLook), args.interrupt)
             n++
             yield* sleepG(100)
 
@@ -204,7 +204,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
 
                 yield* sleepG(100)
-                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, true), args.interrupt)
+                yield* wrap(bot.bot.activateBlock(bot.bot.blockAt(dirt.xyz(bot.dimension)), null, null, bot.instantLook), args.interrupt)
                 n++
                 yield* sleepG(100)
                 shouldContinue = true
