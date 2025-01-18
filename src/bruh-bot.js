@@ -114,259 +114,86 @@ const priorities = Object.freeze({
  */
 
 /**
+ * @typedef {{
+*   onChat: (username: string, message: string) => boolean;
+*   done: boolean;
+* }} ChatAwait
+*/
+
+/**
  * @typedef {StringChatHandler | RegexpChatHandler} ChatHandler
  */
 
 module.exports = class BruhBot {
-    /**
-     * @readonly
-     * @type {import('mineflayer').Bot}
-     */
-    bot
+    /** @readonly @type {import('mineflayer-pathfinder').Movements} */ permissiveMovements
+    /** @readonly @type {import('mineflayer-pathfinder').Movements} */ restrictedMovements
+    /** @readonly @type {import('mineflayer-pathfinder').Movements} */ cutTreeMovements
 
-    /**
-     * @readonly
-     * @type {Minecraft}
-     */
-    mc
+    /** @private @readonly @type {Interval} */ ensureEquipmentInterval
+    /** @private @readonly @type {Interval} */ dumpTrashInterval
+    /** @private @readonly @type {Interval} */ forceDumpTrashInterval
+    /** @private @readonly @type {Interval} */ saveInterval
+    /** @private @readonly @type {Interval} */ saveTasksInterval
+    /** @private @readonly @type {Interval} */ trySleepInterval
+    /** @private @readonly @type {Interval} */ checkQuietInterval
+    /** @private @readonly @type {Interval} */ randomLookInterval
+    /** @private @readonly @type {Interval} */ clearHandInterval
+    /** @private @readonly @type {Interval} */ lookAtPlayerTimeout
+    /** @private @readonly @type {Interval} */ moveAwayInterval
+    /** @private @readonly @type {Interval} */ tryAutoHarvestInterval
+    /** @private @readonly @type {Interval} */ tryRestoreCropsInterval
+    /** @private @readonly @type {Interval} */ breedAnimalsInterval
+    /** @private @readonly @type {Interval} */ loadCrossbowsInterval
+    /** @private @readonly @type {Interval} */ giveBackItemsInterval
 
-    /**
-     * @private @readonly
-     * @type {TaskManager}
-     */
-    tasks
+    /** @readonly @type {{ isActivated: boolean; activatedTime: number; }} */ leftHand
+    /** @readonly @type {{ isActivated: boolean; activatedTime: number; }} */ rightHand
 
-    /**
-     * @typedef {{
-     *   onChat: (username: string, message: string) => boolean;
-     *   done: boolean;
-     * }} ChatAwait
-     */
-
-    /**
-     * @readonly
-     * @type {Array<ChatAwait>}
-     */
-    chatAwaits
-
-    /**
-     * @readonly
-     * @type {import('mineflayer-pathfinder').Movements}
-     */
-    permissiveMovements
-    /**
-     * @readonly
-     * @type {import('mineflayer-pathfinder').Movements}
-     */
-    restrictedMovements
-    /**
-     * @readonly
-     * @type {import('mineflayer-pathfinder').Movements}
-     */
-    cutTreeMovements
-
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    ensureEquipmentInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    dumpTrashInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    forceDumpTrashInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    saveInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    saveTasksInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    trySleepInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    checkQuietInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    randomLookInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    clearHandInterval
-    /**
-     * @private
-     * @type {number}
-     */
-    lookAtPlayer
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    lookAtPlayerTimeout
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    moveAwayInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    tryAutoHarvestInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    tryRestoreCropsInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    breedAnimalsInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    loadCrossbowsInterval
-    /**
-     * @private @readonly
-     * @type {Interval}
-     */
-    giveBackItemsInterval
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    _quietMode
-
-    /**
-     * @readonly
-     * @type {boolean}
-     */
-    get quietMode() { return this._quietMode || this.userQuiet }
-
-    /**
-     * @readonly
-     * @type {{ isActivated: boolean; activatedTime: number; }}
-     */
-    leftHand
-
-    /**
-     * @readonly
-     * @type {{ isActivated: boolean; activatedTime: number; }}
-     */
-    rightHand
-
-    /**
-     * @type {import('./managed-task').AsManaged<import('./tasks/attack')> | null}
-     */
+    /** @type {import('./managed-task').AsManaged<import('./tasks/attack')> | null} */
     defendMyselfGoal
-
-    /**
-     * @private
-     * @type {import('./managed-task')}
-     */
-    _runningTask
-
-    /**
-     * @readonly
-     * @type {import('mineflayer').Dimension}
-     */
-    get dimension() { return this.bot.game.dimension }
-
-    /**
-     * @readonly
-     * @type {string}
-     */
-    get username() { return this.bot.username ?? this._config.bot.username }
-
-    /**
-     * @type {((soundName: string | number) => void) | null}
-     */
+    /** @type {((soundName: string | number) => void) | null} */
     onHeard
-
-    /**
-     * @readonly
-     * @type {Environment}
-     */
+    /** @readonly @type {import('mineflayer').Bot} */
+    bot
+    /** @readonly @type {Minecraft} */
+    mc
+    /** @private @readonly @type {TaskManager} */
+    tasks
+    /** @readonly @type {Array<ChatAwait>} */
+    chatAwaits
+    /** @readonly @type {Environment} */
     env
-
-    /**
-     * @readonly
-     * @type {Memory}
-     */
+    /** @readonly @type {Memory} */
     memory
-
-    /**
-     * @readonly
-     * @type {Array<import('./locks/item-lock')>}
-     */
+    /** @readonly @type {Array<import('./locks/item-lock')>} */
     lockedItems
-
-    /**
-     * @private
-     * @type {boolean}
-     */
-    _isLeaving
-
-    /**
-     * @readonly
-     * @type {boolean}
-     */
-    get isLeaving() { return this._isLeaving }
-
-    /**
-     * @readonly
-     * @type {import('./debug/debug')}
-     */
+    /** @readonly @type {import('./debug/debug')} */
     debug
-
-    /**
-     * @private @readonly
-     * @type {ReadonlyArray<ChatHandler>}
-     */
+    /** @private @readonly @type {ReadonlyArray<ChatHandler>} */
     chatHandlers
-
-    /**
-     * @readonly
-     * @type {Commands}
-     */
+    /** @readonly @type {Commands} */
     commands
-
-    /**
-     * @private
-     * @type {import('mineflayer-pathfinder').PartiallyComputedPath | null}
-     */
-    _currentPath
-
-    /**
-     * @private @readonly
-     * @type {Readonly<BotConfig>}
-     */
-    _config
-
-    /**
-     * @type {boolean}
-     */
+    /** @type {boolean} */
     instantLook
+
+    /** @private @type {import('./managed-task')} */
+    _runningTask
+    /** @private @type {import('mineflayer-pathfinder').PartiallyComputedPath | null} */
+    _currentPath
+    /** @private @readonly @type {Readonly<BotConfig>} */
+    _config
+    /** @private @type {number} */
+    _lookAtPlayer
+
+    /** @readonly @type {import('mineflayer').Dimension} */ get dimension() { return this.bot.game.dimension }
+
+    /** @readonly @type {string} */ get username() { return this.bot.username ?? this._config.bot.username }
+
+    /** @private @type {boolean} */ _quietMode
+    /** @readonly @type {boolean} */ get quietMode() { return this._quietMode || this.userQuiet }
+
+    /** @private @type {boolean} */ _isLeaving
+    /** @readonly @type {boolean} */ get isLeaving() { return this._isLeaving }
 
     /**
      * @param {Readonly<BotConfig>} config
@@ -1062,7 +889,7 @@ module.exports = class BruhBot {
         const handlers = []
 
         handlers.push(/** @type {StringChatHandler} */({
-            match: 'test1',
+            match: 'pause',
             command: (sender, message, response, isWhispered) => {
                 this.tasks.push(this, {
                     task: function*(bot, args) {
@@ -1536,8 +1363,8 @@ module.exports = class BruhBot {
                 }, priorities.user, true, sender, isWhispered)
                 if (task) {
                     task.wait()
-                    .then(() => { })
-                    .catch(error => error instanceof CancelledError || response.respond(error))
+                        .then(() => { })
+                        .catch(error => error instanceof CancelledError || response.respond(error))
                 } else {
                     response.respond(`No`)
                 }
@@ -3486,20 +3313,20 @@ module.exports = class BruhBot {
 
         if (this.lookAtPlayerTimeout.done()) {
             this.lookAtPlayerTimeout.restart()
-            this.lookAtPlayer++
+            this._lookAtPlayer++
         }
 
-        while (this.lookAtPlayer < 0) {
+        while (this._lookAtPlayer < 0) {
             this.lookAtPlayerTimeout.restart()
-            this.lookAtPlayer += players.length
+            this._lookAtPlayer += players.length
         }
 
-        while (this.lookAtPlayer >= players.length) {
+        while (this._lookAtPlayer >= players.length) {
             this.lookAtPlayerTimeout.restart()
-            this.lookAtPlayer -= players.length
+            this._lookAtPlayer -= players.length
         }
 
-        const selected = players[this.lookAtPlayer]
+        const selected = players[this._lookAtPlayer]
 
         if (!selected?.entity) { return false }
 
