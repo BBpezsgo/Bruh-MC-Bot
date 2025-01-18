@@ -5,7 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const { replacer, reviver } = require('./utils/serializing')
 const { wrap, sleepG, runtimeArgs, sleepTicks } = require('./utils/tasks')
-const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor, isItemEquals } = require('./utils/other')
+const { directBlockNeighbors: directBlockNeighbors, isDirectNeighbor, isItemEquals, stringifyItem } = require('./utils/other')
 const { Block } = require('prismarine-block')
 const Minecraft = require('./minecraft')
 const Tasks = require('./tasks')
@@ -24,6 +24,8 @@ const EntityLock = require('./locks/entity-lock')
  *   position: Vec3Dimension;
  *   content: Freq<import('./utils/other').ItemId>;
  *   myItems: Freq<import('./utils/other').ItemId>;
+ *   type: 'single' | 'right' | 'left';
+ *   facing: 'north' | 'east' | 'south' | 'west';
  * }} SavedChest
  */
 
@@ -228,6 +230,8 @@ module.exports = class Environment {
                 content: new Freq(isItemEquals).from(v.content),
                 myItems: new Freq(isItemEquals).from(v.myItems),
                 position: v.position,
+                type: v.type,
+                facing: v.facing,
             }))
             : this.#chests
         this.villagers = data.villagers ?? this.villagers
@@ -563,22 +567,17 @@ module.exports = class Environment {
             const blockAt = bot.bot.blocks.at(chest.position.xyz(bot.dimension))
             if (!blockAt) { continue }
             if (blockAt.name !== 'chest') {
+                bot.debug.label(chest.position.xyz(bot.dimension), { text: `- Chest`, color: 'red' }, 10000)
                 console.log(`[Bot "${bot.username}"] Chest at ${chest.position} disappeared`)
                 this.#chests.splice(i, 1)
             }
         }
 
-        console.log(`[Bot "${bot.username}"] Scanning chests ...`)
-        const chestPositions = bot.bot.findBlocks({
+        const chestIterator = bot.findBlocks({
             point: bot.bot.entity.position.clone(),
             maxDistance: config.scanChests.radius,
-            matching: (block) => {
-                if (bot.mc.registry.blocksByName['chest'].id === block.type) {
-                    return true
-                }
-                return false
-            },
-            useExtraInfo: (block) => {
+            matching: 'chest',
+            filter: (block) => {
                 const properties = block.getProperties()
                 if (!properties['type']) {
                     return true
@@ -588,70 +587,68 @@ module.exports = class Environment {
                 }
                 return true
             },
-            count: 128,
+            force: true,
+            count: Infinity,
         })
-        console.log(`[Bot "${bot.username}"] Found ${chestPositions.length} chests`)
-        for (const chestPosition of chestPositions) {
+
+        for (const _chestBlock of chestIterator) {
+            yield
+
+            let chestBlock = _chestBlock
+            if (!chestBlock) { continue }
+
+            bot.debug.label(chestBlock.position, { text: `? Chest`, color: 'yellow' }, 10000)
+
             try {
                 yield* Tasks.goto.task(bot, {
-                    block: chestPosition,
+                    block: chestBlock.position,
                     ...runtimeArgs(args),
                 })
-                const chestBlock = bot.bot.blockAt(chestPosition)
+
+                chestBlock = bot.bot.blockAt(chestBlock.position)
                 if (!chestBlock) {
                     console.warn(`[Bot "${bot.username}"] Chest disappeared while scanning`)
                     continue
                 }
+
                 if (chestBlock.name !== 'chest') {
                     console.warn(`[Bot "${bot.username}"] Chest replaced while scanning`)
                     continue
                 }
 
-                let chest
+                const lock = yield* this.waitLock(bot.username, chestBlock.position)
+
+                let chest = null
                 try {
                     chest = yield* bot.openChest(chestBlock)
-                } catch (error) {
-                    console.error(error)
-                    continue
-                }
 
-                /**
-                 * @type {SavedChest | null}
-                 */
-                let found = null
-                for (const _chest of this.#chests) {
-                    if (_chest.position.equals(new Vec3Dimension(chestBlock.position, bot.dimension))) {
-                        found = _chest
+                    let [found] = this.getChest(new Vec3Dimension(chestBlock.position, bot.dimension))
+                    if (!found) {
+                        found = this.saveChest(bot, new Vec3Dimension(chestBlock.position, bot.dimension))
                     }
-                }
-                if (!found) {
-                    found = {
-                        position: new Vec3Dimension(chestBlock.position, bot.dimension),
-                        content: new Freq(isItemEquals),
-                        myItems: new Freq(isItemEquals),
-                    }
-                    this.#chests.push(found)
-                } else {
+
                     found.content = new Freq(isItemEquals)
+
+                    for (const item of chest.containerItems()) {
+                        found.content.add(item, item.count)
+                    }
+
+                    for (const item of found.myItems.keys) {
+                        found.myItems.set(item, Math.min(found.myItems.get(item), found.content.get(item)))
+                    }
+
+                    scannedChests++
+                    yield* sleepTicks()
+
+                    bot.debug.label(chestBlock.position, { text: `+ Chest`, color: 'green' }, 10000)
+                } finally {
+                    chest?.close()
+                    lock.unlock()
                 }
-
-                for (const item of chest.containerItems()) {
-                    found.content.add(item, item.count)
-                }
-
-                for (const item of found.myItems.keys) {
-                    found.myItems.set(item, Math.min(found.myItems.get(item), found.content.get(item)))
-                }
-
-                scannedChests++
-
-                yield* sleepG(100)
-                chest.close()
             } catch (error) {
                 console.warn(`[Bot "${bot.username}"] Error while scanning chests`, error)
             }
         }
-        console.log(`[Bot "${bot.username}"] Chests scanned`)
 
         this.save()
 
@@ -659,15 +656,119 @@ module.exports = class Environment {
     }
 
     /**
+     * @param {import('./bruh-bot')} bot
+     * @param {Vec3Dimension} chestPosition
+     */
+    saveChest(bot, chestPosition) {
+        const chestBlock = bot.bot.blockAt(chestPosition.xyz(bot.dimension))
+        if (chestBlock.name !== 'chest') throw `This aint a chest`
+        /** @type {SavedChest} */
+        const saved = {
+            position: chestPosition,
+            content: new Freq(isItemEquals),
+            myItems: new Freq(isItemEquals),
+            // @ts-ignore
+            type: chestBlock.getProperties()['type'],
+            // @ts-ignore
+            facing: chestBlock.getProperties()['facing'],
+        }
+        this.#chests.push(saved)
+        return saved
+    }
+
+    /**
+     * @param {Vec3Dimension} position
+     * @returns {[(null | SavedChest), number]}
+     */
+    getChest(position) {
+        for (let i = 0; i < this.#chests.length; i++) {
+            const chest = this.#chests[i]
+            if (chest.position.dimension !== position.dimension) continue
+            if (chest.position.x === position.x &&
+                chest.position.y === position.y &&
+                chest.position.z === position.z) { return [chest, i] }
+
+            const otherHalf = Environment.getChestOtherHalf(chest.position, chest.type, chest.facing)
+            if (otherHalf &&
+                otherHalf.x === position.x &&
+                otherHalf.y === position.y &&
+                otherHalf.z === position.z) { return [chest, i] }
+        }
+        return [null, -1]
+    }
+
+    /**
+     * @param {import('minecraft-data').IndexedData} registry
+     * @param {SavedChest} chest
+     * @param {import('./utils/other').ItemId} [item]
+     */
+    isChestFull(registry, chest, item = null) {
+        if (item) {
+            for (const k of chest.content.keys) {
+                if (!isItemEquals(k, item)) continue
+                const stackSize = registry.itemsByName[stringifyItem(k)]?.stackSize ?? 64
+                let n = chest.content.get(k)
+                n %= stackSize
+                if (n) return false
+            }
+        }
+
+        let takenUp = 0
+        for (const k of chest.content.keys) {
+            const stackSize = (typeof k === 'object' && 'stackSize' in k) ? k.stackSize : registry.itemsByName[stringifyItem(k)]?.stackSize ?? 64
+            let n = chest.content.get(k)
+            n /= stackSize
+            n = Math.ceil(n)
+            takenUp += n
+        }
+
+        let full = 0
+        if (chest.type === 'single') {
+            full = 3 * 9
+        } else {
+            full = 6 * 9
+        }
+        return takenUp >= full
+    }
+
+    /**
      * @param {Vec3Dimension} position
      */
     deleteChest(position) {
-        for (let i = this.#chests.length - 1; i >= 0; i--) {
-            if (!this.#chests[i].position.equals(position)) continue
+        while (true) {
+            const [, i] = this.getChest(position)
+            if (i < 0) break
             this.#chests.splice(i, 1)
         }
         this.save()
         console.log(`[Environment] Chest at ${position} deleted`)
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot
+     * @param {Chest} chest
+     * @param {Vec3Dimension} chestPosition
+     * @param {string} item
+     * @param {number} count
+     */
+    recordChestTransfer(bot, chest, chestPosition, item, count) {
+        let [saved] = this.getChest(chestPosition)
+        if (!saved) {
+            saved = this.saveChest(bot, chestPosition)
+        }
+
+        saved.content = new Freq(isItemEquals)
+
+        for (const item of bot.containerItems(chest)) {
+            saved.content.add(item, item.count)
+        }
+
+        saved.myItems.add(item, count)
+
+        for (const item of saved.content.keys) {
+            if (!saved.myItems.get(item)) { continue }
+            saved.myItems.set(item, Math.min(saved.myItems.get(item), saved.content.get(item)))
+        }
     }
 
     /**
@@ -702,50 +803,6 @@ module.exports = class Environment {
         }
         console.log(`[Bot "${bot.username}"] Villagers scanned`)
         return scannedVillagers
-    }
-
-    /**
-     * @param {import('./bruh-bot')} bot
-     * @param {Chest} chest
-     * @param {Vec3Dimension} chestPosition
-     * @param {string} item
-     * @param {number} count
-     */
-    recordChestTransfer(bot, chest, chestPosition, item, count) {
-        /**
-         * @type {SavedChest | null}
-         */
-        let saved = null
-
-        for (const _chest of this.#chests) {
-            if (_chest.position.equals(chestPosition) &&
-                _chest.position.dimension === chestPosition.dimension) {
-                saved = _chest
-                break
-            }
-        }
-
-        if (!saved) {
-            saved = {
-                position: chestPosition,
-                content: new Freq(isItemEquals),
-                myItems: new Freq(isItemEquals),
-            }
-            this.#chests.push(saved)
-        }
-
-        saved.content = new Freq(isItemEquals)
-
-        for (const item of bot.containerItems(chest)) {
-            saved.content.add(item, item.count)
-        }
-
-        saved.myItems.add(item, count)
-
-        for (const item of saved.content.keys) {
-            if (!saved.myItems.get(item)) { continue }
-            saved.myItems.set(item, Math.min(saved.myItems.get(item), saved.content.get(item)))
-        }
     }
 
     /**
@@ -1243,6 +1300,25 @@ module.exports = class Environment {
                 lock.block.z === block.z) {
                 return lock.by
             }
+            for (const additionalPoint of lock.additionalPoints) {
+                if (additionalPoint.x === block.x &&
+                    additionalPoint.y === block.y &&
+                    additionalPoint.z === block.z) {
+                    return lock.by
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * @param {Vec3Dimension} position
+     */
+    _blockAt(position) {
+        for (const bot of this.bots) {
+            if (bot.dimension !== position.dimension) continue
+            const b = bot.bot.blockAt(position.xyz(bot.dimension))
+            if (b) return b
         }
         return null
     }
@@ -1253,17 +1329,93 @@ module.exports = class Environment {
      * @returns {BlockLock}
      */
     tryLockBlock(by, block) {
-        for (const lock of this.lockedBlocks) {
-            if (lock.isUnlocked) continue
-            if (lock.block.x === block.x &&
-                lock.block.y === block.y &&
-                lock.block.z === block.z) {
-                return null
+        if (this.isBlockLocked(block)) return null
+        const blockAt = this._blockAt(new Vec3Dimension(block, this.bots.find(v => v.username === by).dimension))
+        /** @type {Array<Point3>} */ const additionalPoints = []
+        if (blockAt?.name === 'chest') {
+            const properties = blockAt.getProperties() ?? {}
+            // @ts-ignore
+            const chestOtherHalf = Environment.getChestOtherHalf(block, properties['type'], properties['facing'])
+            if (chestOtherHalf) {
+                additionalPoints.push(chestOtherHalf)
             }
         }
-        const newLock = new BlockLock(by, block)
+        const newLock = new BlockLock(by, block, additionalPoints)
         this.lockedBlocks.push(newLock)
         return newLock
+    }
+
+    /**
+     * @param {Point3} position
+     * @param {string} type
+     * @param {string} facing
+     */
+    static getChestOtherHalf(position, type, facing) {
+        switch (type) {
+            case 'left':
+                switch (facing) {
+                    case 'north':
+                        return {
+                            x: position.x + 1,
+                            y: position.y,
+                            z: position.z,
+                        }
+                    case 'east':
+                        return {
+                            x: position.x,
+                            y: position.y,
+                            z: position.z + 1,
+                        }
+                    case 'south':
+                        return {
+                            x: position.x - 1,
+                            y: position.y,
+                            z: position.z,
+                        }
+                    case 'west':
+                        return {
+                            x: position.x,
+                            y: position.y,
+                            z: position.z - 1,
+                        }
+                    default:
+                        break
+                }
+                break
+            case 'right':
+                switch (facing) {
+                    case 'north':
+                        return {
+                            x: position.x - 1,
+                            y: position.y,
+                            z: position.z,
+                        }
+                    case 'east':
+                        return {
+                            x: position.x,
+                            y: position.y,
+                            z: position.z - 1,
+                        }
+                    case 'south':
+                        return {
+                            x: position.x + 1,
+                            y: position.y,
+                            z: position.z,
+                        }
+                    case 'west':
+                        return {
+                            x: position.x,
+                            y: position.y,
+                            z: position.z + 1,
+                        }
+                    default:
+                        break
+                }
+                break
+            default:
+                break
+        }
+        return null
     }
 
     /**

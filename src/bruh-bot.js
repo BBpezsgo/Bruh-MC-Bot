@@ -4124,41 +4124,49 @@ module.exports = class BruhBot {
             }
         }
 
-        if (botItems.length === 0) return 0
+        let error = null
+        for (let i = 0; i < 5; i++) {
+            try {
+                if (botItems.length === 0) return 0
+                if (!botItems[0]) return 0
 
-        if (!botItems[0]) return 0
+                const destinationSlot = this.firstFreeContainerSlot(chest, item)
+                if (destinationSlot === null) return 0
 
-        const destinationSlot = this.firstFreeContainerSlot(chest, item)
-        if (destinationSlot === null) return 0
+                const actualCount = Math.min(
+                    depositCount,
+                    botItems[0].count,
+                    stackSize,
+                    stackSize - (chest.slots[destinationSlot] ? chest.slots[destinationSlot].count : 0)
+                )
 
-        const actualCount = Math.min(
-            depositCount,
-            botItems[0].count,
-            stackSize,
-            stackSize - (chest.slots[destinationSlot] ? chest.slots[destinationSlot].count : 0)
-        )
+                const sourceSlot = botItems[0].slot
 
-        const sourceSlot = botItems[0].slot
+                yield* taskUtils.wrap(this.bot.transfer({
+                    window: chest,
+                    itemType: this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id,
+                    metadata: null,
+                    count: actualCount,
+                    sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
+                    sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
+                    destStart: (destinationSlot !== null) ? destinationSlot : 0,
+                    destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
+                }))
 
-        yield* taskUtils.wrap(this.bot.transfer({
-            window: chest,
-            itemType: this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id,
-            metadata: null,
-            count: actualCount,
-            sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
-            sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
-            destStart: (destinationSlot !== null) ? destinationSlot : 0,
-            destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
-        }))
+                this.env.recordChestTransfer(
+                    this,
+                    chest,
+                    new Vec3Dimension(chestBlock, this.dimension),
+                    typeof item === 'string' ? item : item.name,
+                    actualCount)
 
-        this.env.recordChestTransfer(
-            this,
-            chest,
-            new Vec3Dimension(chestBlock, this.dimension),
-            typeof item === 'string' ? item : item.name,
-            actualCount)
+                return actualCount
+            } catch (_error) {
+                error = _error
+            }
+        }
 
-        return actualCount
+        if (error) throw error
     }
 
     /**

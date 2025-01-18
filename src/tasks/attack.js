@@ -835,6 +835,7 @@ module.exports = {
             const blockBelow = bot.bot.world.getBlock(bot.bot.entity.position.floored().offset(0, -0.5, 0))
             const initialVelocity =
                 bot.bot.entity.onGround
+                    // @ts-ignore
                     ? Math.fround(0.42) * ((blockBelow && blockBelow.name === 'honey_block') ? bot.bot.physics.honeyblockJumpSpeed : 1)
                     : bot.bot.entity.velocity.y
             // if (bot.bot.entity.jumpBoost > 0) {

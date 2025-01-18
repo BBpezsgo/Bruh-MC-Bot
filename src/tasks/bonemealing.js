@@ -64,6 +64,7 @@ module.exports = {
 
                 const cropBlock = bot.bot.blocks.at(crop)
                 if (cropBlock && cropBlock.name !== 'air') {
+                    // @ts-ignore
                     yield* wrap(bot.bot.activateBlock({ position: crop }), args.interrupt)
                     n++
                 }

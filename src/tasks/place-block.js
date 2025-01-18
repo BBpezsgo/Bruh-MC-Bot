@@ -208,6 +208,7 @@ function getCorrectBlock(itemName) {
  * }) & {
  *   clearGrass?: boolean;
  *   cheat?: boolean;
+ *   scaffoldingBlocks?: Array<string>;
  * } & ({} | {
  *   position: Vec3;
  *   properties?: object;
@@ -226,86 +227,152 @@ module.exports = {
 
         if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
 
-        /**
-         * @param {Vec3} target
-         */
-        const findBestReferenceBlock = (target) => {
-            let validFaceVectors = [
-                new Vec3(1, 0, 0),
-                new Vec3(0, 1, 0),
-                new Vec3(0, 0, 1),
-                new Vec3(-1, 0, 0),
-                new Vec3(0, -1, 0),
-                new Vec3(0, 0, -1),
-            ]
+        const allFaceVectors = Object.freeze([
+            new Vec3(1, 0, 0),
+            new Vec3(0, 1, 0),
+            new Vec3(0, 0, 1),
+            new Vec3(-1, 0, 0),
+            new Vec3(0, -1, 0),
+            new Vec3(0, 0, -1),
+        ])
 
-            if ('properties' in args && args.properties) {
-                if ('axis' in args.properties) {
-                    switch (args.properties['axis']) {
-                        case 'x':
-                            validFaceVectors = [
-                                new Vec3(-1, 0, 0),
-                                new Vec3(1, 0, 0),
-                            ]
-                            break
-                        case 'y':
-                            validFaceVectors = [
-                                new Vec3(0, -1, 0),
-                                new Vec3(0, 1, 0),
-                            ]
-                            break
-                        case 'z':
-                            validFaceVectors = [
-                                new Vec3(0, 0, -1),
-                                new Vec3(0, 0, 1),
-                            ]
-                            break
-                        default:
-                            debugger
-                            break
-                    }
-                } else if ('facing' in args.properties) {
-                    /*
-                    switch (args.properties['facing']) {
-                        case 'east':
-                            validFaceVectors = [
-                                new Vec3(-1, 0, 0),
-                            ]
-                            break
-                        case 'west':
-                            validFaceVectors = [
-                                new Vec3(1, 0, 0),
-                            ]
-                            break
-                        case 'south':
-                            validFaceVectors = [
-                                new Vec3(0, 0, -1),
-                            ]
-                            break
-                        case 'north':
-                            validFaceVectors = [
-                                new Vec3(0, 0, 1),
-                            ]
-                            break
-                        default:
-                            debugger
-                            break
-                    }
-                    */
+        let validFaceVectors = allFaceVectors
+
+        if ('properties' in args && args.properties) {
+            if ('axis' in args.properties) {
+                switch (args.properties['axis']) {
+                    case 'x':
+                        validFaceVectors = [
+                            new Vec3(-1, 0, 0),
+                            new Vec3(1, 0, 0),
+                        ]
+                        break
+                    case 'y':
+                        validFaceVectors = [
+                            new Vec3(0, -1, 0),
+                            new Vec3(0, 1, 0),
+                        ]
+                        break
+                    case 'z':
+                        validFaceVectors = [
+                            new Vec3(0, 0, -1),
+                            new Vec3(0, 0, 1),
+                        ]
+                        break
+                    default:
+                        debugger
+                        break
                 }
+            } else if ('facing' in args.properties) {
+                /*
+                switch (args.properties['facing']) {
+                    case 'east':
+                        validFaceVectors = [
+                            new Vec3(-1, 0, 0),
+                        ]
+                        break
+                    case 'west':
+                        validFaceVectors = [
+                            new Vec3(1, 0, 0),
+                        ]
+                        break
+                    case 'south':
+                        validFaceVectors = [
+                            new Vec3(0, 0, -1),
+                        ]
+                        break
+                    case 'north':
+                        validFaceVectors = [
+                            new Vec3(0, 0, 1),
+                        ]
+                        break
+                    default:
+                        debugger
+                        break
+                }
+                */
             }
-
-            for (const faceVector of validFaceVectors) {
-                const referenceBlock = bot.bot.blockAt(target.offset(-faceVector.x, -faceVector.y, -faceVector.z))
-                if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) { continue }
-                if (interactableBlocks.includes(referenceBlock.name)) { continue }
-                return { referenceBlock, faceVector }
-            }
-
-            return null
         }
 
-        /** @type {ReturnType<typeof findBestReferenceBlock>} */
+        /**
+         * @typedef {{
+         *   referenceBlock: Vec3;
+         *   faceVector: Vec3;
+         *   scaffoldingBlocks: Array<Vec3>;
+         * }} PlaceInfo
+         */
+
+        /**
+         * @param {Vec3} target
+         * @param {ReadonlyArray<Vec3>} validFaceVectors
+         * @returns {PlaceInfo}
+         */
+        const findBestReferenceBlock = (target, validFaceVectors) => {
+            /** @type {Set<string>} */
+            const closed = new Set()
+            closed.add(`${target.x}:${target.y}:${target.z}`)
+
+            /**
+             * @param {Vec3} currentTarget
+             * @returns {PlaceInfo}
+             */
+            const findBlock = (currentTarget, depth = 0) => {
+                if (depth > 5) return null
+
+                for (const faceVector of validFaceVectors) {
+                    const referencePosition = currentTarget.offset(-faceVector.x, -faceVector.y, -faceVector.z)
+                    const referenceBlock = bot.bot.blocks.at(referencePosition)
+                    if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) { continue }
+                    if (interactableBlocks.includes(referenceBlock.name)) { continue }
+                    return {
+                        referenceBlock: referencePosition,
+                        faceVector: faceVector,
+                        scaffoldingBlocks: [],
+                    }
+                }
+
+                /**
+                 * @type {Array<PlaceInfo>}
+                 */
+                const possiblePaths = [
+
+                ]
+
+                for (const faceVector of allFaceVectors) {
+                    const pos = currentTarget.offset(-faceVector.x, -faceVector.y, -faceVector.z)
+                    const block = bot.bot.blocks.at(pos)
+                    if (!block || (block.name !== 'air')) continue
+                    const hash = `${pos.x}:${pos.y}:${pos.z}`
+                    if (closed.has(hash)) continue
+                    closed.add(hash)
+                    const v = findBlock(pos, depth + 1)
+                    if (!v) continue
+                    possiblePaths.push({
+                        faceVector: faceVector,
+                        referenceBlock: pos,
+                        scaffoldingBlocks: [
+                            pos,
+                            ...v.scaffoldingBlocks,
+                        ],
+                    })
+                }
+
+                if (possiblePaths.length > 0) {
+                    let shortest = 0
+                    for (let i = 1; i < possiblePaths.length; i++) {
+                        if (possiblePaths[i].scaffoldingBlocks.length >= possiblePaths[shortest].scaffoldingBlocks.length) continue
+                        shortest = i
+                    }
+                    return possiblePaths[shortest]
+                }
+
+                return null
+            }
+
+            return findBlock(target)
+        }
+
+        /** @type {PlaceInfo} */
         let placeInfo = null
         /** @type {Vec3 | null} */
         let position = null
@@ -360,7 +427,7 @@ module.exports = {
 
         if ('position' in args) {
             position = args.position
-            placeInfo = findBestReferenceBlock(position)
+            placeInfo = findBestReferenceBlock(position, validFaceVectors)
         } else {
             for (let x = -config.placeAnywhere.placeSearchRadiusH; x <= config.placeAnywhere.placeSearchRadiusH; x++) {
                 for (let y = -config.placeAnywhere.placeSearchRadiusV; y <= config.placeAnywhere.placeSearchRadiusV; y++) {
@@ -369,7 +436,7 @@ module.exports = {
 
                         const current = bot.bot.entity.position.floored().offset(x, y, z)
                         const above = bot.bot.blockAt(current)
-                        const _placeInfo = findBestReferenceBlock(current)
+                        const _placeInfo = findBestReferenceBlock(current, validFaceVectors)
                         if (!_placeInfo) { continue }
 
                         if (Minecraft.replaceableBlocks[above.name]) {
@@ -394,7 +461,18 @@ module.exports = {
 
         if (!placeInfo) { throw `Couldn't find a reference block` }
 
-        const referencePosition = position.offset(-placeInfo.faceVector.x, -placeInfo.faceVector.y, -placeInfo.faceVector.z)
+        for (const scaffoldingPos of placeInfo.scaffoldingBlocks) {
+            if (!args.scaffoldingBlocks?.length) { throw `Couldn't find a reference block` }
+            yield* this.task(bot, {
+                block: args.scaffoldingBlocks[0],
+                cheat: args.cheat,
+                clearGrass: args.clearGrass,
+                position: scaffoldingPos,
+                ...runtimeArgs(args),
+            })
+        }
+
+        const referencePosition = placeInfo.referenceBlock
         const blockPosition = new Vec3Dimension(position, bot.dimension)
 
         let blockHere = bot.bot.blockAt(position)

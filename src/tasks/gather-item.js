@@ -1802,7 +1802,7 @@ function* plan(bot, item, count, permissions, context, planSoFar) {
  */
 function* evaluatePlan(bot, plan, args) {
     /**
-     * @type {{ chestPosition: Vec3Dimension; chest: Chest; } | null}
+     * @type {{ chestPosition: Vec3Dimension; chest: Chest; lock: import('../locks/block-lock'); } | null}
      */
     let openedChest = null
 
@@ -1886,13 +1886,16 @@ function* evaluatePlan(bot, plan, args) {
                         }
                         if (openedChest && !step.chest.equals(openedChest.chestPosition)) {
                             openedChest.chest.close()
+                            openedChest.lock.unlock()
                             openedChest = null
                         }
                         if (!openedChest) {
                             const chest = yield* bot.openChest(chestBlock)
+                            const lock = yield* bot.env.waitLock(bot.username, chestBlock.position)
                             openedChest = {
                                 chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
                                 chest: chest,
+                                lock: lock,
                             }
                         }
                         const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
@@ -2234,6 +2237,7 @@ function* evaluatePlan(bot, plan, args) {
                                         block: pos,
                                         alsoTheNeighbors: false,
                                         pickUpItems: true,
+                                        skipIfAllocated: false,
                                         ...runtimeArgs(args),
                                     })
 
@@ -2273,6 +2277,7 @@ function* evaluatePlan(bot, plan, args) {
     } finally {
         if (openedChest) {
             openedChest.chest.close()
+            openedChest.lock.unlock()
             openedChest = null
         }
     }

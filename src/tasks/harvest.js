@@ -68,6 +68,7 @@ module.exports = {
                                 block: cropPosition.position.xyz(bot.dimension),
                                 alsoTheNeighbors: false,
                                 pickUpItems: true,
+                                skipIfAllocated: false,
                                 ...runtimeArgs(args),
                             })
                             break
@@ -94,6 +95,7 @@ module.exports = {
                                 block: grownBlock,
                                 alsoTheNeighbors: true,
                                 pickUpItems: true,
+                                skipIfAllocated: false,
                                 ...runtimeArgs(args),
                             })
                             break

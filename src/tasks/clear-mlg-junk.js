@@ -94,6 +94,7 @@ module.exports = {
                         block: junkBlock.position,
                         alsoTheNeighbors: false,
                         pickUpItems: true,
+                        skipIfAllocated: false,
                         ...runtimeArgs(args),
                     })
                     bot.memory.mlgJunkBlocks.pop()

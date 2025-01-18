@@ -18,6 +18,7 @@ const { isItemEquals } = require('../utils/other')
  *   block: Vec3;
  *   alsoTheNeighbors: boolean;
  *   pickUpItems: boolean;
+ *   skipIfAllocated: boolean;
  * }>}
  */
 module.exports = {
@@ -25,6 +26,13 @@ module.exports = {
         if (!args.block) { return { digged: [], itemsDelta: new Freq(isItemEquals) } }
 
         if (bot.quietMode) { throw `Can't dig in quiet mode` }
+
+        if (bot.env.getAllocatedBlock(new Vec3Dimension(args.block, bot.dimension))) {
+            if (!args.skipIfAllocated) {
+                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(args.block, bot.dimension), 'dig')
+            }
+            return { digged: [], itemsDelta: new Freq(isItemEquals) }
+        }
 
         /**
          * @type {Array<{ position: Vec3; loot: getMcData.BlockItemDrop[] }>}
@@ -41,63 +49,79 @@ module.exports = {
         }, new Freq(isItemEquals))
 
         let lastError = null
+        let waitingForPlayersSince = performance.now()
 
         while (current) {
             yield
 
-            if (args.interrupt.isCancelled) { break }
+            if (performance.now() - waitingForPlayersSince < 5000) {
+                let playerStandingOnBlock = false
+                for (const player of Object.values(bot.bot.players)) {
+                    if (!player.entity) continue
+                    if (!player.entity.position.floored().offset(0, -1, 0).equals(current.position)) { continue }
+                    const belowTargetBlock = bot.bot.blocks.at(current.position.offset(0, -1, 0))
 
-            if (bot.bot.entity.position.floored().offset(0, -1, 0).equals(current.position)) {
-                const belowTargetBlock = bot.bot.blocks.at(current.position.offset(0, -1, 0))
-                let shouldMoveAway = false
-                if (!belowTargetBlock) shouldMoveAway = true
-                else if (belowTargetBlock.name === 'air' ||
-                    belowTargetBlock.name === 'cave_air' ||
-                    belowTargetBlock.name === 'fire' ||
-                    belowTargetBlock.name === 'water' ||
-                    belowTargetBlock.name === 'lava' ||
-                    belowTargetBlock.name === 'powder_snow' ||
-                    belowTargetBlock.name === 'end_portal' ||
-                    belowTargetBlock.name === 'nether_portal' ||
-                    belowTargetBlock.name === 'magma_block' ||
-                    belowTargetBlock.name === 'campfire' ||
-                    belowTargetBlock.name === 'soul_campfire') {
-                    shouldMoveAway = true
-                } else {
-                    const [a, b, c, d] = [
-                        bot.bot.blocks.at(current.position.offset(1, 1, 0)),
-                        bot.bot.blocks.at(current.position.offset(-1, 1, 0)),
-                        bot.bot.blocks.at(current.position.offset(0, 1, 1)),
-                        bot.bot.blocks.at(current.position.offset(0, 1, -1)),
-                    ]
-                    if (!a && !b && !c && !d) {
+                    let shouldMoveAway = false
+                    if (!belowTargetBlock) {
                         shouldMoveAway = true
-                    } else if (
-                        (a.name !== 'air' && a.name !== 'cave_air') &&
-                        (b.name !== 'air' && b.name !== 'cave_air') &&
-                        (c.name !== 'air' && c.name !== 'cave_air') &&
-                        (d.name !== 'air' && d.name !== 'cave_air')) {
+                    } else if (belowTargetBlock.name === 'air' ||
+                        belowTargetBlock.name === 'cave_air' ||
+                        belowTargetBlock.name === 'fire' ||
+                        belowTargetBlock.name === 'water' ||
+                        belowTargetBlock.name === 'lava' ||
+                        belowTargetBlock.name === 'powder_snow' ||
+                        belowTargetBlock.name === 'end_portal' ||
+                        belowTargetBlock.name === 'nether_portal' ||
+                        belowTargetBlock.name === 'magma_block' ||
+                        belowTargetBlock.name === 'campfire' ||
+                        belowTargetBlock.name === 'soul_campfire') {
                         shouldMoveAway = true
+                    } else {
+                        const [a, b, c, d] = [
+                            bot.bot.blocks.at(current.position.offset(1, 1, 0)),
+                            bot.bot.blocks.at(current.position.offset(-1, 1, 0)),
+                            bot.bot.blocks.at(current.position.offset(0, 1, 1)),
+                            bot.bot.blocks.at(current.position.offset(0, 1, -1)),
+                        ]
+                        if (!a && !b && !c && !d) {
+                            shouldMoveAway = true
+                        } else if (
+                            (a.name !== 'air' && a.name !== 'cave_air') &&
+                            (b.name !== 'air' && b.name !== 'cave_air') &&
+                            (c.name !== 'air' && c.name !== 'cave_air') &&
+                            (d.name !== 'air' && d.name !== 'cave_air')) {
+                            shouldMoveAway = true
+                        }
                     }
+
+                    if (!shouldMoveAway) continue
+
+                    if (player.username === bot.username) {
+                        yield* goto.task(bot, {
+                            flee: current.position.offset(0, 1, 0),
+                            distance: performance.now() - waitingForPlayersSince < 1000 ? 1 : 3,
+                            ...runtimeArgs(args),
+                        })
+                    }
+
+                    playerStandingOnBlock = true
                 }
 
-                if (shouldMoveAway) {
-                    yield* goto.task(bot, {
-                        flee: current.position.offset(0, 1, 0),
-                        distance: 1,
-                        ...runtimeArgs(args),
-                    })
-                }
+                if (playerStandingOnBlock) { continue }
             }
 
-            if (args.interrupt.isCancelled) { break }
+            waitingForPlayersSince = performance.now()
+
+            const cleanup = () => {
+                bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
+            }
 
             /**
              * @param {import('../utils/interrupt').InterruptType} type
              */
             const onInterrupt = (type) => {
                 if (type === 'cancel') {
-                    bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
+                    cleanup()
                 }
             }
 
@@ -150,7 +174,6 @@ module.exports = {
                         position: current.position.clone(),
                         loot: loot,
                     })
-                    bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
                 }
             } catch (error) {
                 if (!args.alsoTheNeighbors) {
@@ -161,6 +184,7 @@ module.exports = {
                 lastError = error
             } finally {
                 args.interrupt.off(onInterrupt)
+                cleanup()
                 if (args.alsoTheNeighbors) {
                     current = bot.bot.findBlock({
                         point: current.position.clone(),
