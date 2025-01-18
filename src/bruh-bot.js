@@ -891,137 +891,36 @@ module.exports = class BruhBot {
         handlers.push(/** @type {StringChatHandler} */({
             match: 'pause',
             command: (sender, message, response, isWhispered) => {
-                this.tasks.push(this, {
-                    task: function*(bot, args) {
-                        /** @type {Vec3} */
-                        let found = null
-                        bot.bot.findBlock({
-                            matching: bot.mc.registry.blocksByName['lava'].id,
-                            count: 1,
-                            maxDistance: 32,
-                            useExtraInfo: (block) => {
-                                for (const lavaNeighborPosition of directBlockNeighbors(block.position, 'side')) {
-                                    const lavaNeighbor = bot.bot.blockAt(lavaNeighborPosition)
-                                    if (!lavaNeighbor || lavaNeighbor.name !== 'cobblestone') { continue }
-
-                                    for (const cobblestoneNeighborPosition of directBlockNeighbors(lavaNeighbor.position, 'side')) {
-                                        if (cobblestoneNeighborPosition.equals(block.position)) { continue }
-                                        const cobblestoneNeighbor = bot.bot.blockAt(cobblestoneNeighborPosition)
-                                        if (!cobblestoneNeighbor || cobblestoneNeighbor.name !== 'water') { continue }
-                                        const waterLevel = cobblestoneNeighbor.getProperties()['level']
-                                        if (!waterLevel) { continue }
-                                        if (waterLevel !== 1) { continue }
-                                        const blockBelowFlowingWater = bot.bot.blockAt(cobblestoneNeighborPosition.offset(0, -1, 0))
-                                        if (!blockBelowFlowingWater) { continue }
-                                        if (blockBelowFlowingWater.name !== 'water') { continue }
-                                        if (found) {
-                                            return false
-                                        } else {
-                                            found = lavaNeighborPosition
-                                        }
-                                    }
-                                }
-                                if (!found) { return false }
-                                return true
-                            },
-                        })
-                        console.log(found)
-
-
-
-
-
-
-
-
-                        /**
-                         * @typedef {{
-                         *   DataVersion: number;
-                         *   author?: string;
-                         *   size: [number, number, number];
-                         *   palette: Array<{
-                         *     Name: string;
-                         *     Properties?: Record<string, any>;
-                         *   }>;
-                         *   palettes?: Array<any>;
-                         *   blocks: Array<{
-                         *     pos: [number, number, number];
-                         *     state: number;
-                         *     nbt?: object;
-                         *   }>;
-                         *   entities: Array<{
-                         *     pos: [number, number, number];
-                         *     blockPos: [number, number, number];
-                         *     nbt?: object;
-                         *   }>;
-                         * }} Structure
-                         */
-
-                        // const origin = new Vec3(-8, 4, 3)
-
-                        // const buffer = require('fs').readFileSync('/home/BB/.minecraft/saves/1_20_4 Flat/generated/minecraft/structures/house.nbt')
-                        // const nbt = yield* taskUtils.wrap(require('prismarine-nbt').parse(buffer))
-                        // /** @type {Structure} */
-                        // const structure = NBT2JSON(nbt.parsed)
-
-                        // const blocks = structure.blocks.map(v => ({
-                        //     position: new Vec3(v.pos[0] + origin.x, v.pos[1] + origin.y, v.pos[2] + origin.z),
-                        //     name: structure.palette[v.state].Name.replace('minecraft:', ''),
-                        //     properties: structure.palette[v.state].Properties,
-                        //     nbt: v.nbt,
-                        // }))
-
-                        // yield* tasks.build.task(bot, { blocks: blocks })
-                    },
-                    id: 'test1',
-                    humanReadableId: 'test1',
-                }, {
-                    response: response,
-                }, priorities.user, true, sender, isWhispered)
-                    ?.wait()
-                    .then(() => response.respond(`K`))
-                    .catch(error => error instanceof CancelledError || response.respond(error))
+                this.tasks.interrupt()
             },
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
-            match: 'test2',
+            match: 'resume',
             command: (sender, message, response, isWhispered) => {
-                this.tasks.push(this, {
-                    task: function*(bot, args) {
-                        const fencings = yield* bot.env.scanFencings(bot)
-                        const mobsToKill = []
-                        for (const fencing of fencings) {
-                            yield
-                            /** @type {Record<string, Array<import('prismarine-entity').Entity>>} */
-                            const entityTypes = {}
-                            for (const entityId in fencing.mobs) {
-                                const entity = fencing.mobs[entityId]
-                                if (!entity || !entity.isValid) { continue }
-                                entityTypes[entity.name] ??= []
-                                entityTypes[entity.name].push(entity)
-                            }
-                            yield
-                            for (const entityName in entityTypes) {
-                                const entities = entityTypes[entityName]
-                                if (entities.length < 5) { continue }
-                                for (let i = 4; i < entities.length; i++) {
-                                    yield
-                                    mobsToKill.push(entities[i])
-                                }
-                            }
-                        }
-                        for (const mobToKill of mobsToKill) {
-                            yield* tasks.kill.task(bot, {
-                                entity: mobToKill,
-                                ...taskUtils.runtimeArgs(args),
-                            })
-                        }
-                        console.log(`[Bot "${bot.username}"] Mobs to kill`, mobsToKill)
-                    },
-                    id: 'test',
-                    humanReadableId: 'test',
-                }, {}, priorities.user, true)
+                this.tasks.resume()
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
+            match: 'chain',
+            command: (sender, message, response, isWhispered) => {
+                const bots = this.env.bots.map(v => v.username)
+                const selfIndex = bots.indexOf(this.username)
+                const followUsername = selfIndex === 0 ? sender : bots[selfIndex - 1]
+                const task = this.tasks.push(this, tasks.followPlayer, {
+                    player: followUsername,
+                    range: 2,
+                    response: response,
+                }, priorities.low - 1, true, sender, isWhispered)
+                if (task) {
+                    response.respond(`Okay`)
+                    task.wait()
+                        .then(() => { })
+                        .catch(error => error instanceof CancelledError || response.respond(error))
+                } else {
+                    response.respond(`I'm already following ${sender === followUsername ? 'you' : followUsername}`)
+                }
             },
         }))
 
