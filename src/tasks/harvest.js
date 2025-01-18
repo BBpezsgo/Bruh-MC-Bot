@@ -65,7 +65,7 @@ module.exports = {
                         case 'grows_block':
                         case 'spread': {
                             yield* dig.task(bot, {
-                                block: cropPosition.position.xyz(bot.dimension),
+                                block: grownBlock,
                                 alsoTheNeighbors: false,
                                 pickUpItems: true,
                                 skipIfAllocated: false,
@@ -74,12 +74,11 @@ module.exports = {
                             break
                         }
                         case 'grows_fruit': {
-                            const _grownBlock = bot.bot.blockAt(cropPosition.position.xyz(bot.dimension))
                             yield* goto.task(bot, {
-                                block: _grownBlock.position,
+                                block: cropPosition.position,
                                 ...runtimeArgs(args),
                             })
-                            yield* bot.activate(_grownBlock)
+                            yield* bot.activate(bot.bot.blockAt(cropPosition.position.xyz(bot.dimension)))
                             break
                         }
                         case 'tree': {
