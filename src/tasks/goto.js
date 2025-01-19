@@ -428,8 +428,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
@@ -449,8 +448,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
@@ -480,8 +478,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
@@ -501,8 +498,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
@@ -526,8 +522,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the nether portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,
@@ -550,8 +545,7 @@ module.exports = {
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
                                         if (!portal) { throw `I couldn't find the end portal` }
-                                        const movements = new Movements(bot.bot)
-                                        bot.mc.setRestrictedMovements(movements)
+                                        const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
                                             point: portal.position,

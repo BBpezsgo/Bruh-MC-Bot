@@ -19,6 +19,7 @@ const { isItemEquals } = require('../utils/other')
  *   alsoTheNeighbors: boolean;
  *   pickUpItems: boolean;
  *   skipIfAllocated: boolean;
+ *   gotoOptions?: import('../managed-task').TaskArgs<import('./goto')>['options'];
  * }>}
  */
 module.exports = {
@@ -108,6 +109,8 @@ module.exports = {
                 }
 
                 if (playerStandingOnBlock) { continue }
+            } else {
+                throw `Someone standing on the block I want to dig`
             }
 
             waitingForPlayersSince = performance.now()
@@ -145,9 +148,7 @@ module.exports = {
                     // console.log(`[Bot "${bot.username}"] Goto block ...`)
                     yield* goto.task(bot, {
                         block: current.position,
-                        options: {
-                            movements: bot.cutTreeMovements,
-                        },
+                        options: args.gotoOptions,
                         ...runtimeArgs(args),
                     })
 

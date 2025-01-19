@@ -193,7 +193,7 @@ module.exports = {
             items.push(item)
         }
 
-        console.log(`[Bot "${bot.username}"] Picking up ${items.length} items`)
+        if (items.length) console.log(`[Bot "${bot.username}"] Picking up ${items.length} items`)
 
         for (let i = 0; i < 2 && items.length > 0; i++) {
             for (const item of basicRouteSearch(bot.bot.entity.position, items, v => v.position)) {

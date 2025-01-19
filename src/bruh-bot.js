@@ -663,16 +663,96 @@ module.exports = class BruhBot {
             this.bot.clearControlStates()
 
             const mineflayerPathfinder = require('mineflayer-pathfinder')
+
             // @ts-ignore
             this.permissiveMovements = new mineflayerPathfinder.Movements(this.bot)
-            // @ts-ignore
-            this.restrictedMovements = new mineflayerPathfinder.Movements(this.bot)
-            // @ts-ignore
-            this.cutTreeMovements = new mineflayerPathfinder.Movements(this.bot)
+            this.permissiveMovements.canDig = true
+            this.permissiveMovements.digCost = 4
+            this.permissiveMovements.placeCost = 3
+            this.permissiveMovements.allowParkour = true
+            this.permissiveMovements.allowSprinting = true
+            this.permissiveMovements.canOpenDoors = true
+    
+            // this.permissiveMovements.exclusionAreasStep.push((block) => {
+            //     if (block.name === 'composter') return 50
+            //     return 0
+            // })
+    
+            Object.values(this.bot.registry.entities)
+                .filter(v => v.type === 'hostile')
+                .map(v => v.name)
+                .forEach(v => this.permissiveMovements.entitiesToAvoid.add(v));
 
-            this.mc.setPermissiveMovements(this.permissiveMovements)
-            this.mc.setRestrictedMovements(this.restrictedMovements)
-            this.mc.setRestrictedMovements(this.cutTreeMovements)
+            ([
+                'furnace',
+                'blast_furnace',
+                'smoker',
+                'campfire',
+                'soul_campfire',
+                'brewing_stand',
+                'beacon',
+                'conduit',
+                'bee_nest',
+                'beehive',
+                'suspicious_sand',
+                'suspicious_gravel',
+                'decorated_pot',
+                'bookshelf',
+                'barrel',
+                'ender_chest',
+                'respawn_anchor',
+                'infested_stone',
+                'infested_cobblestone',
+                'infested_stone_bricks',
+                'infested_mossy_stone_bricks',
+                'infested_cracked_stone_bricks',
+                'infested_chiseled_stone_bricks',
+                'infested_deepslate',
+                'end_portal_frame',
+                'spawner',
+                'composter',
+            ]
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .forEach(v => this.permissiveMovements.blocksCantBreak.add(v)));
+    
+            ([
+                'campfire',
+                'composter',
+                'sculk_sensor',
+                'sweet_berry_bush',
+                'end_portal',
+                'nether_portal',
+            ]
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .forEach(v => this.permissiveMovements.blocksToAvoid.add(v)));
+    
+            ([
+                'vine',
+                'scaffolding',
+                'ladder',
+                'twisting_vines',
+                'twisting_vines_plant',
+                'weeping_vines',
+                'weeping_vines_plant',
+            ]
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .forEach(v => this.permissiveMovements.climbables.add(v)));
+    
+            ([
+                'short_grass',
+                'tall_grass',
+            ]
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .forEach(v => this.permissiveMovements.replaceables.add(v)));
+
+            // @ts-ignore
+            this.restrictedMovements = new mineflayerPathfinder.Movements(this.bot, this.permissiveMovements)
+            this.restrictedMovements.allow1by1towers = false
+            this.restrictedMovements.canOpenDoors = false
+            require('./tasks/mine').addMovementExclusions(this.restrictedMovements, this)
+
+            // @ts-ignore
+            this.cutTreeMovements = new mineflayerPathfinder.Movements(this.bot, this.restrictedMovements)
             this.cutTreeMovements.blocksCanBreakAnyway?.add(this.mc.registry.blocksByName['oak_leaves'].id)
 
             console.log(`[Bot "${this.username}"] Ready`)

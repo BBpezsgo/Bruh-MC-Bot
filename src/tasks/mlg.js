@@ -100,6 +100,8 @@ module.exports = {
         while (!didMLG) {
             yield
 
+            if (bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) return 'failed'
+
             try {
                 const neighbor = bot.bot.nearestEntity()
                 if (neighbor &&
@@ -119,7 +121,6 @@ module.exports = {
 
                 const reference = bot.bot.blockAtCursor()
                 if (!reference) {
-                    if (bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) return 'failed'
                     // console.warn(`[Bot "${bot.username}"] [MLG] No reference block`)
                     continue
                 }

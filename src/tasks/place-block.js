@@ -209,6 +209,7 @@ function getCorrectBlock(itemName) {
  *   clearGrass?: boolean;
  *   cheat?: boolean;
  *   scaffoldingBlocks?: Array<string>;
+ *   gotoOptions?: import('../managed-task').TaskArgs<import('./goto')>['options'];
  * } & ({} | {
  *   position: Vec3;
  *   properties?: object;
@@ -479,6 +480,7 @@ module.exports = {
         while (blockHere && Minecraft.replaceableBlocks[blockHere.name] === 'break') {
             yield* goto.task(bot, {
                 block: position,
+                options: args.gotoOptions,
                 ...runtimeArgs(args),
             })
 
@@ -497,6 +499,7 @@ module.exports = {
 
             yield* goto.task(bot, {
                 block: position,
+                options: args.gotoOptions,
                 ...runtimeArgs(args),
             })
 
@@ -514,6 +517,7 @@ module.exports = {
             for (let i = 3; i >= 0; i--) {
                 yield* goto.task(bot, {
                     block: position,
+                    options: args.gotoOptions,
                     ...runtimeArgs(args),
                 })
 
@@ -529,6 +533,7 @@ module.exports = {
                     yield* goto.task(bot, {
                         flee: position,
                         distance: 1.9,
+                        options: args.gotoOptions,
                         ...runtimeArgs(args),
                     })
                 }

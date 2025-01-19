@@ -80,7 +80,13 @@ module.exports = {
             if ('item' in args) { return args.item }
             return getClosestItem(bot, args.items ? (item) => args.items.some(v => isItemEquals(v, item)) : null, args)
         })()
-        if (!nearest) { throw `No items nearby` }
+        if (!nearest) {
+            if ('item' in args) {
+                throw `Item entity not found`
+            } else {
+                return
+            }
+        }
 
         const item = nearest.getDroppedItem()
         if (!item) { throw `This aint an item` }

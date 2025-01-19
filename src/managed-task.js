@@ -2,6 +2,7 @@
 
 const CancelledError = require('./errors/cancelled-error')
 const Interrupt = require('./utils/interrupt')
+const logs = false
 
 /**
  * @typedef {{
@@ -220,13 +221,13 @@ class ManagedTask {
         if (this._status !== 'running') return
         this.args.interrupt.trigger('interrupt')
         this._status = 'interrupted'
-        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
+        if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
     }
 
     resume() {
         if (this._status !== 'interrupted') return
         this._status = 'running'
-        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" resumed`)
+        if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" resumed`)
     }
 
     cancel() {
@@ -240,7 +241,7 @@ class ManagedTask {
 
     blur() {
         if (!this._isBackground) {
-            console.log(`[Bot "${this._bot.username}"] Task "${this.id}" blurred`)
+            if (logs) console.log(`[Bot "${this._bot.username}"] Task "${this.id}" blurred`)
             this._isBackground = true
             return true
         }
@@ -249,7 +250,7 @@ class ManagedTask {
 
     focus() {
         if (this._isBackground) {
-            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" focused`)
+            if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" focused`)
             this._isBackground = false
             return true
         }
@@ -261,12 +262,12 @@ class ManagedTask {
         if (!this._task) { return }
 
         this._task.throw('aborted')
-        console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" aborted`)
+        if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" aborted`)
     }
 
     tick() {
         if (this._status === 'cancelled') {
-            console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled`)
+            if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" cancelled`)
             if (this._reject) { this._reject(new CancelledError()) }
             return false
         }
@@ -279,7 +280,7 @@ class ManagedTask {
             this._task = this._def.task(this._bot, this.args)
             this._status = 'running'
             if (!this.args.silent) {
-                console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" started`)
+                if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" started`)
             }
         }
 
@@ -287,7 +288,7 @@ class ManagedTask {
             const v = this._task.next()
             if (v.done) {
                 this._status = 'done'
-                if (!this.args.silent) {
+                if (!this.args.silent && logs) {
                     if (v.value === undefined) {
                         console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" finished`)
                     } else {
