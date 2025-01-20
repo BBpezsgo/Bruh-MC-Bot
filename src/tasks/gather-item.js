@@ -1847,31 +1847,54 @@ function* evaluatePlan(bot, plan, args) {
                         let itemToFill = bot.searchInventoryItem(null, step.item)
                         if (!itemToFill) { throw `I have no ${stringifyItemH(step.item)}` }
 
-                        itemToFill = yield* bot.equip(itemToFill)
-                        const block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
+                        yield* bot.equip(itemToFill)
+
+                        let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
                         if (!block) { throw `The chunk where I want to fill my ${stringifyItemH(itemToFill)} aint loaded` }
 
                         if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
 
-                        if (!bot.blockInView(block)) {
-                            yield* goto.task(bot, {
-                                block: step.block.position,
-                                raycast: true,
-                                ...runtimeArgs(args),
-                            })
+                        let failStreak = 0
+                        /** @type {Set<string>} */
+                        const bad = new Set()
+                        while (true) {
+                            if (!bot.blockInView(block)) {
+                                yield* goto.task(bot, {
+                                    block: block.position,
+                                    raycast: true,
+                                    ...runtimeArgs(args),
+                                })
+                            }
+
+                            try {
+                                yield* wrap(bot.lookAtBlock(block, null, bot.instantLook), args.interrupt)
+                                yield* sleepTicks(1)
+                                bot.bot.activateItem(false)
+                                yield* sleepTicks(1)
+
+                                bot.bot.deactivateItem()
+
+                                const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
+                                if (filledItemAfter <= filledItemBefore) {
+                                    throw `Failed to fill my ${stringifyItemH(itemToFill)}`
+                                }
+                                break
+                            } catch (error) {
+                                bad.add(`${block.position.x}:${block.position.y}:${block.position.z}`)
+                                console.log(`${block.position.x}:${block.position.y}:${block.position.z}`)
+                                block = bot.bot.findBlock({
+                                    matching: block.type,
+                                    count: 1,
+                                    maxDistance: 32,
+                                    useExtraInfo: (other) => {
+                                        return !bad.has(`${other.position.x}:${other.position.y}:${other.position.z}`)
+                                    },
+                                })
+                                if (!block || (failStreak++) > 10) throw error
+                                continue
+                            }
                         }
-                        yield* wrap(bot.lookAtBlock(block, null, bot.instantLook), args.interrupt)
-                        yield* sleepTicks(1)
 
-                        bot.bot.activateItem(false)
-                        yield* sleepTicks(1)
-
-                        bot.bot.deactivateItem()
-
-                        const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
-                        if (filledItemAfter <= filledItemBefore) {
-                            throw `Failed to fill my ${stringifyItemH(itemToFill)}`
-                        }
                         continue
                     }
                     case 'chest': {
