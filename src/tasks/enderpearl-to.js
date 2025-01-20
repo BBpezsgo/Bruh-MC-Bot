@@ -59,7 +59,7 @@ module.exports = {
 
         const thrownFrom = bot.bot.entity.position.clone()
 
-        const time = trajectoryTime(grade.arrowTrajectoryPoints, 20) * 1000
+        const time = trajectoryTime(grade.arrowTrajectoryPoints, 20, 0) * 1000
         const predictedImpactAt = performance.now() + time
         while (true) {
             if (args.interrupt.isCancelled) { break }
