@@ -8,6 +8,7 @@ export interface BlocksModule {
     stateIdAt(pos: Vec3): number
     skyLightAt(pos: Vec3): number
     biomeAt(pos: Vec3): number
+    shapes(block: Minecraft.IndexedBlock): ReadonlyArray<import('prismarine-block').Shape>
 }
 
 declare module 'mineflayer' {

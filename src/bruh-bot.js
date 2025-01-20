@@ -2722,7 +2722,7 @@ module.exports = class BruhBot {
                     ?.wait()
                     .catch(error => {
                         // TODO: better way of handling this
-                        if (error === `Don't have anything`) {
+                        if (String(error).startsWith(`Don't have`)) {
                             playerDeath.items.forEach(v => v.unlock())
                         }
                     })

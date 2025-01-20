@@ -131,6 +131,7 @@ module.exports = class TaskManager {
         for (let i = this.#tasks.length - 1; i >= 0; i--) {
             const task = this.#tasks[i]
             console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
+            task.cancel()
             this.#tasks.splice(i)
             if (this.#previousTask === task) this.#previousTask = null
         }

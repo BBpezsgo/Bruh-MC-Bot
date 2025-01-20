@@ -70,24 +70,3 @@ declare module 'prismarine-world' {
 		intersect: Vec3
 	})
 }
-
-module 'prismarine-entity' {
-	interface Entity {
-	  isInWater: boolean
-	  isInLava: boolean
-	  isInWeb: boolean
-	  isCollidedHorizontally: boolean
-	  isCollidedVertically: boolean
-	  eyeHeight: number
-  
-	  attributes: Record<string, {
-		value: number
-		modifiers: Array<{
-			amount: number
-			operation: 0 | 1 | 2
-			uuid: string,
-		}>
-	  }>
-	}
-  }
-  

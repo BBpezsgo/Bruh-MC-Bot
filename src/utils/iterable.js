@@ -124,21 +124,19 @@ module.exports = class Iterable {
     }
 
     /**
-     * @template U
-     * @param {(value: T, index: number) => { [Symbol.iterator](): Iterator<U> }} callbackfn
-     * @returns {Iterable<U>}
+     * @returns {T extends Iterable<infer L> ? Iterable<L> : T extends Array<infer L> ? Iterable<L> : never}
      */
-    mapMultiple(callbackfn) {
+    flat() {
         const iterator = this.iterator()
+        // @ts-ignore
         return new Iterable(function*() {
-            let i = 0
-
             while (true) {
                 const v = iterator.next()
                 if (v.done === true) { break }
-                const mapped = callbackfn(v.value, i++)
-                for (const subv of mapped) {
-                    yield subv
+                if (Array.isArray(v.value) || v.value instanceof Iterable) {
+                    for (const item of v.value) {
+                        yield item
+                    }
                 }
             }
         })
