@@ -147,7 +147,19 @@ module.exports = class Environment {
      * @readonly
      * @type {Record<number, number>}
      */
-    entityHurtTimes
+    #entityHurtTimes
+
+    /**
+     * @readonly
+     * @type {Record<number, Array<number>>}
+     */
+    #entityHurtTimeRecords
+
+    /**
+     * @readonly
+     * @type {Readonly<Record<number, ReadonlyArray<number>>>}
+     */
+    get entityHurtTimeRecords() { return this.#entityHurtTimeRecords } 
 
     /**
      * @readonly
@@ -205,7 +217,8 @@ module.exports = class Environment {
         this.crops = []
         this.#chests = []
         this.playerPositions = {}
-        this.entityHurtTimes = {}
+        this.#entityHurtTimes = {}
+        this.#entityHurtTimeRecords = {}
         this.entitySpawnTimes = {}
         this.animalBreedTimes = {}
         this.allocatedBlocks = {}
@@ -349,7 +362,8 @@ module.exports = class Environment {
     __entityDead(bot, entity) {
         delete this.entitySpawnTimes[entity.id]
         delete this.animalBreedTimes[entity.id]
-        delete this.entityHurtTimes[entity.id]
+        delete this.#entityHurtTimes[entity.id]
+        delete this.#entityHurtTimeRecords[entity.id]
         delete this.entityOwners[entity.id]
         for (const id in this.entityOwners) {
             const v = this.entityOwners[id]
@@ -488,7 +502,56 @@ module.exports = class Environment {
      * @param {import('prismarine-entity').Entity} entity
      */
     __entityHurt(bot, entity) {
-        this.entityHurtTimes[entity.id] = performance.now()
+        this.#entityHurtTimes[entity.id] = performance.now()
+    }
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     */
+    static resolveEntityHurtTime(entity) {
+        if (entity.name === 'boat') return 80
+        return Minecraft.general.hurtTime
+    }
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     * @param {number} [time]
+     */
+    isEntityHurting(entity, time) {
+        const now = performance.now()
+        const hurtTime = Environment.resolveEntityHurtTime(entity)
+        if (!time) {
+            time = now
+            if (this.#entityHurtTimes[entity.id]) {
+                if (time - this.#entityHurtTimes[entity.id] < hurtTime) return true
+            }
+        } else {
+            if (this.#entityHurtTimeRecords[entity.id]) {
+                const records = this.#entityHurtTimeRecords[entity.id]
+                for (let i = 0; i < records.length; i++) {
+                    const record = records[i]
+                    if (record < now) {
+                        records.splice(i, 1)
+                    } else if (time > record && time - record < hurtTime) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     * @param {number} [time]
+     */
+    recordEntityHurt(entity, time = undefined) {
+        time ??= performance.now()
+        if (!time) {
+            this.#entityHurtTimes[entity.id] = time
+        } else {
+            (this.#entityHurtTimeRecords[entity.id] ??= []).push(time)
+        }
     }
 
     /**

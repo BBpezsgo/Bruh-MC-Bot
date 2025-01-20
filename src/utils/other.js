@@ -82,15 +82,16 @@ function* basicRouteSearch(start, points, mapper) {
 /**
  * @param {ReadonlyArray<Vec3>} trajectory
  * @param {number} speed
+ * @param {number} acceleration
  * @returns {number}
  */
-function trajectoryTime(trajectory, speed) {
+function trajectoryTime(trajectory, speed, acceleration) {
     let time = 0
     for (let i = 1; i < trajectory.length; i++) {
         const a = trajectory[i - 1]
         const b = trajectory[i]
         const d = a.distanceTo(b)
-        time += d / speed
+        time += d / (speed + (acceleration * time))
     }
     return time
 }
