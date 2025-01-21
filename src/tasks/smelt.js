@@ -8,6 +8,7 @@ const Minecraft = require('../minecraft')
 const config = require('../config')
 const { Vec3 } = require('vec3')
 const { stringifyItemH } = require('../utils/other')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -118,7 +119,7 @@ module.exports = {
         const outputs = []
 
         args.task?.blur()
-        const blockLock = yield* bot.env.waitLock(bot.username, furnaceBlock.position)
+        const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(furnaceBlock.position, bot.dimension), 'use')
         args.task?.focus()
 
         /** @type {import('mineflayer').Furnace | null} */

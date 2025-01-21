@@ -1914,7 +1914,7 @@ function* evaluatePlan(bot, plan, args) {
                         }
                         if (!openedChest) {
                             const chest = yield* bot.openChest(chestBlock)
-                            const lock = yield* bot.env.waitLock(bot.username, chestBlock.position)
+                            const lock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(chestBlock.position, bot.dimension), 'use')
                             openedChest = {
                                 chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
                                 chest: chest,

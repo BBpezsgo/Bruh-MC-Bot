@@ -162,12 +162,6 @@ module.exports = class Environment {
     get entityHurtTimeRecords() { return this.#entityHurtTimeRecords } 
 
     /**
-     * @readonly
-     * @type {Record<PositionHash, AllocatedBlock>}
-     */
-    allocatedBlocks
-
-    /**
      * @private
      * @type {NodeJS.Timeout}
      */
@@ -221,7 +215,6 @@ module.exports = class Environment {
         this.#entityHurtTimeRecords = {}
         this.entitySpawnTimes = {}
         this.animalBreedTimes = {}
-        this.allocatedBlocks = {}
         this.itemRequests = []
         this.villagers = {}
         this.entityOwners = {}
@@ -288,28 +281,17 @@ module.exports = class Environment {
         const isBreak = (!newBlock || newBlock.name === 'air')
         if (isPlace && isBreak) { return }
 
-        const allocated = this.getAllocatedBlock(new Vec3Dimension(newBlock.position, dimension))
-
-        if (allocated) {
-            switch (allocated.type) {
-                case 'activate':
-                    this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
-                    break
-                case 'dig':
-                    if (isBreak) this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
-                    break
-                case 'hoe':
-                    if (newBlock?.name === 'farmland') this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
-                    break
-                case 'place':
-                    if (isPlace) this.deallocateBlock(null, new Vec3Dimension(newBlock.position, dimension))
-                    break
+        for (const lock of this.lockedBlocks) {
+            if (!lock.block.equals(new Vec3Dimension(newBlock.position, dimension))) continue
+            if (isBreak) {
+                lock.isUnlocked = true
+            }
+            if (isPlace && lock.reason === 'place') {
+                lock.isUnlocked = true
             }
         }
 
         if (isBreak) {
-            this.unlockBlock(null, newBlock.position)
-
             if (Minecraft.isCropRoot(bot.bot, oldBlock)) {
                 let isSaved = false
                 for (const crop of this.crops) {
@@ -679,7 +661,7 @@ module.exports = class Environment {
                     continue
                 }
 
-                const lock = yield* this.waitLock(bot.username, chestBlock.position)
+                const lock = yield* this.waitLock(bot.username, new Vec3Dimension(chestBlock.position, bot.dimension), 'use')
 
                 let chest = null
                 try {
@@ -1263,7 +1245,7 @@ module.exports = class Environment {
                                 if (!x && !y && !z) continue
                                 const other = bot.bot.blocks.at(p.offset(x, y, z))
                                 if (!other || other.name !== block.name) continue
-                                if (this.getAllocatedBlock(new Vec3Dimension(p.offset(x, y, z), bot.dimension))) continue
+                                if (this.isBlockLocked(new Vec3Dimension(p.offset(x, y, z), bot.dimension))?.reason === 'dig') continue
                                 nearby++
                                 if (nearby > 2) return p
                             }
@@ -1353,21 +1335,22 @@ module.exports = class Environment {
     }
 
     /**
-     * @param {Point3} block
+     * @param {Vec3Dimension} block
      */
     isBlockLocked(block) {
         for (const lock of this.lockedBlocks) {
             if (lock.isUnlocked) continue
+            if (lock.block.dimension !== block.dimension) continue
             if (lock.block.x === block.x &&
                 lock.block.y === block.y &&
                 lock.block.z === block.z) {
-                return lock.by
+                return lock
             }
             for (const additionalPoint of lock.additionalPoints) {
                 if (additionalPoint.x === block.x &&
                     additionalPoint.y === block.y &&
                     additionalPoint.z === block.z) {
-                    return lock.by
+                    return lock
                 }
             }
         }
@@ -1388,10 +1371,11 @@ module.exports = class Environment {
 
     /**
      * @param {string} by
-     * @param {Point3} block
+     * @param {Vec3Dimension} block
+     * @param {import('./locks/block-lock').BlockLockReason} reason
      * @returns {BlockLock}
      */
-    tryLockBlock(by, block) {
+    tryLockBlock(by, block, reason) {
         if (this.isBlockLocked(block)) return null
         const blockAt = this._blockAt(new Vec3Dimension(block, this.bots.find(v => v.username === by).dimension))
         /** @type {Array<Point3>} */ const additionalPoints = []
@@ -1403,7 +1387,7 @@ module.exports = class Environment {
                 additionalPoints.push(chestOtherHalf)
             }
         }
-        const newLock = new BlockLock(by, block, additionalPoints)
+        const newLock = new BlockLock(by, block, reason, additionalPoints)
         this.lockedBlocks.push(newLock)
         return newLock
     }
@@ -1483,14 +1467,56 @@ module.exports = class Environment {
 
     /**
      * @param {string} by
-     * @param {Point3} block
+     * @param {Vec3Dimension} block
+     * @param {import('./locks/block-lock').BlockLockReason} reason
      */
-    *waitLock(by, block) {
+    *waitLock(by, block, reason) {
         let lock = null
-        while (!(lock = this.tryLockBlock(by, block))) {
+        while (!(lock = this.tryLockBlock(by, block, reason))) {
             yield* sleepTicks()
         }
         return lock
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot
+     * @param {Vec3Dimension} block
+     * @returns {import('./task').Task<BlockLock | null>}
+     */
+    *lockBlockDigging(bot, block) {
+        outer: while (true) {
+            yield
+            const lock = bot.env.tryLockBlock(bot.username, block, 'dig')
+            if (lock) return lock
+            while (bot.bot.blocks.at(block)?.name !== 'air') {
+                if (!this.isBlockLocked(block)) continue outer
+                yield* sleepTicks()
+            }
+            return null
+        }
+    }
+
+    /**
+     * @param {import('./bruh-bot')} bot
+     * @param {Vec3Dimension} block
+     * @param {string | ((block: import('minecraft-data').IndexedBlock) => boolean)} matching 
+     * @returns {import('./task').Task<BlockLock | null>}
+     */
+    *lockBlockPlacing(bot, block, matching) {
+        if (typeof matching === 'string') {
+            const s = matching
+            matching = (block) => block?.name === s
+        }
+        outer: while (true) {
+            yield
+            const lock = bot.env.tryLockBlock(bot.username, block, 'place')
+            if (lock) return lock
+            while (!matching(bot.bot.blocks.at(block))) {
+                if (!this.isBlockLocked(block)) continue outer
+                yield* sleepTicks()
+            }
+            return null
+        }
     }
 
     /**
@@ -1556,144 +1582,6 @@ module.exports = class Environment {
                 this.lockedEntities.splice(i, 1)
                 i--
             }
-        }
-    }
-
-    /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @param {'dig'} type
-     * @param {any} [args]
-     * @returns {boolean}
-     */
-    /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @param {'place'} type
-     * @param {{ item: number; }} args
-     * @returns {boolean}
-     */
-    /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @param {'hoe'} type
-     * @param {any} [args]
-     * @returns {boolean}
-     */
-    /**
-     * @overload
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @param {'activate'} type
-     * @param {any} [args]
-     * @returns {boolean}
-     */
-    /**
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @param {AllocatedBlock['type']} type
-     * @param {any} [args]
-     * @returns {boolean}
-     */
-    allocateBlock(bot, position, type, args) {
-        /**
-         * @type {PositionHash}
-         */
-        const hash = `${position.x}-${position.y}-${position.z}-${position.dimension}`
-        if (this.allocatedBlocks[hash] &&
-            this.allocatedBlocks[hash].bot !== bot) {
-            return false
-        }
-        this.allocatedBlocks[hash] = {
-            bot: bot,
-            allocatedAt: performance.now(),
-            type: type,
-            ...args,
-        }
-        // console.log(`ALLOC ${position} ${type} by ${bot}`)
-        return true
-    }
-
-    /**
-     * @param {string} bot
-     * @param {Vec3Dimension} position
-     * @returns {boolean}
-     */
-    deallocateBlock(bot, position) {
-        /**
-         * @type {PositionHash}
-         */
-        const hash = `${position.x}-${position.y}-${position.z}-${position.dimension}`
-        if (this.allocatedBlocks[hash] &&
-            bot &&
-            this.allocatedBlocks[hash].bot !== bot) {
-            return false
-        }
-        delete this.allocatedBlocks[hash]
-        // console.log(`DEALLOC ${position} by ${bot}`)
-        return true
-    }
-
-    /**
-     * @param {Vec3Dimension} blockPosition
-     * @returns {AllocatedBlock | null}
-     */
-    getAllocatedBlock(blockPosition) {
-        /**
-         * @type {PositionHash}
-         */
-        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}-${blockPosition.dimension}`
-        return this.allocatedBlocks[hash] ?? null
-    }
-
-    /**
-     * @param {Vec3Dimension} blockPosition
-     * @param {AllocatedBlock['type']} waitFor
-     * @returns {import('./task').Task<boolean>}
-     */
-    *waitUntilBlockIs(blockPosition, waitFor) {
-        /**
-         * @type {PositionHash}
-         */
-        const hash = `${blockPosition.x}-${blockPosition.y}-${blockPosition.z}-${blockPosition.dimension}`
-        if (!this.allocatedBlocks[hash]) {
-            return false
-        }
-        if (this.allocatedBlocks[hash].type !== waitFor) {
-            return false
-        }
-        while (this.allocatedBlocks[hash]) {
-            yield* sleepG(100)
-        }
-        let blockAt = null
-        for (const bot of this.bots) {
-            if (bot.dimension !== blockPosition.dimension) { continue }
-            blockAt = bot.bot.blocks.at(blockPosition.xyz(bot.dimension))
-            if (blockAt) { break }
-        }
-        if (!blockAt) {
-            return true
-        }
-        switch (waitFor) {
-            case 'dig':
-                if (blockAt.name === 'air') {
-                    return true
-                } else {
-                    return false
-                }
-            case 'hoe':
-                if (blockAt.name === 'farmland') {
-                    return true
-                } else {
-                    return false
-                }
-            case 'place':
-                return true
-            default:
-                return true
         }
     }
 

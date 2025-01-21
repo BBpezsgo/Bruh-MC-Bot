@@ -107,31 +107,27 @@ module.exports = {
 
             let above = bot.bot.blockAt(args.block.offset(0, 1, 0).xyz(bot.dimension))
 
-            while (above && Minecraft.replaceableBlocks[above.name] === 'break') {
-                if (!bot.env.allocateBlock(bot.username, new Vec3Dimension(above.position, bot.dimension), 'dig')) {
-                    console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
-                    yield* bot.env.waitUntilBlockIs(new Vec3Dimension(above.position, bot.dimension), 'dig')
-                    above = bot.bot.blockAt(args.block.offset(0, 1, 0).xyz(bot.dimension))
-                    continue
+            const lock = yield* bot.env.lockBlockDigging(bot, new Vec3Dimension(above.position, bot.dimension))
+
+            args.interrupt.registerLock(lock)
+            try {
+                if (lock) {
+                    if (above && !Minecraft.replaceableBlocks[above.name]) {
+                        throw `Can't break ${above.name ?? 'null'}`
+                    }
+
+                    yield* goto.task(bot, {
+                        block: args.block,
+                        ...runtimeArgs(args),
+                    })
+
+                    if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
+                        yield* bot.dig(above, true, false, args.interrupt)
+                    }
                 }
+            } catch (error) {
+                lock?.unlock()
             }
-
-            if (above && !Minecraft.replaceableBlocks[above.name]) {
-                throw `Can't break ${above.name ?? 'null'}`
-            }
-
-            yield* goto.task(bot, {
-                block: args.block,
-                ...runtimeArgs(args),
-            })
-
-            if (args.interrupt.isCancelled) { return 0 }
-
-            if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
-                yield* wrap(bot.bot.dig(above, true), args.interrupt)
-            }
-
-            if (args.interrupt.isCancelled) { return 0 }
 
             yield* equipHoe()
             yield
@@ -143,8 +139,6 @@ module.exports = {
         }
 
         while (true) {
-            if (args.interrupt.isCancelled) { break }
-
             yield* equipHoe()
 
             const filterBlock = (/** @type {Block} */ block) => {
@@ -194,7 +188,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
 
                 if (Minecraft.replaceableBlocks[above.name] === 'break') {
-                    yield* wrap(bot.bot.dig(above, true), args.interrupt)
+                    yield* bot.dig(above, true, false, args.interrupt)
                 }
 
                 if (args.interrupt.isCancelled) { break }

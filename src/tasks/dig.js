@@ -2,7 +2,7 @@
 
 const { Block } = require('prismarine-block')
 const getMcData = require('minecraft-data')
-const { wrap, runtimeArgs } = require('../utils/tasks')
+const { wrap, runtimeArgs, sleepTicks } = require('../utils/tasks')
 const goto = require('./goto')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../utils/vec3-dimension')
@@ -28,11 +28,9 @@ module.exports = {
 
         if (bot.quietMode) { throw `Can't dig in quiet mode` }
 
-        if (bot.env.getAllocatedBlock(new Vec3Dimension(args.block, bot.dimension))) {
-            if (!args.skipIfAllocated) {
-                yield* bot.env.waitUntilBlockIs(new Vec3Dimension(args.block, bot.dimension), 'dig')
-            }
-            return { digged: [], itemsDelta: new Freq(isItemEquals) }
+        while (bot.env.isBlockLocked(new Vec3Dimension(args.block, bot.dimension))) {
+            if (args.skipIfAllocated) return { digged: [], itemsDelta: new Freq(isItemEquals) }
+            yield* sleepTicks()
         }
 
         /**
@@ -115,22 +113,11 @@ module.exports = {
 
             waitingForPlayersSince = performance.now()
 
-            const cleanup = () => {
-                bot.env.deallocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension))
-            }
-
-            /**
-             * @param {import('../utils/interrupt').InterruptType} type
-             */
-            const onInterrupt = (type) => {
-                if (type === 'cancel') {
-                    cleanup()
-                }
-            }
-
-            args.interrupt.on(onInterrupt)
+            let lock = null
             try {
-                if (bot.env.allocateBlock(bot.username, new Vec3Dimension(current.position, bot.dimension), 'dig')) {
+                lock = yield* bot.env.lockBlockDigging(bot, new Vec3Dimension(current.position, bot.dimension))
+                if (lock) {
+                    args.interrupt.registerLock(lock)
                     // console.log(`[Bot "${bot.username}"] Digging ${current.displayName} ${current.position} ...`)
 
                     /** @type {{ has: boolean; item: getMcData.Item; } | null} */
@@ -170,7 +157,7 @@ module.exports = {
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
 
                     // console.log(`[Bot "${bot.username}"] Digging ...`)
-                    yield* wrap(bot.bot.dig(current, true), args.interrupt)
+                    yield* bot.dig(current, bot.instantLook, false, args.interrupt)
                     digged.push({
                         position: current.position.clone(),
                         loot: loot,
@@ -184,8 +171,7 @@ module.exports = {
                 }
                 lastError = error
             } finally {
-                args.interrupt.off(onInterrupt)
-                cleanup()
+                lock?.unlock()
                 if (args.alsoTheNeighbors) {
                     current = bot.bot.findBlock({
                         point: current.position.clone(),

@@ -53,7 +53,7 @@ module.exports = {
                 if (!grownBlock) continue
 
                 const p = cropPosition.position
-                if (bot.env.getAllocatedBlock(p)) continue
+                if (bot.env.isBlockLocked(p)) continue
 
                 args.task?.focus()
 

@@ -4,6 +4,7 @@ const goto = require('./goto')
 const Freq = require('../utils/freq')
 const { isItemEquals } = require('../utils/other')
 const { runtimeArgs } = require('../utils/tasks')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, {
@@ -55,7 +56,7 @@ module.exports = {
 
             const remainingItemsToDump = args.items.map(v => ({ item: v.item, count: v.count }))
 
-            const lock = yield* bot.env.waitLock(bot.username, chestBlock.position)
+            const lock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(chestBlock.position, bot.dimension), 'use')
 
             /** @type {import('mineflayer').Chest} */
             let chest = null

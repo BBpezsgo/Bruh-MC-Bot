@@ -4,10 +4,14 @@
 const plugin = function(bot) {
     // @ts-ignore
     bot.blocks = /** @type {import('./blocks').BlocksModule} */ ({
+        // @ts-ignore
         stateIdAt(pos) { return bot.world.getBlockStateId(pos) },
         at(pos) { return bot.registry.blocksByStateId[this.stateIdAt(pos)] },
+        // @ts-ignore
         lightAt(pos) { return bot.world.getBlockLight(pos) },
+        // @ts-ignore
         skyLightAt(pos) { return bot.world.getSkyLight(pos) },
+        // @ts-ignore
         biomeAt(pos) { return bot.world.getBiome(pos) },
         shapes(block) {
             // @ts-ignore

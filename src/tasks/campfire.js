@@ -5,6 +5,7 @@ const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const { Timeout } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 /**
  * @type {import('../task').TaskDef<Array<Item>, {
@@ -28,7 +29,7 @@ module.exports = {
         if (!campfire) { throw `No campfire nearby` }
 
         args.task?.blur()
-        const blockLock = yield* bot.env.waitLock(bot.username, campfire.position)
+        const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(campfire.position, bot.dimension), 'use')
         args.task?.focus()
 
         try {

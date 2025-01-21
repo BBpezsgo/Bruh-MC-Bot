@@ -99,4 +99,13 @@ module.exports = class Interrupt {
     off(callback) {
         this.#emitter.off(callback)
     }
+
+    /**
+     * @param {import('../locks/generic')} lock
+     */
+    registerLock(lock) {
+        this.#emitter.on(type => {
+            if (type === 'cancel') lock.unlock()
+        })
+    }
 }

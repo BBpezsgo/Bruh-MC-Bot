@@ -672,12 +672,12 @@ module.exports = class BruhBot {
             this.permissiveMovements.allowParkour = true
             this.permissiveMovements.allowSprinting = true
             this.permissiveMovements.canOpenDoors = true
-    
+
             // this.permissiveMovements.exclusionAreasStep.push((block) => {
             //     if (block.name === 'composter') return 50
             //     return 0
             // })
-    
+
             Object.values(this.bot.registry.entities)
                 .filter(v => v.type === 'hostile')
                 .map(v => v.name)
@@ -714,7 +714,7 @@ module.exports = class BruhBot {
             ]
                 .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.blocksCantBreak.add(v)));
-    
+
             ([
                 'campfire',
                 'composter',
@@ -725,7 +725,7 @@ module.exports = class BruhBot {
             ]
                 .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.blocksToAvoid.add(v)));
-    
+
             ([
                 'vine',
                 'scaffolding',
@@ -737,7 +737,7 @@ module.exports = class BruhBot {
             ]
                 .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.climbables.add(v)));
-    
+
             ([
                 'short_grass',
                 'tall_grass',
@@ -2155,7 +2155,7 @@ module.exports = class BruhBot {
                             if (waterBucketItem) {
                                 let refBlock = bot.bot.blockAt(bot.bot.entity.position)
                                 if (refBlock.name === 'fire') {
-                                    yield* bot.dig(refBlock, 'ignore', false)
+                                    yield* bot.dig(refBlock, 'ignore', false, args.interrupt)
                                     yield
                                 }
                                 refBlock = bot.bot.blockAt(bot.bot.entity.position)
@@ -2208,8 +2208,8 @@ module.exports = class BruhBot {
 
                 if (blockAt.name === 'fire') {
                     this.tasks.push(this, {
-                        task: function*(bot) {
-                            yield* bot.dig(blockAt, 'ignore', false)
+                        task: function*(bot, args) {
+                            yield* bot.dig(blockAt, 'ignore', false, args.interrupt)
                         },
                         id: `extinguish-myself`,
                         humanReadableId: `Extinguish myself`,
@@ -4134,7 +4134,6 @@ module.exports = class BruhBot {
     /**
      * @param {import('prismarine-block').Block | import('prismarine-entity').Entity} chest
      * @returns {import('./task').Task<MineFlayer.Chest>}
-     * @throws {Error}
      */
     *openChest(chest) {
         let isLocked = false
@@ -4249,39 +4248,37 @@ module.exports = class BruhBot {
 
     /**
      * @param {import('prismarine-block').Block} block
-     * @param {boolean | 'ignore'} [forceLook]
-     * @param {boolean} [allocate]
+     * @param {boolean | 'ignore'} forceLook
+     * @param {boolean} allocate
+     * @param {import('./utils/interrupt')} interrupt
      * @returns {import('./task').Task<boolean>}
-     * @throws {Error}
      */
-    *dig(block, forceLook = 'ignore', allocate = true) {
+    *dig(block, forceLook, allocate, interrupt) {
         if (allocate) {
             const blockLocation = new Vec3Dimension(block.position, this.dimension)
-            if (!this.env.allocateBlock(this.username, blockLocation, 'dig')) {
-                return false
+            const digLock = this.env.tryLockBlock(this.username, blockLocation, 'dig')
+            if (!digLock) return false
+            try {
+                yield* this.dig(block, forceLook, false, interrupt)
+            } finally {
+                digLock.unlock()
             }
-            yield* taskUtils.wrap(this.bot.dig(block, forceLook))
-            this.env.deallocateBlock(this.username, blockLocation)
             return true
         } else {
-            debugger
-            yield* taskUtils.wrap(this.bot.dig(block, forceLook))
+            const onInterrupt = () => {
+                this.bot.stopDigging()
+            }
+            interrupt?.on(onInterrupt)
+            try {
+                yield* taskUtils.wrap(this.bot.dig(block, forceLook))
+            } catch (error) {
+                if (error instanceof Error && error.message === 'Digging aborted') {
+                    return false
+                }
+            } finally {
+                interrupt?.off(onInterrupt)
+            }
             return true
-        }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} block
-     * @param {boolean | 'ignore'} forceLook
-     * @returns {import('./task').Task<void>}
-     * @throws {Error}
-     */
-    *forceDig(block, forceLook = 'ignore') {
-        while (true) {
-            const digged = yield* this.dig(block, forceLook, true)
-            if (digged) { break }
-            const success = yield* this.env.waitUntilBlockIs(new Vec3Dimension(block.position, this.dimension), 'dig')
-            if (success) { break }
         }
     }
 
@@ -4291,38 +4288,32 @@ module.exports = class BruhBot {
      * @param {import('./utils/other').ItemId} item
      * @param {boolean} [allocate]
      * @returns {import('./task').Task<boolean>}
-     * @throws {Error}
      */
     *place(referenceBlock, faceVector, item, allocate = true) {
-        const itemId = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id
         const above = referenceBlock.position.offset(faceVector.x, faceVector.y, faceVector.z)
-        const blockLocation = new Vec3Dimension(above, this.dimension)
         if (allocate) {
-            if (!this.env.allocateBlock(this.username, blockLocation, 'place', { item: itemId })) {
-                return false
-            }
+            const blockLocation = new Vec3Dimension(above, this.dimension)
+            const lock = yield* this.env.lockBlockPlacing(this, blockLocation, v => v?.name !== 'air')
+            if (!lock) return false
 
-            let holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-            if (!holds || !isItemEquals(holds, item)) {
-                yield* taskUtils.wrap(this.bot.equip(itemId, 'hand'))
+            try {
+                return yield* this.place(referenceBlock, faceVector, item, false)
+            } finally {
+                lock.unlock()
             }
-            holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-            if (!holds || !isItemEquals(holds, item)) {
-                throw `I have no ${stringifyItemH(item)}`
-            }
-
-            yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
-
-            this.env.deallocateBlock(this.username, blockLocation)
-            return true
         } else {
             let holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
             if (!holds || !isItemEquals(holds, item)) {
+                const itemId = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id
                 yield* taskUtils.wrap(this.bot.equip(itemId, 'hand'))
             }
             holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
             if (!holds || !isItemEquals(holds, item)) {
                 throw `I have no ${stringifyItemH(item)}`
+            }
+
+            if (this.bot.blocks.at(above)?.name !== 'air') {
+                throw `Can't place \"${item}\": there is something else there (${this.bot.blocks.at(above)?.name})`
             }
 
             yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
@@ -4335,21 +4326,18 @@ module.exports = class BruhBot {
      * @param {import('prismarine-block').Block} block
      * @param {boolean} [forceLook]
      * @param {boolean} [allocate]
-     * @returns {import('./task').Task<boolean>}
-     * @throws {Error}
+     * @returns {import('./task').Task<void>}
      */
     *activate(block, forceLook = false, allocate = true) {
         if (allocate) {
-            const blockLocation = new Vec3Dimension(block.position, this.dimension)
-            if (!this.env.allocateBlock(this.username, blockLocation, 'activate')) {
-                return false
+            const lock = yield* this.env.waitLock(this.username, new Vec3Dimension(block.position, this.dimension), 'use')
+            try {
+                yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
+            } finally {
+                lock.unlock()
             }
-            yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
-            this.env.deallocateBlock(this.username, blockLocation)
-            return true
         } else {
             yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
-            return true
         }
     }
 

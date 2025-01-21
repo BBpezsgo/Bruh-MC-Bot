@@ -598,7 +598,7 @@ module.exports = {
                         if (error.name === 'NoPath') {
                         } else if (error.name === 'GoalChanged') {
                             retryCount++
-                            console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
+                            // console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
                         } else if (error.name === 'PathStopped' && args.interrupt.isCancelled) {
                             console.log(`[Bot "${bot.username}"] Pathfinder stopped but that was expected`)
                         }

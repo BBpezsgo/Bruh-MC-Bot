@@ -8,6 +8,7 @@ const pickupItem = require('./pickup-item')
 const goto = require('./goto')
 const Minecraft = require('../minecraft')
 const config = require('../config')
+const Vec3Dimension = require('../utils/vec3-dimension')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -77,7 +78,7 @@ module.exports = {
         if (!composter) { throw `There is no composter` }
 
         args.task?.blur()
-        const blockLock = yield* bot.env.waitLock(bot.username, composter.position)
+        const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(composter.position, bot.dimension), 'use')
         args.task?.focus()
 
         try {

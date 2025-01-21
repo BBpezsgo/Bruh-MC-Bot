@@ -486,96 +486,100 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { return }
 
-            if (!bot.env.allocateBlock(bot.username, blockPosition, 'dig')) {
-                console.log(`[Bot "${bot.username}"] Block will be digged by someone else, waiting ...`)
-                yield* bot.env.waitUntilBlockIs(blockPosition, 'dig')
-                blockHere = bot.bot.blockAt(position)
-                continue
-            }
+            const digLock = yield* bot.env.lockBlockDigging(bot, blockPosition)
+            if (digLock) {
+                args.interrupt.registerLock(digLock)
 
-            if (!args.clearGrass) {
-                throw `Can't place the block because the block above is "${blockHere.name}" and I'm not allowed to break it`
-            }
+                try {
+                    blockHere = bot.bot.blockAt(position)
 
-            yield* goto.task(bot, {
-                block: position,
-                options: args.gotoOptions,
-                ...runtimeArgs(args),
-            })
+                    if (!args.clearGrass) {
+                        throw `Can't place the block because the block above is "${blockHere.name}" and I'm not allowed to break it`
+                    }
 
-            if (args.interrupt.isCancelled) { return }
-
-            yield* wrap(bot.bot.dig(blockHere), args.interrupt)
-        }
-
-        if (!bot.env.allocateBlock(bot.username, blockPosition, 'place', { item: bot.bot.registry.itemsByName[item].id })) {
-            console.log(`Block will be placed by someone else`)
-            return
-        }
-
-        try {
-            for (let i = 3; i >= 0; i--) {
-                yield* goto.task(bot, {
-                    block: position,
-                    options: args.gotoOptions,
-                    ...runtimeArgs(args),
-                })
-
-                let imInTheWay = false
-
-                if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.5) {
-                    imInTheWay = true
-                } else if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.5) {
-                    imInTheWay = true
-                }
-
-                if (imInTheWay) {
                     yield* goto.task(bot, {
-                        flee: position,
-                        distance: 1.9,
+                        block: position,
                         options: args.gotoOptions,
                         ...runtimeArgs(args),
                     })
+
+                    if (args.interrupt.isCancelled) { return }
+
+                    yield* bot.dig(blockHere, bot.instantLook, false, args.interrupt)
+                } finally {
+                    digLock.unlock()
                 }
+            }
+        }
 
-                if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
-                    throw `There is already a block here: ${blockHere.name}`
-                }
+        const placeLock = yield* bot.env.lockBlockPlacing(bot, blockPosition, v => v?.name !== 'air')
 
-                const referenceBlock = bot.bot.blockAt(referencePosition)
-                if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
-                    throw `Invalid reference block ${referenceBlock.name}`
-                }
+        if (placeLock) {
+            args.interrupt.registerLock(placeLock)
+            try {
+                for (let i = 3; i >= 0; i--) {
+                    yield* goto.task(bot, {
+                        block: position,
+                        options: args.gotoOptions,
+                        ...runtimeArgs(args),
+                    })
 
-                if (args.interrupt.isCancelled) { return }
+                    let imInTheWay = false
 
-                if (!bot.searchInventoryItem(null, item)) {
-                    if (args.cheat) {
-                        yield* wrap(bot.commands.sendAsync(`/give @p ${item}`), args.interrupt)
-                    } else {
-                        throw `I don't have ${item}`
+                    if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position) <= bot.bot.entity.width + 0.5) {
+                        imInTheWay = true
+                    } else if (position.offset(0.5, 0.5, 0.5).manhattanDistanceTo(bot.bot.entity.position.offset(0, 1, 0)) <= bot.bot.entity.width + 0.5) {
+                        imInTheWay = true
                     }
-                }
 
-                try {
-                    yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'), args.interrupt)
-                    if (botFacing) {
-                        const yaw = Math.atan2(-botFacing.x, -botFacing.z)
-                        const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
-                        const pitch = Math.atan2(botFacing.y, groundDistance)
-                        yield* wrap(bot.bot.look(yaw, pitch, bot.instantLook), args.interrupt)
+                    if (imInTheWay) {
+                        yield* goto.task(bot, {
+                            flee: position,
+                            distance: 1.9,
+                            options: args.gotoOptions,
+                            ...runtimeArgs(args),
+                        })
+                    }
+
+                    if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
+                        throw `There is already a block here: ${blockHere.name}`
+                    }
+
+                    const referenceBlock = bot.bot.blockAt(referencePosition)
+                    if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
+                        throw `Invalid reference block ${referenceBlock.name}`
                     }
 
                     if (args.interrupt.isCancelled) { return }
-                    yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }), args.interrupt)
-                    break
-                } catch (error) {
-                    if (i === 0) { throw error }
-                    // console.warn(`[Bot "${bot.username}"] Failed to place ${item}, retrying ... (${i})`)
+
+                    if (!bot.searchInventoryItem(null, item)) {
+                        if (args.cheat) {
+                            yield* wrap(bot.commands.sendAsync(`/give @p ${item}`), args.interrupt)
+                        } else {
+                            throw `I don't have ${item}`
+                        }
+                    }
+
+                    try {
+                        yield* wrap(bot.bot.equip(bot.mc.registry.itemsByName[item].id, 'hand'), args.interrupt)
+                        if (botFacing) {
+                            const yaw = Math.atan2(-botFacing.x, -botFacing.z)
+                            const groundDistance = Math.sqrt(botFacing.x * botFacing.x + botFacing.z * botFacing.z)
+                            const pitch = Math.atan2(botFacing.y, groundDistance)
+                            yield* wrap(bot.bot.look(yaw, pitch, bot.instantLook), args.interrupt)
+                        }
+
+                        if (args.interrupt.isCancelled) { return }
+                        yield* wrap(bot.bot._placeBlockWithOptions(referenceBlock, placeInfo.faceVector, { forceLook: 'ignore', half: half }), args.interrupt)
+                        break
+                    } catch (error) {
+                        if (i === 0) { throw error }
+                        console.warn(`[Bot "${bot.username}"] Failed to place ${item}, retrying ... (${i})`, error)
+                    }
                 }
+            } finally {
+                placeLock.unlock()
             }
-        } finally {
-            bot.env.deallocateBlock(bot.username, blockPosition)
         }
     },
     id: function(args) {

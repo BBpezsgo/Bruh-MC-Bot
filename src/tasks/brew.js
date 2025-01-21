@@ -376,7 +376,7 @@ module.exports = {
         if (!brewingStand) { throw `No brewing stand found` }
 
         args.task?.blur()
-        const blockLock = yield* bot.env.waitLock(bot.username, brewingStand.position)
+        const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(brewingStand.position, bot.dimension), 'use')
         args.task?.focus()
 
         /** @type {import('mineflayer').BrewingStand | null} */

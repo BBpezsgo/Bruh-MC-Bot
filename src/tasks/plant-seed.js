@@ -73,7 +73,7 @@ module.exports = {
                 const at = bot.bot.blocks.at(savedCrop.position.xyz(bot.dimension))
 
                 if (at && Minecraft.replaceableBlocks[at.name] !== 'yes') {
-                    console.warn(`[Bot "${bot.username}"] There is something else there`)
+                    console.warn(`[Bot "${bot.username}"] There is something else there (${at.name})`)
                     continue
                 }
                 if (crop.type === 'tree' &&
