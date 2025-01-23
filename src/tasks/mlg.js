@@ -83,7 +83,7 @@ module.exports = {
                         bot.bot.entity.velocity.y >= Minecraft.general.fallDamageVelocity) {
                         cancelEat.trigger('cancel')
                         args.interrupt.off(cancelEat.trigger)
-                        console.warn(`[Bot "${bot.username}"] [MLG] There was not enough time to eat chorus fruit`)
+                        console.warn(`[Bot "${bot.username}"] [MLG] There is not enough time to eat chorus fruit`)
                         return 'failed'
                     }
 
