@@ -5,6 +5,8 @@ const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const { trajectoryTime } = require('../utils/other')
 const { Weapons } = require('minecrafthawkeye')
 const goto = require('./goto')
+const GameError = require('../errors/game-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @type {import('../task').TaskDef<'here' | 'ok', {
@@ -22,7 +24,7 @@ module.exports = {
 
         const enderpearl = bot.searchInventoryItem(null, 'ender_pearl')
         if (!enderpearl) {
-            throw `I have no enderpearl`
+            throw new GameError(`I have no enderpearl`)
         }
 
         if (!bot.bot.hawkEye) {
@@ -44,11 +46,11 @@ module.exports = {
         bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
         // args.response.respond(`${Math.atan2(d.y, d.x)}(${grade.yaw * (180 / Math.PI)}) ${grade.pitch * (180 / Math.PI)}`)
         if (!grade) {
-            throw `No`
+            throw new GameError(`No`)
         }
 
         if (grade.blockInTrayect) {
-            throw `There are blocks (${grade.blockInTrayect.name}) intersecting the trajectory`
+            throw new EnvironmentError(`There are blocks (${grade.blockInTrayect.name}) intersecting the trajectory`)
         }
 
         yield* wrap(bot.bot.look(grade.yaw, grade.pitch, bot.instantLook), args.interrupt)

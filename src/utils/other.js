@@ -97,16 +97,14 @@ function trajectoryTime(trajectory, speed, acceleration) {
 }
 
 class Timeout {
-    /**
-     * @private @readonly
-     * @type {number}
-     */
-    end
+    /** @private @readonly @type {number} */ end
+    /** @private @readonly @type {number} */ start
 
     /**
      * @param {number} ms
      */
     constructor(ms) {
+        this.start = performance.now()
         this.end = performance.now() + ms
     }
 

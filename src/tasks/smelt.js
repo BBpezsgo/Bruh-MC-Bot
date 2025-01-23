@@ -9,6 +9,10 @@ const config = require('../config')
 const { Vec3 } = require('vec3')
 const { stringifyItemH } = require('../utils/other')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -102,15 +106,15 @@ module.exports = {
             if (args.interrupt.isCancelled) { return [] }
 
             furnaceBlock = bot.bot.blockAt(new Vec3(args.furnace.x, args.furnace.y, args.furnace.z))
-            if (!furnaceBlock) { throw `The provided furnace disappeared` }
+            if (!furnaceBlock) { throw new EnvironmentError(`The provided furnace disappeared`) }
 
             recipe = args.recipe
         } else {
             let best = yield* findBestFurnace(bot, [args.recipe])
-            if (!best) { throw `No furnaces found` }
+            if (!best) { throw new EnvironmentError(`No furnaces found`) }
 
             furnaceBlock = best.furnaceBlock
-            if (!furnaceBlock) { throw `No furnaces found` }
+            if (!furnaceBlock) { throw new EnvironmentError(`No furnaces found`) }
 
             recipe = best.recipes[0]
         }
@@ -127,7 +131,7 @@ module.exports = {
 
         try {
             furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
-            if (!furnaceBlock) { throw `Furnace disappeared` }
+            if (!furnaceBlock) { throw new EnvironmentError(`Furnace disappeared`) }
     
             yield* goto.task(bot, {
                 block: furnaceBlock.position,
@@ -151,30 +155,36 @@ module.exports = {
             }
 
             if (furnace.inputItem() || furnace.outputItem()) {
-                if (!args.response) { throw `I can't ask questions` }
-                const res = yield* wrap(args.response.askYesNo(`There are some stuff in a furnace. Can I take it out?`, 10000, null, q => {
-                    if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
-                        let detRes = ''
-                        if (furnace.inputItem()) {
-                            detRes += `${furnace.inputItem().count > 1 ? furnace.inputItem().count : ''}${stringifyItemH(furnace.inputItem())}\n`
+                if (!args.response) { throw new PermissionError(`I can't ask questions`) }
+                try {
+                    const res = yield* wrap(args.response.askYesNo(`There are some stuff in a furnace. Can I take it out?`, 10000, null, q => {
+                        if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
+                            let detRes = ''
+                            if (furnace.inputItem()) {
+                                detRes += `${furnace.inputItem().count > 1 ? furnace.inputItem().count : ''}${stringifyItemH(furnace.inputItem())}\n`
+                            }
+                            if (furnace.outputItem()) {
+                                detRes += `${furnace.outputItem().count > 1 ? furnace.outputItem().count : ''}${stringifyItemH(furnace.outputItem())}\n`
+                            }
+                            return detRes
                         }
-                        if (furnace.outputItem()) {
-                            detRes += `${furnace.outputItem().count > 1 ? furnace.outputItem().count : ''}${stringifyItemH(furnace.outputItem())}\n`
+    
+                        if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
+                            return `At ${furnaceBlock.position.x} ${furnaceBlock.position.y} ${furnaceBlock.position.z} in ${bot.dimension}`
                         }
-                        return detRes
+    
+                        return null
+                    }))
+                    if (res.message) {
+                        if (furnace.inputItem()) yield* wrap(furnace.takeInput(), args.interrupt)
+                        if (furnace.outputItem()) yield* wrap(furnace.takeOutput(), args.interrupt)
+                    } else {
+                        throw new PermissionError(`${res.sender} didn't allowed to take out the items from a furnace`)
                     }
-
-                    if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
-                        return `At ${furnaceBlock.position.x} ${furnaceBlock.position.y} ${furnaceBlock.position.z} in ${bot.dimension}`
-                    }
-
-                    return null
-                }))
-                if (res?.message) {
-                    if (furnace.inputItem()) yield* wrap(furnace.takeInput(), args.interrupt)
-                    if (furnace.outputItem()) yield* wrap(furnace.takeOutput(), args.interrupt)
-                } else {
-                    throw `Didn't got a response to my question`
+                } catch (error) {
+                    throw new GameError(`Didn't got a response to my question`, {
+                        cause: error
+                    })
                 }
             }
 
@@ -193,7 +203,7 @@ module.exports = {
                     break
                 }
 
-                if (!furnace.inputItem()) { throw `I have no ingredients` }
+                if (!furnace.inputItem()) { throw new GameError(`I have no ingredients`) }
 
                 while (!furnace.outputItem()) {
                     yield
@@ -213,7 +223,7 @@ module.exports = {
                             }
                         }
 
-                        if (!havePutSomething && furnace.fuel <= 0 && !furnace.fuelItem()) { throw `I have no fuel` }
+                        if (!havePutSomething && furnace.fuel <= 0 && !furnace.fuelItem()) { throw new GameError(`I have no fuel`) }
                     }
 
                     yield* sleepTicks(1)
@@ -221,12 +231,12 @@ module.exports = {
 
                 const output = yield* wrap(furnace.takeOutput(), args.interrupt)
 
-                if (!output) { throw `Failed to smelt item` }
+                if (!output) { throw new GameError(`Failed to smelt item`) }
 
                 outputs.push(output)
             }
 
-            if (outputs.length !== args.count) { throw `Something aint right` }
+            if (outputs.length !== args.count) { throw new GameError(`Something aint right`) }
             return outputs
         } finally {
             if (shouldTakeEverything) {

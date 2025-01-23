@@ -1,6 +1,6 @@
 'use strict'
 
-const { basicRouteSearch, directBlockNeighbors } = require('../utils/other')
+const { basicRouteSearch, directBlockNeighbors, stringifyItemH } = require('../utils/other')
 const goto = require('./goto')
 const plantSeed = require('./plant-seed')
 const Minecraft = require('../minecraft')
@@ -9,6 +9,8 @@ const Vec3Dimension = require('../utils/vec3-dimension')
 const pickupItem = require('./pickup-item')
 const config = require('../config')
 const { runtimeArgs } = require('../utils/tasks')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 
 /**
  * @type {import('../task').TaskDef<number, {
@@ -18,7 +20,7 @@ const { runtimeArgs } = require('../utils/tasks')
 module.exports = {
     task: function*(bot, args) {
         if (args.interrupt.isCancelled) { return 0 }
-        if (bot.quietMode) { throw `Can't harvest in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't harvest in quiet mode`) }
 
         args.task.blur()
 
@@ -143,10 +145,10 @@ module.exports = {
 
                     try {
                         const seed = bot.searchInventoryItem(null, crop.seed)
-                        if (!seed) { throw `Can't replant this: doesn't have "${crop.seed}"` }
+                        if (!seed) { throw new GameError(`Can't replant this: doesn't have "${crop.seed}"`) }
 
                         const placeOn = bot.env.getPlantableBlock(bot, p.xyz(bot.dimension), crop, true, true)
-                        if (!placeOn) { throw `Place on is null` }
+                        if (!placeOn) { throw new GameError(`Can't replant ${stringifyItemH(seed)} because I didn't find a block to place on`) }
 
                         yield* plantSeed.plant(bot, placeOn.block, placeOn.faceVector, seed, args)
                     } catch (error) {

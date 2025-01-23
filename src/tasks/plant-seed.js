@@ -9,6 +9,9 @@ const { basicRouteSearch, isItemEquals } = require('../utils/other')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const Freq = require('../utils/freq')
 const { runtimeArgs } = require('../utils/tasks')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -20,9 +23,9 @@ const { runtimeArgs } = require('../utils/tasks')
 function* plant(bot, placeOn, placeVector, seedItem, args) {
     const above = bot.bot.blocks.at(placeOn.position.offset(placeVector.x, placeVector.y, placeVector.z))
 
-    if (bot.quietMode) { throw `Can't plant in quiet mode` }
+    if (bot.quietMode) { throw new PermissionError(`Can't plant in quiet mode`) }
 
-    if (above.name !== 'air') { throw `Can't plant seed: block above is "${above.name}"` }
+    if (above.name !== 'air') { throw new EnvironmentError(`Can't plant seed: block above is "${above.name}"`) }
 
     yield* goto.task(bot, {
         block: placeOn.position.clone().offset(0, 0.5, 0),

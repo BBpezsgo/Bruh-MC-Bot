@@ -7,6 +7,7 @@ const goto = require('./goto')
 const ItemLock = require('../locks/item-lock')
 const move = require('./move')
 const pickupItem = require('./pickup-item')
+const GameError = require('../errors/game-error')
 
 /**
  * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, ({
@@ -23,7 +24,7 @@ module.exports = {
         const tossedMap = new Freq(isItemEquals)
 
         if (args.interrupt.isCancelled) { return tossedMap }
-        if (bot.inventoryItems().isEmpty()) { throw `I don't have anything` }
+        if (bot.inventoryItems().isEmpty()) { throw new GameError(`I don't have anything`) }
 
         let canGiveSomething = false
 
@@ -49,9 +50,9 @@ module.exports = {
 
         if (!canGiveSomething) {
             if (itemsToGive.length === 1) {
-                throw `Don't have ${stringifyItemH(itemsToGive[0].item)}`
+                throw new GameError(`Don't have ${stringifyItemH(itemsToGive[0].item)}`)
             } else {
-                throw `Don't have anything`
+                throw new GameError(`Don't have anything`)
             }
         }
 
@@ -123,7 +124,7 @@ module.exports = {
                     yield
 
                     target = bot.env.getPlayerPosition(player)
-                    if (!target) { throw `Can't find ${player}` }
+                    if (!target) { throw new GameError(`Can't find ${player}`) }
 
                     const MAX_DISTANCE = 3
                     const MIN_DISTANCE = 2
@@ -149,7 +150,7 @@ module.exports = {
                     if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE + 1) continue
 
                     target = bot.env.getPlayerPosition(player)
-                    if (!target) { throw `Can't find ${player}` }
+                    if (!target) { throw new GameError(`Can't find ${player}`) }
 
                     yield* move.task(bot, {
                         goal: {
@@ -172,7 +173,7 @@ module.exports = {
                     })
 
                     target = bot.env.getPlayerPosition(player)
-                    if (!target) { throw `Can't find ${player}` }
+                    if (!target) { throw new GameError(`Can't find ${player}`) }
                     
                     if (bot.bot.entity.position.distanceTo(target.xyz(bot.dimension)) > MAX_DISTANCE) continue
                     break
@@ -215,9 +216,9 @@ module.exports = {
 
         if (tossedMap.isEmpty) {
             if (itemsToGiveOriginal.length === 1) {
-                throw `Don't have ${stringifyItemH(itemsToGiveOriginal[0].item)}`
+                throw new GameError(`Don't have ${stringifyItemH(itemsToGiveOriginal[0].item)}`)
             } else {
-                throw `Don't have anything`
+                throw new GameError(`Don't have anything`)
             }
         }
 

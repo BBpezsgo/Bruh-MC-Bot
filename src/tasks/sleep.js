@@ -5,6 +5,8 @@ const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
+const GameError = require('../errors/game-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -75,7 +77,7 @@ module.exports = {
             })
         }
 
-        if (!bed) { throw `No beds found` }
+        if (!bed) { throw new EnvironmentError(`No beds found`) }
 
         yield* goto.task(bot, {
             block: bed.position,

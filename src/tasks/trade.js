@@ -1,5 +1,7 @@
 'use strict'
 
+const EnvironmentError = require('../errors/environment-error')
+const GameError = require('../errors/game-error')
 const { wrap, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 
@@ -38,7 +40,7 @@ module.exports = {
         if (args.interrupt.isCancelled) { return 0 }
 
         if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {
-            throw `This aint a villager`
+            throw new EnvironmentError(`This aint a villager`)
         }
 
         if (!args.villager) {
@@ -107,7 +109,7 @@ module.exports = {
         })
 
         if (args.villager && (!args.villager.isValid || args.villager.name !== 'villager')) {
-            throw `This aint a villager`
+            throw new EnvironmentError(`This aint a villager`)
         }
 
         const villager = yield* wrap(bot.bot.openVillager(args.villager), args.interrupt)
@@ -121,12 +123,12 @@ module.exports = {
         try {
             const tradeIndex = villager.trades.findIndex(v => tradeEquality(v, args.trade))
             if (tradeIndex === -1) {
-                throw `No trade found`
+                throw new EnvironmentError(`No trade found`)
             }
 
             const trade = villager.trades[tradeIndex]
 
-            if (trade.tradeDisabled) { throw `This trade is disabled` }
+            if (trade.tradeDisabled) { throw new EnvironmentError(`This trade is disabled`) }
             while (traded < args.numberOfTrades) {
                 if (args.interrupt.isCancelled) { break }
                 const have = bot.inventoryItemCount(villager, trade.inputItem1)

@@ -6,6 +6,10 @@ const { Timeout } = require('../utils/other')
 const goto = require('./goto')
 const pickupItem = require('./pickup-item')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const EnvironmentError = require('../errors/environment-error')
+const KnowledgeError = require('../errors/knowledge-error')
 
 /**
  * @type {import('../task').TaskDef<Array<Item>, {
@@ -26,7 +30,7 @@ module.exports = {
             maxDistance: 48,
             filter: (campfire) => Boolean(campfire.getProperties()['lit']),
         }).filter(Boolean).first()
-        if (!campfire) { throw `No campfire nearby` }
+        if (!campfire) { throw new EnvironmentError(`No campfire nearby`) }
 
         args.task?.blur()
         const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(campfire.position, bot.dimension), 'use')
@@ -39,12 +43,12 @@ module.exports = {
             })
     
             campfire = bot.bot.blockAt(campfire.position)
-            if (!campfire) { throw `Campfire disappeared` }
+            if (!campfire) { throw new EnvironmentError(`Campfire disappeared`) }
 
             const recipe = recipes[0]
 
             const result = bot.mc.registry.itemsByName[recipe.result]
-            if (!result) { throw `What?` }
+            if (!result) { throw new KnowledgeError(`Unknown item \"${recipe.result}\"`) }
 
             const extraWaitTime = 1000
 
@@ -77,8 +81,8 @@ module.exports = {
             }
 
             campfire = bot.bot.blockAt(campfire.position)
-            if (!campfire) { throw `Campfire disappeared` }
-            if (!campfire.getProperties()['lit']) { throw `This campfire is out` }
+            if (!campfire) { throw new EnvironmentError(`Campfire disappeared`) }
+            if (!campfire.getProperties()['lit']) { throw new EnvironmentError(`This campfire is out`) }
 
             for (let i = 0; i < args.count; i++) {
                 if (args.interrupt.isCancelled) { break }
@@ -97,7 +101,7 @@ module.exports = {
                     if (ingredientItem) { break }
                 }
 
-                if (!ingredientItem) { throw `No ingredient` }
+                if (!ingredientItem) { throw new GameError(`No ingredient`) }
 
                 yield* wrap(bot.bot.equip(ingredientItem, 'hand'), args.interrupt)
                 yield* wrap(bot.bot.activateBlock(campfire), args.interrupt)
@@ -134,12 +138,12 @@ module.exports = {
                 campfire = bot.bot.blockAt(campfire.position)
                 if (!campfire) {
                     bot.bot.removeListener('playerCollect', onPickUp)
-                    throw `Campfire disappeared`
+                    throw new EnvironmentError(`Campfire disappeared`)
                 }
 
                 if (!campfire.getProperties()['lit']) {
                     bot.bot.removeListener('playerCollect', onPickUp)
-                    throw `This campfire is out`
+                    throw new EnvironmentError(`This campfire is out`)
                 }
 
                 if (minimumTime.done() && pickedUp.length > 0) {
@@ -149,7 +153,9 @@ module.exports = {
 
                 if (maximumTime.done()) {
                     bot.bot.removeListener('playerCollect', onPickUp)
-                    throw `This isn't cooking`
+                    throw new GameError(`This isn't cooking`, {
+                        cause: TimeoutError.fromTime(maximumTime),
+                    })
                 }
 
                 yield* sleepTicks(1)

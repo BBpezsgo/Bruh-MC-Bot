@@ -3,6 +3,7 @@
 const { Item } = require('prismarine-item')
 const { NBT2JSON, isItemEquals } = require('./other')
 const Freq = require('./freq')
+const GameError = require('../errors/game-error')
 
 const INVALID_ITEMS = [
     'shulker_box',
@@ -33,22 +34,22 @@ module.exports = {
      */
     putIn: async function(bot, registry, bundleSlot, itemSlot) {
         let bundleItem = bot.inventory.slots[bundleSlot]
-        if (!bundleItem) { throw new Error(`There is no bundle at slot ${bundleSlot}`) }
-        if (bundleItem.name !== 'bundle') { throw new Error(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
+        if (!bundleItem) { throw new GameError(`There is no bundle at slot ${bundleSlot}`) }
+        if (bundleItem.name !== 'bundle') { throw new GameError(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
 
         const bundleItemsBefore = this.content(bundleItem.nbt)
 
         let item = bot.inventory.slots[itemSlot]
-        if (!item) { throw new Error(`There is nothing at slot ${itemSlot}`) }
-        if (INVALID_ITEMS.includes(item.name)) { throw new Error(`Can't put ${item.name} into a bundle`) }
+        if (!item) { throw new GameError(`There is nothing at slot ${itemSlot}`) }
+        if (INVALID_ITEMS.includes(item.name)) { throw new GameError(`Can't put ${item.name} into a bundle`) }
 
         const emptySpace = 64 - this.size(registry, bundleItem)
-        if (emptySpace === 0) { throw new Error(`The bundle is full`) }
+        if (emptySpace === 0) { throw new GameError(`The bundle is full`) }
 
         const itemSize = 64 / item.stackSize
         const canPutIn = Math.floor(Math.min(emptySpace, item.count * itemSize) / itemSize)
 
-        if (canPutIn === 0) { throw new Error(`Not enough space in the bundle`) }
+        if (canPutIn === 0) { throw new GameError(`Not enough space in the bundle`) }
 
         await bot.clickWindow(bundleSlot, 0, 0)
         await bot.waitForTicks(1)
@@ -58,8 +59,8 @@ module.exports = {
         await bot.waitForTicks(1)
 
         bundleItem = bot.inventory.slots[bundleSlot]
-        if (!bundleItem) { throw new Error(`There is no bundle at slot ${bundleSlot} after the operation`) }
-        if (bundleItem.name !== 'bundle') { throw new Error(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name} after the operation`) }
+        if (!bundleItem) { throw new GameError(`There is no bundle at slot ${bundleSlot} after the operation`) }
+        if (bundleItem.name !== 'bundle') { throw new GameError(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name} after the operation`) }
 
         const bundleItemsAfter = this.content(bundleItem.nbt)
 
@@ -79,12 +80,12 @@ module.exports = {
         if (Object.keys(delta).length === 1 &&
             Object.keys(delta)[0] === item.name) {
             if (delta.get(item.name) !== -canPutIn) {
-                throw new Error(`Couldn't put ${canPutIn} ${item.name} into the bundle, only ${-delta.get(item.name)}`)
+                throw new GameError(`Couldn't put ${canPutIn} ${item.name} into the bundle, only ${-delta.get(item.name)}`)
             }
             return
         }
 
-        throw new Error(`Messed up the bundle operation. Items delta: ${JSON.stringify(delta, null, ' ')}`)
+        throw new GameError(`Messed up the bundle operation. Items delta: ${JSON.stringify(delta, null, ' ')}`)
     },
     /**
      * @param {import('mineflayer').Bot} bot
@@ -94,16 +95,16 @@ module.exports = {
      * @returns {Promise<Item | null>}
      */
     takeOutItem: async function(bot, registry, bundleSlot, item) {
-        if (INVALID_ITEMS.includes(item)) { throw new Error(`Can't put ${item} into a bundle`) }
+        if (INVALID_ITEMS.includes(item)) { throw new GameError(`Can't put ${item} into a bundle`) }
 
         let bundleItem = bot.inventory.slots[bundleSlot]
-        if (!bundleItem) { throw new Error(`There is no bundle at slot ${bundleSlot}`) }
-        if (bundleItem.name !== 'bundle') { throw new Error(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
+        if (!bundleItem) { throw new GameError(`There is no bundle at slot ${bundleSlot}`) }
+        if (bundleItem.name !== 'bundle') { throw new GameError(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
 
         const bundleItemsBefore = this.content(bundleItem.nbt)
 
-        if (bundleItemsBefore.length === 0) { throw new Error(`The bundle is empty`) }
-        if (!bundleItemsBefore.find(v => v.name === item)) { throw new Error(`There is not ${item} in the bundle`) }
+        if (bundleItemsBefore.length === 0) { throw new GameError(`The bundle is empty`) }
+        if (!bundleItemsBefore.find(v => v.name === item)) { throw new GameError(`There is not ${item} in the bundle`) }
 
         const takenOut = []
         let result = null
@@ -130,15 +131,15 @@ module.exports = {
      */
     takeOut: async function(bot, bundleSlot) {
         const bundleItem = bot.inventory.slots[bundleSlot]
-        if (!bundleItem) { throw new Error(`There is no bundle at slot ${bundleSlot}`) }
-        if (bundleItem.name !== 'bundle') { throw new Error(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
+        if (!bundleItem) { throw new GameError(`There is no bundle at slot ${bundleSlot}`) }
+        if (bundleItem.name !== 'bundle') { throw new GameError(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
 
         const bundleItemsBefore = this.content(bundleItem.nbt)
 
-        if (bundleItemsBefore.length === 0) { throw new Error(`The bundle is empty`) }
+        if (bundleItemsBefore.length === 0) { throw new GameError(`The bundle is empty`) }
 
         const emptySlot = bot.inventory.firstEmptyInventorySlot(false)
-        if (emptySlot === null) { throw new Error(`No empty slot found`) }
+        if (emptySlot === null) { throw new GameError(`No empty slot found`) }
 
         const expected = bundleItemsBefore[0]
 
@@ -151,12 +152,12 @@ module.exports = {
         await bot.clickWindow(bundleSlot, 0, 0)
         await bot.waitForTicks(1)
 
-        if (bot.inventory.slots[bundleSlot]?.name !== 'bundle') { throw new Error(`Failed to put back the bundle`) }
+        if (bot.inventory.slots[bundleSlot]?.name !== 'bundle') { throw new GameError(`Failed to put back the bundle`) }
 
         const takenOut = bot.inventory.slots[emptySlot]
-        if (!takenOut) { throw new Error(`There is nothing at the destination slot after the operation`) }
-        if (takenOut.name !== expected.name) { throw new Error(`Unexpected item ${takenOut.name} at the destination slot after the operation, expected ${expected.name}`) }
-        if (takenOut.count !== expected.count) { throw new Error(`Couldn't take out all the ${expected.name} from the bundle: taken ${takenOut.count}, expected ${expected.count}.`) }
+        if (!takenOut) { throw new GameError(`There is nothing at the destination slot after the operation`) }
+        if (takenOut.name !== expected.name) { throw new GameError(`Unexpected item ${takenOut.name} at the destination slot after the operation, expected ${expected.name}`) }
+        if (takenOut.count !== expected.count) { throw new GameError(`Couldn't take out all the ${expected.name} from the bundle: taken ${takenOut.count}, expected ${expected.count}.`) }
 
         return takenOut
     },
@@ -167,15 +168,15 @@ module.exports = {
     empty: async function(bot, bundleSlot) {
         while (true) {
             const bundleItem = bot.inventory.slots[bundleSlot]
-            if (!bundleItem) { throw new Error(`There is no bundle at slot ${bundleSlot}`) }
-            if (bundleItem.name !== 'bundle') { throw new Error(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
+            if (!bundleItem) { throw new GameError(`There is no bundle at slot ${bundleSlot}`) }
+            if (bundleItem.name !== 'bundle') { throw new GameError(`There isn't a bundle at ${bundleSlot} but a ${bundleItem.name}`) }
 
             const bundleItems = this.content(bundleItem.nbt)
             if (bundleItems.length === 0) { return }
 
             const emptySlot = bot.inventory.firstEmptyInventorySlot(false)
 
-            if (emptySlot === null) { throw new Error(`No empty slot found in the inventory`) }
+            if (emptySlot === null) { throw new GameError(`No empty slot found in the inventory`) }
 
             await bot.clickWindow(bundleSlot, 0, 0)
             await bot.waitForTicks(1)
@@ -191,7 +192,7 @@ module.exports = {
      * @returns 0 - 64
      */
     size: function(registry, bundle) {
-        if (bundle.name !== 'bundle') { throw new Error(`This isn't a bundle but a ${bundle.name}`) }
+        if (bundle.name !== 'bundle') { throw new GameError(`This isn't a bundle but a ${bundle.name}`) }
         const bundleItems = this.content(bundle.nbt)
         let size = 0
         for (const bundleItem of bundleItems) {
@@ -238,7 +239,7 @@ module.exports = {
             const bundleContent = this.content(bundleItem.nbt)
             const filteredContent = bundleContent.filter(v => v?.name === item)
             if (filteredContent.length === 0) { continue }
-            if (filteredContent.length !== 1) { throw `What?` }
+            if (filteredContent.length !== 1) { throw new Error(`What?`) }
             const itemDepth = bundleContent.length - bundleContent.findIndex(v => v.name === item)
             if (itemDepth < bestBundleDepth) {
                 bestBundle = bundleItem
@@ -262,7 +263,7 @@ module.exports = {
             const bundleContent = this.content(bundleItem.nbt)
             const filteredContent = bundleContent.filter(v => v?.name === item)
             if (filteredContent.length === 0) { continue }
-            if (filteredContent.length !== 1) { throw `What?` }
+            if (filteredContent.length !== 1) { throw new Error(`What?`) }
             const itemDepth = bundleContent.length - bundleContent.findIndex(v => v.name === item)
             bundles.push({
                 bundle: bundleItem,

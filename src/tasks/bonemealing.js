@@ -6,6 +6,8 @@ const { backNForthSort } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 
 /**
  * @type {import('../task').TaskDef<number, {
@@ -15,7 +17,7 @@ const config = require('../config')
 module.exports = {
     task: function*(bot, args) {
         if (args.interrupt.isCancelled) { return 0 }
-        if (bot.quietMode) { throw `Can't bonemeal in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't bonemeal in quiet mode`) }
 
         let bonemeal = bot.searchInventoryItem(null, 'bonemeal')
         let n = 0

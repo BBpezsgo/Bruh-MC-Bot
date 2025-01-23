@@ -12,6 +12,8 @@ const { isItemEquals, trajectoryTime } = require('../utils/other')
 const config = require('../config')
 const projectilRadar = require('minecrafthawkeye/dist/projectilRadar')
 const { weaponsProps } = require('minecrafthawkeye')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 
 /**
  * @typedef {{
@@ -706,7 +708,7 @@ function timeUntilCriticalHit(bot) {
 module.exports = {
     task: function*(bot, args) {
         if (!args.useBow && !args.useMelee) {
-            throw `Every possible way of attacking is disabled`
+            throw new PermissionError(`Every possible way of attacking is disabled`)
         }
 
         if (!bot.bot.hawkEye) {

@@ -8,6 +8,8 @@ const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
 const { GoalPlaceBlock, GoalInvert, GoalNear } = require('mineflayer-pathfinder/lib/goals')
 const BruhBot = require('../bruh-bot')
+const GameError = require('../errors/game-error')
+const EnvironmentError = require('../errors/environment-error')
 
 class GoalBlockSimple extends goals.Goal {
     /**
@@ -318,7 +320,7 @@ function* getGoal(bot, args) {
     } else if ('entity' in args) {
         yield new GoalEntity(args.entity, args.distance)
     } else {
-        throw `What?`
+        throw new Error(`What?`)
     }
 }
 
@@ -415,7 +417,7 @@ module.exports = {
                 let remainingTravels = 3
                 while (true) {
                     remainingTravels--
-                    if (remainingTravels <= 0) { throw `I lost :(` }
+                    if (remainingTravels <= 0) { throw new GameError(`I lost :(`) }
 
                     try {
                         switch (args.dimension) {
@@ -427,7 +429,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the nether portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
@@ -447,7 +449,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the end portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
@@ -477,7 +479,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the nether portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
@@ -497,7 +499,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the end portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
@@ -521,7 +523,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the nether portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the nether portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['nether_portal'].id)
                                         yield* this.task(bot, {
@@ -544,7 +546,7 @@ module.exports = {
                                             count: 1,
                                             maxDistance: config.goto.portalSearchRadius,
                                         })
-                                        if (!portal) { throw `I couldn't find the end portal` }
+                                        if (!portal) { throw new EnvironmentError(`I couldn't find the end portal`) }
                                         const movements = new Movements(bot.bot, args.options?.movements ?? bot.restrictedMovements)
                                         movements.blocksToAvoid.delete(bot.mc.registry.blocksByName['end_portal'].id)
                                         yield* this.task(bot, {
@@ -572,7 +574,7 @@ module.exports = {
                 _goal.hasChanged ??= () => false
                 _goal.isValid ??= () => true
 
-                if (args.options.savePathError && bot.memory.isGoalUnreachable(_goal)) { throw `If I remember correctly I can't get there` }
+                if (args.options.savePathError && bot.memory.isGoalUnreachable(_goal)) { throw new GameError(`If I remember correctly I can't get there`) }
 
                 let retryCount = ('retryCount' in args.options) ? args.options.retryCount : 3
                 let lastError = null
@@ -616,9 +618,13 @@ module.exports = {
                         bot.bot.pathfinder.stop()
                         if (args.options.savePathError && lastError?.name === 'NoPath') bot.memory.theGoalIsUnreachable(_goal)
                         if (lastError?.name === 'NoPath') {
-                            throw `I can't get there`
+                            throw new GameError(`I can't get there`, {
+                                cause: lastError
+                            })
                         } else {
-                            throw `Looks like I can't get there`
+                            throw new GameError(`Looks like I can't get there`, {
+                                cause: lastError
+                            })
                         }
                     } else {
                         bot.bot.pathfinder.stop()
@@ -628,7 +634,7 @@ module.exports = {
                 }
 
                 bot.bot.pathfinder.stop()
-                throw `bruh`
+                throw new Error(`bruh`)
             } else {
                 let result
                 for (const _goal of getGoal(bot, args)) {

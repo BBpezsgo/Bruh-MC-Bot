@@ -3,6 +3,8 @@
 const { Vec3 } = require('vec3')
 const { sleepG, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
+const GameError = require('../errors/game-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -37,10 +39,10 @@ module.exports = {
         if (args.interrupt.isCancelled) { return }
 
         const nearest = getClosestXp(bot, args)
-        if (!nearest) { throw `No xps nearby` }
+        if (!nearest) { throw new EnvironmentError(`No xps nearby`) }
 
         const entityLock = bot.env.tryLockEntity(bot.username, nearest)
-        if (!entityLock) { throw `Entity is locked` }
+        if (!entityLock) { throw new GameError(`Entity is locked`) }
 
         try {
             yield* goto.task(bot, {

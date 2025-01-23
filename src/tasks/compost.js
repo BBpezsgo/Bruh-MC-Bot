@@ -9,6 +9,9 @@ const goto = require('./goto')
 const Minecraft = require('../minecraft')
 const config = require('../config')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -66,7 +69,7 @@ const getItem = function(bot, includeNono) {
 module.exports = {
     task: function*(bot, args) {
         if (args.interrupt.isCancelled) { return 0 }
-        if (bot.quietMode) { throw `Can't compost in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't compost in quiet mode`) }
 
         let composted = 0
 
@@ -75,7 +78,7 @@ module.exports = {
             maxDistance: config.compost.composterSearchRadius,
         })
 
-        if (!composter) { throw `There is no composter` }
+        if (!composter) { throw new EnvironmentError(`There is no composter`) }
 
         args.task?.blur()
         const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(composter.position, bot.dimension), 'use')
@@ -94,7 +97,7 @@ module.exports = {
                 })
 
                 composter = bot.bot.blockAt(composter.position)
-                if (!composter) { throw `Composter destroyed while I was trying to get there` }
+                if (!composter) { throw new EnvironmentError(`Composter destroyed while I was trying to get there`) }
 
                 yield* waitCompost(bot, composter, args)
 

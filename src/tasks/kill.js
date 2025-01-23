@@ -1,5 +1,7 @@
 'use strict'
 
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 const { wrap, runtimeArgs } = require('../utils/tasks')
 const attack = require('./attack')
 
@@ -15,15 +17,21 @@ module.exports = {
 
         if (targetPlayer) {
             if (!args.requestedBy) {
-                throw `I can only kill players on command`
+                throw new PermissionError(`I can only kill players on command`)
             }
 
             if (targetPlayer.username !== args.requestedBy &&
                 targetPlayer.username === 'BB_vagyok') {
-                if (!args.response) { throw `I can't ask questions` }
-                const confirmation = yield* wrap(args.response.askYesNo(`Do you allow me to kill you? Requested by ${args.requestedBy}`, 10000, targetPlayer.username))
-                if (confirmation && !confirmation.message) {
-                    throw `${targetPlayer.username} didn't allow this`
+                if (!args.response) { throw new PermissionError(`I can't ask questions`) }
+                try {
+                    const confirmation = yield* wrap(args.response.askYesNo(`Do you allow me to kill you? Requested by ${args.requestedBy}`, 10000, targetPlayer.username))
+                    if (!confirmation.message) {
+                        throw new PermissionError(`${targetPlayer.username} didn't allow this`)
+                    }
+                } catch (error) {
+                    throw new GameError(`${targetPlayer.username} didn't responded`, {
+                        cause: error
+                    })
                 }
             }
         }
@@ -37,7 +45,7 @@ module.exports = {
         })
 
         if (!result) {
-            throw `I couldn't kill ${targetPlayer ? targetPlayer.username : args.entity.username ?? args.entity.displayName ?? args.entity.name ?? 'someone/something'}`
+            throw new GameError(`I couldn't kill ${targetPlayer ? targetPlayer.username : args.entity.username ?? args.entity.displayName ?? args.entity.name ?? 'someone/something'}`)
         }
     },
     id: function(args) {

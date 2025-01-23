@@ -4,6 +4,11 @@ const { wrap, waitForEvent, runtimeArgs, sleepTicks } = require('../utils/tasks'
 const { NBT2JSON, stringifyItemH } = require('../utils/other')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const PermissionError = require('../errors/permission-error')
+const KnowledgeError = require('../errors/knowledge-error')
+const EnvironmentError = require('../errors/environment-error')
 
 const potions = Object.freeze([
     {
@@ -336,7 +341,7 @@ module.exports = {
                 const goodRecipes = recipes.filter(v => v.result.potion === potionName)
 
                 if (!goodRecipes.length) {
-                    throw `I don't know what potion "${args.potion}" is`
+                    throw new KnowledgeError(`I don't know what potion "${args.potion}" is`)
                 }
 
                 return goodRecipes[0]
@@ -349,15 +354,15 @@ module.exports = {
         let ingredientItem = bot.inventoryItems(null).filter(v => v.name === recipe.ingredient).first()
 
         if (!bottleItem && !ingredientItem) {
-            throw `I don't have "${recipe.ingredient}" and the bottle`
+            throw new GameError(`I don't have "${recipe.ingredient}" and the bottle`)
         }
 
         if (!bottleItem) {
-            throw `I don't have the bottle`
+            throw new GameError(`I don't have the bottle`)
         }
 
         if (!ingredientItem) {
-            throw `I don't have "${recipe.ingredient}"`
+            throw new GameError(`I don't have "${recipe.ingredient}"`)
         }
 
         if (args.brewingStand) {
@@ -373,7 +378,7 @@ module.exports = {
             count: 1,
             maxDistance: 64,
         }).filter(v => !!v).first()
-        if (!brewingStand) { throw `No brewing stand found` }
+        if (!brewingStand) { throw new EnvironmentError(`No brewing stand found`) }
 
         args.task?.blur()
         const blockLock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(brewingStand.position, bot.dimension), 'use')
@@ -388,7 +393,7 @@ module.exports = {
             })
     
             brewingStand = bot.bot.blockAt(brewingStand.position, true)
-            if (!brewingStand) { throw `Brewing stand disappeared` }
+            if (!brewingStand) { throw new EnvironmentError(`Brewing stand disappeared`) }
 
             const slot1 = 0
             const slot2 = 1
@@ -402,40 +407,46 @@ module.exports = {
             ingredientItem = bot.inventoryItems(window).filter(v => v.name === recipe.ingredient).first()
 
             if (!bottleItem || !ingredientItem) {
-                throw `Ingredients disappeared`
+                throw new GameError(`Ingredients disappeared`)
             }
 
             if (window.potions().some(Boolean) || window.ingredientItem()) {
-                if (!args.response) { throw `I can't ask questions` }
-                const res = yield* wrap(args.response.askYesNo(`There are some stuff in a brewing stand. Can I take it out?`, 10000, null, q => {
-                    if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
-                        let detRes = ''
-                        for (const potion of window.potions().filter(Boolean)) {
-                            detRes += `${potion.count > 1 ? potion.count : ''}${stringifyItemH(potion)}\n`
+                if (!args.response) { throw new PermissionError(`I can't ask questions`) }
+                try {
+                    const res = yield* wrap(args.response.askYesNo(`There are some stuff in a brewing stand. Can I take it out?`, 10000, null, q => {
+                        if (/what(\s*is\s*it)?\s*\?*/.exec(q)) {
+                            let detRes = ''
+                            for (const potion of window.potions().filter(Boolean)) {
+                                detRes += `${potion.count > 1 ? potion.count : ''}${stringifyItemH(potion)}\n`
+                            }
+                            if (window.ingredientItem()) {
+                                detRes += `${window.ingredientItem().count > 1 ? window.ingredientItem().count : ''}${stringifyItemH(window.ingredientItem())}\n`
+                            }
+                            return detRes
                         }
-                        if (window.ingredientItem()) {
-                            detRes += `${window.ingredientItem().count > 1 ? window.ingredientItem().count : ''}${stringifyItemH(window.ingredientItem())}\n`
+    
+                        if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
+                            return `At ${brewingStand.position.x} ${brewingStand.position.y} ${brewingStand.position.z} in ${bot.dimension}`
                         }
-                        return detRes
+    
+                        return null
+                    }))
+                    if (res.message) {
+                        if (window.potions().some(Boolean)) yield* wrap(window.takePotions(), args.interrupt)
+                        if (window.ingredientItem()) yield* wrap(window.takeIngredient(), args.interrupt)
+                    } else {
+                        throw new PermissionError(`${res.sender} didn't allowed to take out the items from a brewing stand`)
                     }
-
-                    if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
-                        return `At ${brewingStand.position.x} ${brewingStand.position.y} ${brewingStand.position.z} in ${bot.dimension}`
-                    }
-
-                    return null
-                }))
-                if (res?.message) {
-                    if (window.potions().some(Boolean)) yield* wrap(window.takePotions(), args.interrupt)
-                    if (window.ingredientItem()) yield* wrap(window.takeIngredient(), args.interrupt)
-                } else {
-                    throw `Didn't got a response to my question`
+                } catch (error) {
+                    throw new GameError(`Didn't got a response to my question`, {
+                        cause: error,
+                    })
                 }
             }
 
             if (!window.fuel && !window.fuelItem()) {
                 const fuelItem = bot.searchInventoryItem(window, 'blaze_powder')
-                if (!fuelItem) { throw `I have no blaze powder` }
+                if (!fuelItem) { throw new GameError(`I have no blaze powder`) }
                 yield* wrap(window.putFuel(fuelItem.type, fuelItem.metadata, 1), args.interrupt)
             }
 
@@ -456,7 +467,7 @@ module.exports = {
                     bot.bot.clickWindow(ingredientItem.slot, 0, 0)
                     yield
 
-                    throw `I don't have the required bottles`
+                    throw new GameError(`I don't have the required bottles`)
                 }
 
                 yield
@@ -472,7 +483,7 @@ module.exports = {
                 yield* wrap(window.takeIngredient(), args.interrupt)
             }
 
-            if (res.length !== args.count) { throw `Something aint right` }
+            if (res.length !== args.count) { throw new GameError(`I took out ${res.length} potions but expected ${args.count}`) }
             return res
         } finally {
             if (window) bot.bot.closeWindow(window)

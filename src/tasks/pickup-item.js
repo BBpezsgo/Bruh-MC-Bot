@@ -5,6 +5,9 @@ const { isItemEquals } = require('../utils/other')
 const goto = require('./goto')
 const { sleepTicks, runtimeArgs } = require('../utils/tasks')
 const move = require('./move')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @typedef {({
@@ -82,19 +85,19 @@ module.exports = {
         })()
         if (!nearest) {
             if ('item' in args) {
-                throw `Item entity not found`
+                throw new EnvironmentError(`Item entity not found`)
             } else {
                 return
             }
         }
 
         const item = nearest.getDroppedItem()
-        if (!item) { throw `This aint an item` }
+        if (!item) { throw new EnvironmentError(`This aint an item`) }
 
-        if (bot.isInventoryFull(item.name)) { throw `Inventory is full` }
+        if (bot.isInventoryFull(item.name)) { throw new GameError(`Inventory is full`) }
 
         const entityLock = bot.env.tryLockEntity(bot.username, nearest)
-        if (!entityLock) { throw `Entity is locked` }
+        if (!entityLock) { throw new GameError(`Entity is locked`) }
 
         if (args.minLifetime) {
             while (true) {
@@ -151,9 +154,13 @@ module.exports = {
                 while (true) {
                     yield* sleepTicks()
                     if (isCollected) { break }
-                    if (!nearest.isValid) { throw `The item disappeared` }
+                    if (!nearest.isValid) { throw new EnvironmentError(`The item disappeared`) }
                     const waitTime = performance.now() - startWaitAt
-                    if (waitTime > 5000) { throw `Couldn't pick up the item after ${waitTime.toFixed(2)} sec` }
+                    if (waitTime > 5000) {
+                        throw new GameError(`Couldn't pick up the item`, {
+                            cause: TimeoutError.fromTime(waitTime)
+                        })
+                    }
 
                     goal.proximity.target(nearest.position)
                     if (bot.bot.entity.position.distanceTo(nearest.position) > 0.5) {
@@ -177,7 +184,7 @@ module.exports = {
             entityLock.unlock()
         }
 
-        if (!isCollected) { throw `Couldn't pick up the item` }
+        if (!isCollected) { throw new GameError(`Couldn't pick up the item`) }
     },
     id: function(args) {
         if ('item' in args) {

@@ -18,6 +18,8 @@ const config = require('./config')
 const Freq = require('./utils/freq')
 const BlockLock = require('./locks/block-lock')
 const EntityLock = require('./locks/entity-lock')
+const GameError = require('./errors/game-error')
+const EnvironmentError = require('./errors/environment-error')
 
 /**
  * @typedef {{
@@ -706,7 +708,7 @@ module.exports = class Environment {
      */
     saveChest(bot, chestPosition) {
         const chestBlock = bot.bot.blockAt(chestPosition.xyz(bot.dimension))
-        if (chestBlock.name !== 'chest') throw `This aint a chest`
+        if (chestBlock.name !== 'chest') throw new EnvironmentError(`This aint a chest`)
         /** @type {SavedChest} */
         const saved = {
             position: chestPosition,

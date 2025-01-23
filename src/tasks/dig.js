@@ -9,6 +9,11 @@ const Vec3Dimension = require('../utils/vec3-dimension')
 const { pickupItem } = require('../tasks')
 const Freq = require('../utils/freq')
 const { isItemEquals } = require('../utils/other')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const PermissionError = require('../errors/permission-error')
+const KnowledgeError = require('../errors/knowledge-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @type {import('../task').TaskDef<{
@@ -26,7 +31,7 @@ module.exports = {
     task: function*(bot, args) {
         if (!args.block) { return { digged: [], itemsDelta: new Freq(isItemEquals) } }
 
-        if (bot.quietMode) { throw `Can't dig in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't dig in quiet mode`) }
 
         while (bot.env.isBlockLocked(new Vec3Dimension(args.block, bot.dimension))) {
             if (args.skipIfAllocated) return { digged: [], itemsDelta: new Freq(isItemEquals) }
@@ -108,7 +113,9 @@ module.exports = {
 
                 if (playerStandingOnBlock) { continue }
             } else {
-                throw `Someone standing on the block I want to dig`
+                throw new EnvironmentError(`Someone standing on the block I want to dig`, {
+                    cause: TimeoutError.fromTime(performance.now() - waitingForPlayersSince)
+                })
             }
 
             waitingForPlayersSince = performance.now()
@@ -125,9 +132,9 @@ module.exports = {
 
                     if (!current.canHarvest(null)) {
                         tool = bot.mc.getCorrectTool(current, bot.bot)
-                        if (!tool) { throw `I don't know any tool that can dig ${current.displayName}` }
+                        if (!tool) { throw new KnowledgeError(`I don't know any tool that can dig ${current.displayName}`) }
 
-                        if (!tool.has) { throw 'No tool' }
+                        if (!tool.has) { throw new GameError(`No tool`) }
                     }
 
                     // console.log(`[Bot "${bot.username}"] Tool:`, tool)
@@ -147,11 +154,11 @@ module.exports = {
                     }
 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
-                        throw `Can't dig ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`
+                        throw new GameError(`Can't dig ${current.displayName} with ${bot.bot.heldItem?.displayName ?? 'hand'}`)
                     }
 
                     if (current.name === 'air') {
-                        throw `Can't dig air`
+                        throw new GameError(`Can't dig air`)
                     }
 
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
@@ -206,7 +213,7 @@ module.exports = {
                     const distance = position.position.distanceTo(nearestEntity.position)
                     if (distance < 1.5) {
                         if (bot.isInventoryFull()) {
-                            throw `Inventory is full`
+                            throw new GameError(`Inventory is full`)
                         }
 
                         try {

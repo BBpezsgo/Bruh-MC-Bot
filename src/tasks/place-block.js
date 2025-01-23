@@ -6,6 +6,9 @@ const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const config = require('../config')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 const interactableBlocks = Object.freeze([
     'acacia_door',
@@ -221,12 +224,12 @@ function getCorrectBlock(itemName) {
 module.exports = {
     task: function*(bot, args) {
         if (args.interrupt.isCancelled) { return }
-        if (bot.quietMode) { throw `Can't place block in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't place block in quiet mode`) }
 
         const item = ('item' in args) ? ((typeof args.item === 'string') ? args.item : args.item.name) : getCorrectItem(args.block)
         const block = ('block' in args) ? args.block : getCorrectBlock((typeof args.item === 'string') ? args.item : args.item.name)[0]
 
-        if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw `I don't have ${item}` }
+        if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw new GameError(`I don't have ${item}`) }
 
         const allFaceVectors = Object.freeze([
             new Vec3(1, 0, 0),
@@ -457,13 +460,13 @@ module.exports = {
                 }
             }
 
-            if (!position) { throw `Couldn't find a place to place the block` }
+            if (!position) { throw new EnvironmentError(`Couldn't find a place to place the block`) }
         }
 
-        if (!placeInfo) { throw `Couldn't find a reference block` }
+        if (!placeInfo) { throw new EnvironmentError(`Couldn't find a reference block`) }
 
         for (const scaffoldingPos of placeInfo.scaffoldingBlocks) {
-            if (!args.scaffoldingBlocks?.length) { throw `Couldn't find a reference block` }
+            if (!args.scaffoldingBlocks?.length) { throw new EnvironmentError(`Couldn't find a reference block`) }
             yield* this.task(bot, {
                 block: args.scaffoldingBlocks[0],
                 cheat: args.cheat,
@@ -494,7 +497,7 @@ module.exports = {
                     blockHere = bot.bot.blockAt(position)
 
                     if (!args.clearGrass) {
-                        throw `Can't place the block because the block above is "${blockHere.name}" and I'm not allowed to break it`
+                        throw new PermissionError(`Can't place the block because the block above is "${blockHere.name}" and I'm not allowed to break it`)
                     }
 
                     yield* goto.task(bot, {
@@ -542,12 +545,12 @@ module.exports = {
                     }
 
                     if (blockHere && Minecraft.replaceableBlocks[blockHere.name] !== 'yes') {
-                        throw `There is already a block here: ${blockHere.name}`
+                        throw new EnvironmentError(`There is already a block here: ${blockHere.name}`)
                     }
 
                     const referenceBlock = bot.bot.blockAt(referencePosition)
                     if (!referenceBlock || Minecraft.replaceableBlocks[referenceBlock.name]) {
-                        throw `Invalid reference block ${referenceBlock.name}`
+                        throw new EnvironmentError(`Invalid reference block ${referenceBlock.name}`)
                     }
 
                     if (args.interrupt.isCancelled) { return }
@@ -556,7 +559,7 @@ module.exports = {
                         if (args.cheat) {
                             yield* wrap(bot.commands.sendAsync(`/give @p ${item}`), args.interrupt)
                         } else {
-                            throw `I don't have ${item}`
+                            throw new GameError(`I don't have ${item}`)
                         }
                     }
 

@@ -1,5 +1,6 @@
 'use strict'
 
+const GameError = require('../errors/game-error')
 const { sleepG, wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
 
@@ -13,11 +14,11 @@ module.exports = {
         if (args.interrupt.isCancelled) { return }
 
         let items = bot.bot.inventory.items()
-        if (items.length === 0) { throw `I don't have anything` }
+        if (items.length === 0) { throw new GameError(`I don't have anything`) }
 
         const target = bot.env.getPlayerPosition(args.player)
 
-        if (!target) { throw `Can't find ${args.player}` }
+        if (!target) { throw new GameError(`Can't find ${args.player}`) }
 
         yield* goto.task(bot, {
             point: target,
@@ -68,7 +69,7 @@ module.exports = {
             }
         }
 
-        if (!tossedSomething) { throw `Don't have anything` }
+        if (!tossedSomething) { throw new GameError(`Don't have anything`) }
     },
     id: function(args) {
         return `give-all-${args.player}`

@@ -7,6 +7,7 @@ const { Vec3 } = require('vec3')
 const { incrementalNeighbors } = require('../utils/other')
 const config = require('../config')
 const Freq = require('../utils/freq')
+const GameError = require('../errors/game-error')
 
 /**
  * @typedef {{
@@ -335,7 +336,9 @@ module.exports = {
                 }
             }
             if (blockCountBefore === remainingBlocks.length) {
-                throw lastError ?? `Failed`
+                throw new GameError(`Failed to build the building`, {
+                    cause: lastError
+                })
             }
         }
 
@@ -343,7 +346,9 @@ module.exports = {
             const alreadyHere = bot.bot.blockAt(block.position)
             if (!alreadyHere) { continue }
             if (areBlockEqual(alreadyHere, block)) { continue }
-            throw `Failed`
+            throw new GameError(`Failed to build the building`, {
+                cause: new Error(`Block at ${block.position} aint match`)
+            })
         }
     },
     id: `build`,

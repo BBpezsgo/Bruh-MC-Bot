@@ -2,6 +2,8 @@
 
 const { Item } = require('prismarine-item')
 const { wrap, sleepTicks } = require('../utils/tasks')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 
 /**
  * @type {import('../task').TaskDef<'ok' | 'full', {
@@ -25,7 +27,7 @@ const { wrap, sleepTicks } = require('../utils/tasks')
  */
 module.exports = {
     task: function*(bot, args) {
-        if (bot.quietMode) { throw `Can't eat in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't eat in quiet mode`) }
 
         let food = null
         if ('food' in args) {
@@ -37,11 +39,9 @@ module.exports = {
                 includeBadEffects: args.includeBadEffects,
                 includeSideEffects: args.includeSideEffects,
             })
-            if (foods.length === 0) { throw `I have no food` }
+            if (foods.length === 0) { throw new GameError(`I have no food`) }
             food = foods[0]
         }
-
-        if (!food) { throw `No food` }
 
         if (bot.bot.food >= 20 &&
             food.name !== 'chorus_fruit') { return 'full' }

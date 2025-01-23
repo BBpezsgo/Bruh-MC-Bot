@@ -4,6 +4,7 @@ const { sleepG, wrap, race, withInterruption: withCancellation, sleepTicks, runt
 const goto = require('./goto')
 const config = require('../config')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
 
 /**
  * @type {import('../task').TaskDef<void, {
@@ -33,19 +34,27 @@ module.exports = {
                 console.warn(`[Bot "${bot.username}"] Can't find ${args.player}, asking for location ...`)
 
                 const askTask = (/** @type {() => import('../task').Task<Vec3Dimension>} */ function*() {
-                    let _target = args.response ? (yield* wrap(args.response.askPosition(`I lost you. Where are you?`, 120000, args.player)))?.message : null
-
-                    if (!_target) {
-                        _target = bot.env.getPlayerPosition(args.player)
-                        if (!_target) { throw `Can't find ${args.player}` }
-                        console.warn(`[Bot "${bot.username}"] Player not responded, using outdated position`)
-                        return _target
+                    let _error = null
+                    try {
+                        if (args.response) {
+                            const _target = (yield* wrap(args.response.askPosition(`I lost you. Where are you?`, 120000, args.player))).message
+                            args.response.respond(`${_target.x} ${_target.y} ${_target.z} in ${_target.dimension} I got it`, args.player)
+                            console.log(`[Bot "${bot.username}"] Location response: ${_target}`)
+                            bot.env.setPlayerPosition(args.player, _target)
+                            return _target
+                        }
+                    } catch (error) {
+                        _error = error
                     }
 
-                    args.response.respond(`${_target.x} ${_target.y} ${_target.z} in ${_target.dimension} I got it`, args.player)
-                    console.log(`[Bot "${bot.username}"] Location response: ${_target}`)
-                    bot.env.setPlayerPosition(args.player, _target)
-                    return _target
+                    const target = bot.env.getPlayerPosition(args.player)
+                    if (!target) {
+                        throw new GameError(`Can't find ${args.player}`, {
+                            cause: _error
+                        })
+                    }
+                    console.warn(`[Bot "${bot.username}"] Player not responded, using outdated position`)
+                    return target
                 }())
 
                 const foundTask = (/** @type {() => import('../task').Task<Vec3Dimension>} */ function*() {

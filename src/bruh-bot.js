@@ -34,6 +34,10 @@ const config = require('./config')
 const Freq = require('./utils/freq')
 const ItemLock = require('./locks/item-lock')
 const CancelledError = require('./errors/cancelled-error')
+const GameError = require('./errors/game-error')
+const TimeoutError = require('./errors/timeout-error')
+const EnvironmentError = require('./errors/environment-error')
+const KnowledgeError = require('./errors/knowledge-error')
 
 //#endregion
 
@@ -87,15 +91,15 @@ const priorities = Object.freeze({
  *   askYesNo: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
  *     message: true | false;
  *     sender: string;
- *   } | null>;
+ *   }>;
  *   askPosition: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
  *     message: Vec3Dimension;
  *     sender: string;
- *   } | null>;
+ *   }>;
  *   ask: (question: string, timeout: number, player?: string, detailProvider?: (question: string) => string) => Promise<{
  *     message: string;
  *     sender: string;
- *   } | null>;
+ *   }>;
  * }} ChatResponseHandler
  */
 
@@ -304,10 +308,10 @@ module.exports = class BruhBot {
                         }
                         return 'ignore'
                     })
-                    return response ? {
+                    return {
                         sender: response.sender,
                         message: parse(response.message),
-                    } : null
+                    }
                 },
                 askPosition: async (question, timeout, player, detailProvider) => {
                     const _send = player ? ((/** @type {string} */ v) => this.bot.whisper(player, stringifyMessage(v))) : send
@@ -324,13 +328,10 @@ module.exports = class BruhBot {
                         }
                         return 'ignore'
                     })
-                    if (res) {
-                        return {
-                            sender: res.sender,
-                            message: parseLocationH(res.message),
-                        }
+                    return {
+                        sender: res.sender,
+                        message: parseLocationH(res.message),
                     }
-                    return null
                 },
                 ask: (question, timeout, player, detailProvider) => {
                     const _send = player ? ((/** @type {string} */ v) => this.bot.whisper(player, stringifyMessage(v))) : send
@@ -712,7 +713,7 @@ module.exports = class BruhBot {
                 'spawner',
                 'composter',
             ]
-                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new KnowledgeError(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.blocksCantBreak.add(v)));
 
             ([
@@ -723,7 +724,7 @@ module.exports = class BruhBot {
                 'end_portal',
                 'nether_portal',
             ]
-                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new KnowledgeError(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.blocksToAvoid.add(v)));
 
             ([
@@ -735,14 +736,14 @@ module.exports = class BruhBot {
                 'weeping_vines',
                 'weeping_vines_plant',
             ]
-                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new KnowledgeError(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.climbables.add(v)));
 
             ([
                 'short_grass',
                 'tall_grass',
             ]
-                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new Error(`Unknown block "${v}"`) })())
+                .map(v => this.bot.registry.blocksByName[v]?.id ?? (() => { throw new KnowledgeError(`Unknown block "${v}"`) })())
                 .forEach(v => this.permissiveMovements.replaceables.add(v)));
 
             // @ts-ignore
@@ -1133,19 +1134,21 @@ module.exports = class BruhBot {
                     task: function*(bot, args) {
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
-                            location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
-                            if (location) {
+                            try {
+                                location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
                                 response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
-                            } else {
-                                throw `I can't find you`
+                            } catch (error) {
+                                throw new GameError(`I can't find you`, {
+                                    cause: error
+                                })
                             }
                         }
                         if (bot.dimension !== location.dimension) {
-                            throw `We are in a different dimension`
+                            throw new GameError(`We are in a different dimension`)
                         }
                         const elytraItem = bot.searchInventoryItem(null, 'elytra')
                         if (!elytraItem) {
-                            throw `I have no elytra`
+                            throw new GameError(`I have no elytra`)
                         }
 
                         if (!bot.bot.elytrafly) {
@@ -1591,11 +1594,13 @@ module.exports = class BruhBot {
                         const playerEntity = bot.bot.players[args.player]?.entity
                         let location = bot.env.getPlayerPosition(args.player, 10000)
                         if (!location) {
-                            location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
-                            if (location) {
+                            try {
+                                location = (yield* taskUtils.wrap(response.askPosition(`Where are you?`, 30000)))?.message
                                 response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
-                            } else {
-                                throw `I can't find you`
+                            } catch (error) {
+                                throw new GameError(`I can't find you`, {
+                                    cause: error
+                                })
                             }
                         }
 
@@ -1665,7 +1670,7 @@ module.exports = class BruhBot {
                     if (location) {
                         response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`)
                     } else {
-                        throw `I can't find you`
+                        throw new GameError(`I can't find you`)
                     }
                 }
                 if (this.memory.idlePosition &&
@@ -1701,12 +1706,12 @@ module.exports = class BruhBot {
                 const target = this.env.getPlayerPosition(sender)
 
                 if (!target) {
-                    throw `Can't find ${sender}`
+                    throw new GameError(`Can't find ${sender}`)
                 }
 
                 if (target.dimension &&
                     this.dimension !== target.dimension) {
-                    throw `We are in a different dimension`
+                    throw new GameError(`We are in a different dimension`)
                 }
 
                 const task = this.tasks.push(this, tasks.enderpearlTo, {
@@ -1863,7 +1868,7 @@ module.exports = class BruhBot {
                 if (!message[1]) {
                     response.ask(`Where?`, 15000)
                         .then(response => confirm(response.message))
-                        .catch(reason => response.respond(reason))
+                        .catch(console.error)
                 } else {
                     confirm(message[1])
                 }
@@ -2288,7 +2293,7 @@ module.exports = class BruhBot {
                             this.tasks.push(this, {
                                 task: function*(bot, args) {
                                     const milk = bot.searchInventoryItem(null, 'milk_bucket')
-                                    if (!milk) { throw `I have no milk` }
+                                    if (!milk) { throw new GameError(`I have no milk`) }
                                     yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'), args.interrupt)
                                     yield* taskUtils.wrap(bot.bot.consume(), args.interrupt)
                                 },
@@ -3037,7 +3042,10 @@ module.exports = class BruhBot {
                         }
                         // console.log(`[Bot "${bot.username}"] Food gathered`, res)
                     } catch (error) {
-                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
+                        if (error instanceof Error && error.message.startsWith(`Can't gather `)) {
+                        } else {
+                            console.error(`[Bot "${bot.username}"]`, error)
+                        }
                     }
                     break
                 }
@@ -3053,7 +3061,10 @@ module.exports = class BruhBot {
                         })
                         // console.log(`[Bot "${bot.username}"] Equipment ${item.item} gathered`, res)
                     } catch (error) {
-                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
+                        if (error instanceof Error && error.message.startsWith(`Can't gather `)) {
+                        } else {
+                            console.error(`[Bot "${bot.username}"]`, error)
+                        }
                     }
                     break
                 }
@@ -3070,7 +3081,10 @@ module.exports = class BruhBot {
                         // console.log(`[Bot "${bot.username}"] Preferred equipment ${item.prefer} gathered`, res)
                         break
                     } catch (error) {
-                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
+                        if (error instanceof Error && error.message.startsWith(`Can't gather `)) {
+                        } else {
+                            console.error(`[Bot "${bot.username}"]`, error)
+                        }
                     }
 
                     try {
@@ -3083,7 +3097,10 @@ module.exports = class BruhBot {
                         // console.log(`[Bot "${bot.username}"] Equipment gathered`, res)
                         break
                     } catch (error) {
-                        if (!String(error).startsWith(`Can't gather `)) console.error(`[Bot "${bot.username}"]`, error)
+                        if (error instanceof Error && error.message.startsWith(`Can't gather `)) {
+                        } else {
+                            console.error(`[Bot "${bot.username}"]`, error)
+                        }
                     }
                     break
                 }
@@ -3136,7 +3153,10 @@ module.exports = class BruhBot {
                 ...taskUtils.runtimeArgs(args),
             })
         } catch (error) {
-            console.warn(`[Bot "${bot.username}"]`, error)
+            if (error instanceof Error && error.message === 'There is no composter') {
+            } else {
+                console.warn(`[Bot "${bot.username}"]`, error)
+            }
         }
 
         return harvested
@@ -3458,7 +3478,7 @@ module.exports = class BruhBot {
             }
             if (timeoutAt && timeoutAt < performance.now()) {
                 chatAwait.done = true
-                return null
+                throw TimeoutError.fromTime(timeout)
             }
             await taskUtils.sleep(100)
         }
@@ -3500,7 +3520,7 @@ module.exports = class BruhBot {
      */
     *equip(item, destination = 'hand') {
         const _item = (typeof item === 'object' && 'slot' in item) ? item : this.searchInventoryItem(null, item)
-        if (!_item) { throw `Item ${stringifyItemH(item)} not found to equip` }
+        if (!_item) { throw new GameError(`Item ${stringifyItemH(item)} not found to equip`) }
 
         const sourceSlot = _item.slot
         const destSlot = this.bot.getEquipmentDestSlot(destination)
@@ -4175,7 +4195,7 @@ module.exports = class BruhBot {
             if (timeout.done()) {
                 this.bot.off('mount', onMount)
                 return
-                // throw new Error(`Could not mount the entity`)
+                // throw new GameError(`Could not mount the entity`)
             }
             yield
         }
@@ -4309,11 +4329,11 @@ module.exports = class BruhBot {
             }
             holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
             if (!holds || !isItemEquals(holds, item)) {
-                throw `I have no ${stringifyItemH(item)}`
+                throw new GameError(`I have no ${stringifyItemH(item)}`)
             }
 
             if (this.bot.blocks.at(above)?.name !== 'air') {
-                throw `Can't place \"${item}\": there is something else there (${this.bot.blocks.at(above)?.name})`
+                throw new EnvironmentError(`Can't place \"${item}\": there is something else there (${this.bot.blocks.at(above)?.name})`)
             }
 
             yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
@@ -4596,7 +4616,7 @@ module.exports = class BruhBot {
             await this.bot.lookAt(block.position.offset(0.5, 0.5, 0.5), force)
         } else {
             // Block is obstructed return error?
-            throw new Error('Block not in view')
+            throw new EnvironmentError('Block not in view')
         }
     }
 

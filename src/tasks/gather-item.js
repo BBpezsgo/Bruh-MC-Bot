@@ -20,6 +20,10 @@ const BruhBot = require('../bruh-bot')
 const Freq = require('../utils/freq')
 const brew = require('./brew')
 const Minecraft = require('../minecraft')
+const GameError = require('../errors/game-error')
+const TimeoutError = require('../errors/timeout-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 const planningLogs = false
 
@@ -1417,7 +1421,7 @@ const planners = [
                 }, [...planSoFar])
                 if (planResult(bucketPlan, 'bucket') <= 0) {
                     unlockPlanItems(bucketPlan)
-                    // throw `Can't milk cow: aint have a bucket`
+                    // throw new GameError(`Can't milk cow: aint have a bucket`)
                     return null
                 }
                 const future = new PredictedEnvironment(planSoFar.flat(), bot.mc.registry)
@@ -1429,7 +1433,7 @@ const planners = [
                 })
                 if (!entity) {
                     unlockPlanItems(bucketPlan)
-                    // throw `Can't milk any cow because there is aint any`
+                    // throw new GameError(`Can't milk any cow because there is aint any`)
                     return null
                 }
                 return [
@@ -1462,7 +1466,7 @@ const planners = [
                     force: false,
                 }, [...planSoFar])
                 if (planResult(bowlPlan, 'bowl') <= 0) {
-                    // throw `Can't milk mooshroom: aint have a bowl`
+                    // throw new GameError(`Can't milk mooshroom: aint have a bowl`)
                     unlockPlanItems(bowlPlan)
                     return null
                 }
@@ -1475,7 +1479,7 @@ const planners = [
                 })
                 if (!entity) {
                     unlockPlanItems(bowlPlan)
-                    // throw `Can't milk any mooshroom because there is aint any`
+                    // throw new GameError(`Can't milk any mooshroom because there is aint any`)
                     return null
                 }
                 return [
@@ -1845,14 +1849,14 @@ function* evaluatePlan(bot, plan, args) {
                             ...runtimeArgs(args),
                         })
                         let itemToFill = bot.searchInventoryItem(null, step.item)
-                        if (!itemToFill) { throw `I have no ${stringifyItemH(step.item)}` }
+                        if (!itemToFill) { throw new GameError(`I have no ${stringifyItemH(step.item)}`) }
 
                         yield* bot.equip(itemToFill)
 
                         let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
-                        if (!block) { throw `The chunk where I want to fill my ${stringifyItemH(itemToFill)} aint loaded` }
+                        if (!block) { throw new GameError(`The chunk where I want to fill my ${stringifyItemH(itemToFill)} aint loaded`) }
 
-                        if (block.name !== step.block.block.name) { throw `Aint ${step.block.block.name}` }
+                        if (block.name !== step.block.block.name) { throw new EnvironmentError(`Aint ${step.block.block.name}`) }
 
                         let failStreak = 0
                         /** @type {Set<string>} */
@@ -1876,7 +1880,7 @@ function* evaluatePlan(bot, plan, args) {
 
                                 const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
                                 if (filledItemAfter <= filledItemBefore) {
-                                    throw `Failed to fill my ${stringifyItemH(itemToFill)}`
+                                    throw new GameError(`Failed to fill my ${stringifyItemH(itemToFill)}`)
                                 }
                                 break
                             } catch (error) {
@@ -1905,7 +1909,7 @@ function* evaluatePlan(bot, plan, args) {
                         const chestBlock = bot.bot.blockAt(step.chest.xyz(bot.dimension))
                         if (!chestBlock || chestBlock.name !== 'chest') {
                             bot.env.deleteChest(step.chest)
-                            throw `Chest disappeared`
+                            throw new EnvironmentError(`Chest disappeared`)
                         }
                         if (openedChest && !step.chest.equals(openedChest.chestPosition)) {
                             openedChest.chest.close()
@@ -1923,20 +1927,20 @@ function* evaluatePlan(bot, plan, args) {
                         }
                         const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
                         if (took < step.count) {
-                            throw `Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`
+                            throw new GameError(`Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`)
                         }
                         continue
                     }
                     case 'harvest-mob': {
                         const entity = bot.bot.nearestEntity(e => e.id === step.entity.id)
                         if (!entity) {
-                            throw `The ${step.entity.expectedType} disappeared`
+                            throw new EnvironmentError(`The ${step.entity.expectedType} disappeared`)
                         }
                         if (!entity.isValid) {
-                            throw `The ${step.entity.expectedType} is invalid`
+                            throw new EnvironmentError(`The ${step.entity.expectedType} is invalid`)
                         }
                         if (entity.name !== step.entity.expectedType) {
-                            throw `The ${step.entity.expectedType} disappeared`
+                            throw new EnvironmentError(`The ${step.entity.expectedType} disappeared`)
                         }
                         yield* goto.task(bot, {
                             entity: entity,
@@ -1944,11 +1948,11 @@ function* evaluatePlan(bot, plan, args) {
                             ...runtimeArgs(args),
                         })
                         if (!entity.isValid) {
-                            throw `The ${step.entity.expectedType} is invalid`
+                            throw new EnvironmentError(`The ${step.entity.expectedType} is invalid`)
                         }
                         const toolItem = bot.searchInventoryItem(null, step.tool)
                         if (!toolItem) {
-                            throw `I have no ${step.tool}`
+                            throw new GameError(`I have no ${step.tool}`)
                         }
                         yield* wrap(bot.bot.equip(toolItem, 'hand'), args.interrupt)
                         yield* sleepTicks()
@@ -1974,7 +1978,7 @@ function* evaluatePlan(bot, plan, args) {
                                 const has = bot.bot.inventory.count(ingredient.id, ingredient.metadata)
                                 const need = Math.abs(ingredient.count) * step.count
                                 if (has < need) {
-                                    throw `Not enough ${bot.mc.registry.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${need}`
+                                    throw new GameError(`Not enough ${bot.mc.registry.items[ingredient.id].name} for ${step.item}, I have ${has} but I need ${need}`)
                                 }
                             }
                         }
@@ -1989,7 +1993,7 @@ function* evaluatePlan(bot, plan, args) {
                             if (!tableBlock) {
                                 const tableItem = bot.searchInventoryItem(null, 'crafting_table')
                                 if (!tableItem) {
-                                    throw `I have no crafting table`
+                                    throw new GameError(`I have no crafting table`)
                                 }
                                 yield* placeBlock.task(bot, {
                                     item: tableItem.name,
@@ -2001,11 +2005,11 @@ function* evaluatePlan(bot, plan, args) {
                                     maxDistance: config.gatherItem.craftingTableSearchRadius,
                                 })
                                 if (!tableBlock) {
-                                    throw `Failed to place down the crafting table`
+                                    throw new GameError(`Failed to place down the crafting table`)
                                 }
                             }
                             if (!tableBlock) {
-                                throw `There is no crafting table`
+                                throw new EnvironmentError(`There is no crafting table`)
                             }
                             yield* goto.task(bot, {
                                 block: tableBlock.position,
@@ -2094,41 +2098,43 @@ function* evaluatePlan(bot, plan, args) {
                     }
                     case 'bundle-out': {
                         const bundleItem = bundle.bestBundleWithItem(bot.bot, step.item)
-                        if (!bundleItem) { throw `Bundle disappeared` }
+                        if (!bundleItem) { throw new GameError(`Bundle disappeared`) }
                         const content = bundle.content(bundleItem.nbt)
-                        if (!content) { throw `Bundle content sublimated` }
+                        if (!content) { throw new GameError(`Bundle content sublimated`) }
                         const items = content.filter(v => isItemEquals(v.name, step.item))
-                        if (items.length === 0) { throw `Item disappeared from the bundle` }
-                        if (items[0].count < step.count) { throw `Item count decreased in the bundle` }
+                        if (items.length === 0) { throw new GameError(`Item disappeared from the bundle`) }
+                        if (items[0].count < step.count) { throw new GameError(`Item count decreased in the bundle`) }
 
                         const takenOut = yield* wrap(bundle.takeOutItem(bot.bot, bot.mc.registry, bundleItem.slot, items[0].name), args.interrupt)
 
-                        if (takenOut.name !== items[0].name) { throw `Unexpected item taken out from the bundle` }
-                        if (takenOut.count !== items[0].count) { throw `Unexpected number of item taken out from the bundle` }
+                        if (takenOut.name !== items[0].name) { throw new GameError(`Unexpected item taken out from the bundle`) }
+                        if (takenOut.count !== items[0].count) { throw new GameError(`Unexpected number of item taken out from the bundle`) }
 
                         continue
                     }
                     case 'request-from-anyone': {
-                        if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
-                        if (!args.response) { throw `Can't ask anything` }
+                        if (bot.isLeaving) { throw new GameError(`Can't ask: currently leaving the game`) }
+                        if (!args.response) { throw new PermissionError(`Can't ask anything`) }
                         let requestPlayer
                         const res1 = yield* wrap(args.response.askYesNo(
                             (step.count === 1) ?
                                 `Can someone give me a ${stringifyItemH(step.item)}?` :
                                 `Can someone give me ${step.count} ${stringifyItemH(step.item)}?`,
                             30000))
-                        if (!res1 || !res1.message) { throw `:(` }
+                        if (!res1.message) { throw new GameError(`Nobody gave me ${step.item}`) }
 
                         bot.bot.whisper(requestPlayer, `I'm going to you for ${step.count} ${stringifyItemH(step.item)}`)
 
                         let location = bot.env.getPlayerPosition(requestPlayer, 10000)
                         if (!location) {
-                            if (bot.isLeaving) { throw `Can't ask: currently leaving the game` }
-                            location = (yield* wrap(args.response.askPosition(`Where are you?`, 30000, requestPlayer)))?.message
-                            if (location) {
+                            if (bot.isLeaving) { throw new GameError(`Can't ask: currently leaving the game`) }
+                            try {
+                                location = (yield* wrap(args.response.askPosition(`Where are you?`, 30000, requestPlayer)))?.message
                                 args.response.respond(`${location.x} ${location.y} ${location.z} in ${location.dimension} I got it`, requestPlayer)
-                            } else {
-                                throw `I can't find you`
+                            } catch (error) {
+                                throw new GameError(`I can't find you`, {
+                                    cause: error
+                                })
                             }
                         }
 
@@ -2150,7 +2156,7 @@ function* evaluatePlan(bot, plan, args) {
                         })
 
                         const interval = new Interval(20000)
-                        const timeout = new Interval(60000)
+                        const timeout = new Timeout(60000)
 
                         while (true) {
                             yield* sleepG(100)
@@ -2205,7 +2211,9 @@ function* evaluatePlan(bot, plan, args) {
                                         })
                                     }
                                 }
-                                throw `${requestPlayer} didn't give me ${step.count} ${step.item}`
+                                throw new GameError(`${requestPlayer} didn't give me ${step.count} ${step.item}`, {
+                                    cause: TimeoutError.fromTime(timeout)
+                                })
                             }
 
                             if (interval.done()) {
@@ -2248,12 +2256,10 @@ function* evaluatePlan(bot, plan, args) {
                                         }
                                     }
 
-                                    if (!block) {
-                                        throw `Chunk where I like to dig aint loaded`
-                                    }
+                                    if (!block) { throw new GameError(`Chunk where I like to dig aint loaded`) }
 
                                     if (block.name !== step.block.block.name) {
-                                        throw `Unexpected block at ${step.block.position}: expected ${step.block.block.name}, found ${block.name}`
+                                        throw new EnvironmentError(`Unexpected block at ${step.block.position}: expected ${step.block.block.name}, found ${block.name}`)
                                     }
 
                                     const digResult = yield* dig.task(bot, {
@@ -2266,7 +2272,7 @@ function* evaluatePlan(bot, plan, args) {
 
                                     if (digResult.itemsDelta.get(step.loot.item) < step.loot.count) {
                                         if (step.isGenerator) { continue }
-                                        throw `Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta.get(step.loot.item)}`
+                                        throw new GameError(`Couldn't dig ${step.loot.count} ${step.loot.item}: got ${digResult.itemsDelta.get(step.loot.item)}`)
                                     }
                                     break
                                 } catch (error) {
@@ -2651,12 +2657,12 @@ const def = {
 
             if (_planResult <= 0) {
                 planningRemoteLocks.forEach(v => v.unlock())
-                throw `Can't gather ${stringifyItemH(bestPlan.item)}`
+                throw new GameError(`Can't gather ${stringifyItemH(bestPlan.item)}`)
             }
 
             if (_planResult < args.count) {
                 planningRemoteLocks.forEach(v => v.unlock())
-                throw `I can only gather ${_planResult} ${stringifyItemH(bestPlan.item)}`
+                throw new GameError(`I can only gather ${_planResult} ${stringifyItemH(bestPlan.item)}`)
             }
 
             if (planningLogs) {

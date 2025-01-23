@@ -7,6 +7,9 @@ const { Block } = require('prismarine-block')
 const Minecraft = require('../minecraft')
 const goto = require('./goto')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 const hoes = Object.freeze([
     'wooden_hoe',
@@ -34,7 +37,7 @@ const hoes = Object.freeze([
 module.exports = {
     task: function*(bot, args) {
         if (args.interrupt.isCancelled) { return 0 }
-        if (bot.quietMode) { throw `Can't hoe in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't hoe in quiet mode`) }
 
         let n = 0
 
@@ -51,7 +54,7 @@ module.exports = {
                 }
             }
             if (!hasHoe) {
-                throw `I don't have a hoe`
+                throw new GameError(`I don't have a hoe`)
             }
         }
 
@@ -69,7 +72,7 @@ module.exports = {
                 return
             }
 
-            throw `I don't have a hoe`
+            throw new GameError(`I don't have a hoe`)
         }
 
         /** @type {Vec3 | null} */
@@ -84,7 +87,7 @@ module.exports = {
         } else if ('nearPlayer' in args) {
             const target = bot.env.getPlayerPosition(args.nearPlayer)
             if (!target) {
-                throw `I can't find you`
+                throw new GameError(`I can't find you`)
             }
 
             water = bot.bot.findBlock({
@@ -93,7 +96,7 @@ module.exports = {
                 maxDistance: 4,
             })?.position.clone()
             if (!water) {
-                throw `There is no water`
+                throw new EnvironmentError(`There is no water`)
             }
         } else if ('block' in args) {
             yield* goto.task(bot, {
@@ -113,7 +116,7 @@ module.exports = {
             try {
                 if (lock) {
                     if (above && !Minecraft.replaceableBlocks[above.name]) {
-                        throw `Can't break ${above.name ?? 'null'}`
+                        throw new GameError(`Can't break ${above.name ?? 'null'}`)
                     }
 
                     yield* goto.task(bot, {
@@ -125,7 +128,7 @@ module.exports = {
                         yield* bot.dig(above, true, false, args.interrupt)
                     }
                 }
-            } catch (error) {
+            } finally {
                 lock?.unlock()
             }
 

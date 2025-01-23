@@ -5,6 +5,8 @@ const Freq = require('../utils/freq')
 const { isItemEquals } = require('../utils/other')
 const { runtimeArgs } = require('../utils/tasks')
 const Vec3Dimension = require('../utils/vec3-dimension')
+const GameError = require('../errors/game-error')
+const PermissionError = require('../errors/permission-error')
 
 /**
  * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, {
@@ -15,7 +17,7 @@ module.exports = {
     task: function*(bot, args) {
         const dumped = new Freq(isItemEquals)
         if (args.items.length === 0) { return dumped }
-        if (bot.quietMode) { throw `Can't open chest in quiet mode` }
+        if (bot.quietMode) { throw new PermissionError(`Can't open chest in quiet mode`) }
 
         while (true) {
             yield

@@ -7,6 +7,8 @@ const { Vec3 } = require('vec3')
 const { Weapons } = require('minecrafthawkeye')
 const { Interval, directBlockNeighbors } = require('../utils/other')
 const config = require('../config')
+const GameError = require('../errors/game-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @param {import('../bruh-bot')} bot
@@ -114,14 +116,14 @@ module.exports = {
             })
             if (!fishingRod) {
                 if (n) { return n }
-                throw `I have no fishing rod`
+                throw new GameError(`I have no fishing rod`)
             }
 
             const water = findWater(bot, true)
 
             if (!water) {
                 if (n) { return n }
-                throw `There is no water`
+                throw new EnvironmentError(`There is no water`)
             }
 
             /** @type {import('./goto').GoalHawkeye} */ //@ts-ignore
@@ -157,12 +159,12 @@ module.exports = {
                 isValid: false,
             }, new Vec3(0, 0, 0), Weapons.bobber)
 
-            if (!grade) { throw `No` }
+            if (!grade) { throw new GameError(`No`) }
 
             // bot.debug.drawLines(grade.arrowTrajectoryPoints, [1, 1, 1])
 
             if (grade.blockInTrayect) {
-                throw `Block ${grade.blockInTrayect.displayName} is in the way`
+                throw new EnvironmentError(`Block ${grade.blockInTrayect.displayName} is in the way`)
             }
 
             yield* wrap(bot.bot.equip(fishingRod, 'hand'), args.interrupt)

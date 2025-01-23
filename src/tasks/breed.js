@@ -1,5 +1,7 @@
 'use strict'
 
+const GameError = require('../errors/game-error')
+const KnowledgeError = require('../errors/knowledge-error')
 const { basicRouteSearch } = require('../utils/other')
 const { wrap, runtimeArgs } = require('../utils/tasks')
 const goto = require('./goto')
@@ -69,7 +71,7 @@ module.exports = {
 
                 const foods = animalFoods[animalType]
                 if (!foods) {
-                    throw `I don't know what to feed to ${animalType}`
+                    throw new KnowledgeError(`I don't know what to feed to ${animalType}`)
                 }
 
                 let food
@@ -105,11 +107,11 @@ module.exports = {
                 }
 
                 if (!food) {
-                    throw `I don't have enough food`
+                    throw new GameError(`I don't have enough food`)
                 }
 
                 if (foodCount < 2) {
-                    throw `I don't have enough ${food} (${foodCount})`
+                    throw new GameError(`I don't have enough ${food} (${foodCount})`)
                 }
 
                 if (foodCount < animals.length) {
