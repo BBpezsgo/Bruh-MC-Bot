@@ -72,11 +72,18 @@ module.exports = class Interrupt {
     #isCancelled
 
     /** @type {boolean} */
+    #isInterrupted
+
+    /** @type {boolean} */
     get isCancelled() { return this.#isCancelled }
+
+    /** @type {boolean} */
+    get isInterrupted() { return this.#isInterrupted }
 
     constructor() {
         this.#emitter = new TaskEventEmitter()
         this.#isCancelled = false
+        this.#isInterrupted = false
     }
 
     /**
@@ -84,7 +91,13 @@ module.exports = class Interrupt {
      */
     trigger(type) {
         if (type === 'cancel') this.#isCancelled = true
+        if (type === 'interrupt') this.#isInterrupted = true
         this.#emitter.emit(type)
+    }
+
+    resume() {
+        this.#isCancelled = false
+        this.#isInterrupted = false
     }
 
     /** @param {TaskEventCallback<[InterruptType]>} callback */

@@ -390,7 +390,7 @@ function getTime(movements, path) {
 }
 
 /**
- * @type {import('../task').TaskDef<'ok' | 'here',
+ * @type {import('../task').TaskDef<'ok' | 'here' | 'invalidated',
  * (
  *   (GotoArgs | LookAtArgs | PlaceArgs | FleeArgs | GotoDimensionArgs | HawkeyeArgs | GotoEntityArgs | GoalArgs) & {
  *     options?: GeneralArgs;
@@ -601,11 +601,16 @@ module.exports = {
                         } else if (error.name === 'GoalChanged') {
                             retryCount++
                             // console.log(`[Bot "${bot.username}"] Goal changed, increasing retry count`)
-                        } else if (error.name === 'PathStopped' && args.interrupt.isCancelled) {
+                        } else if (error.name === 'PathStopped' && (args.interrupt.isCancelled || args.interrupt.isInterrupted)) {
                             console.log(`[Bot "${bot.username}"] Pathfinder stopped but that was expected`)
                         }
                     } finally {
                         args.interrupt.off(interrupt)
+                    }
+
+                    if (lastError?.name === 'PathStopped' && !args.goal.isValid()) {
+                        console.log(`[Bot "${bot.username}"] Pathfinder stopped because the goal was invalidated`)
+                        return 'invalidated'
                     }
 
                     if (_goal.isEnd(bot.bot.entity.position) ||
@@ -682,7 +687,7 @@ module.exports = {
         } else if ('goal' in args) {
             return `goto-goal`
         } else {
-            throw `What?`
+            throw new Error(`What?`)
         }
     },
     humanReadableId: function(args) {

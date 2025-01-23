@@ -226,6 +226,7 @@ class ManagedTask {
 
     resume() {
         if (this._status !== 'interrupted') return
+        this.args.interrupt.resume()
         this._status = 'running'
         if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" resumed`)
     }
