@@ -45,6 +45,15 @@ function resolveRangeWeapon(weapon) {
     const enchants = {}
     weapon.enchants.forEach(v => enchants[v.name] = v.lvl)
 
+    if (weapon.components) {
+        for (const component of weapon.components) {
+            if (component.type !== 'enchantments') continue
+            for (const enchantment of component.data.enchantments) {
+                enchants[enchantment.id] = enchantment.level
+            }
+        }
+    }
+
     switch (weapon.name) {
         case Weapons.bow: {
             let damage = 6
@@ -74,8 +83,8 @@ function resolveRangeWeapon(weapon) {
         case Weapons.crossbow: {
             let damage = 9
             let chargeTime = 1250
-            if (enchants['quick_charge']) {
-                const quickCharge = enchants['quick_charge']
+            if (enchants['quick_charge'] ?? enchants[29]) {
+                const quickCharge = enchants['quick_charge'] ?? enchants[29]
                 if (quickCharge > 5) {
                     chargeTime = Infinity
                 } else {
@@ -128,6 +137,9 @@ function searchRangeWeapon(bot) {
         if (ammo === 0) { continue }
 
         let resolved = resolveRangeWeapon(found)
+
+        if (!resolved) continue
+
         return {
             ...resolved,
             weapon: weapon,
