@@ -34,6 +34,8 @@ function isCrossbowCharged(item) {
         item.nbt.value['ChargedProjectiles'] &&
         (item.nbt.value['ChargedProjectiles'].type === 'list') &&
         (item.nbt.value['ChargedProjectiles'].value.value.length > 0)
+    ) || (
+        !!(item.components ?? []).find(v => v.type === 'charged_projectiles')?.data.projectiles.length
     )
 }
 

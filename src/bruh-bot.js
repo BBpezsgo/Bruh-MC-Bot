@@ -244,7 +244,8 @@ module.exports = class BruhBot {
                 'movement': MineFlayerMovement.plugin,
                 'freemotion': require('../plugins/freemotion'),
                 // 'elytra': require('mineflayer-elytrafly').elytrafly,
-            }
+            },
+            version: '1.20.4',
         })
 
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
@@ -863,14 +864,12 @@ module.exports = class BruhBot {
                 return
             }
 
-            const json = JSON.stringify(reason)
-
-            if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"disconnect.timeout"}}}') {
+            if (JSON.equals(reason, { type: "compound", value: { translate: { type: "string", value: "disconnect.timeout" } } })) {
                 console.error(`[Bot "${this.username}"] Kicked because I was AFK`)
                 return
             }
 
-            if (json === '{"type":"compound","value":{"translate":{"type":"string","value":"multiplayer.disconnect.kicked"}}}') {
+            if (JSON.equals(reason, { type: "compound", value: { translate: { type: "string", value: "multiplayer.disconnect.kicked" } } })) {
                 console.error(`[Bot "${this.username}"] Someone kicked me`)
                 return
             }
@@ -2853,7 +2852,7 @@ module.exports = class BruhBot {
 
             if ((!this.tasks.isIdleOrThinking || this.tasks.timeSinceImportantTask > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
                 this.tryUnequip()
-                    .then(v => v ? console.log(`[Bot "${this.username}"] Hand cleared`) : console.log(`[Bot "${this.username}"] Failed to clear hand`))
+                    .then(v => v || console.log(`[Bot "${this.username}"] Failed to clear hand`))
                     .catch(v => console.error(`[Bot "${this.username}"]`, v))
                 return
             }

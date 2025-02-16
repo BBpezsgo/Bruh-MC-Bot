@@ -7,6 +7,23 @@ const NBT = require('prismarine-nbt')
 const Iterable = require('./iterable')
 const { Item } = require('prismarine-item')
 
+JSON['equals'] = function(a, b) {
+    if (a === undefined || b === undefined) return false
+    if (a === null && b === null) return true
+    if (a === null || b === null) return false
+    if (a === b) return true
+    if (typeof a === 'object' && typeof b === 'object') {
+        for (const key in a) {
+            if (!Object.prototype.hasOwnProperty.call(a, key)) continue
+            if (!Object.prototype.hasOwnProperty.call(b, key)) continue
+            if (!(key in b)) return false
+            if (!JSON.equals(a[key], b[key])) return false
+        }
+        return true
+    }
+    return false
+}
+
 /**
  * @template {Point3} TPoint
  * @param {ReadonlyArray<Readonly<TPoint>>} blocks
