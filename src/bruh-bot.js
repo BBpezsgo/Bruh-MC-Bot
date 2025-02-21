@@ -1005,6 +1005,23 @@ module.exports = class BruhBot {
         }))
 
         handlers.push(/** @type {StringChatHandler} */({
+            match: 'mine',
+            command: (sender, message, response, isWhispered) => {
+                const task = this.tasks.push(this, require('./tasks/mine'), {
+
+                }, priorities.user, false, sender, isWhispered)
+                if (task) {
+                    response.respond(`Okay`)
+                    task.wait()
+                        .then(result => response.respond(`Done`))
+                        .catch(error => error instanceof CancelledError || response.respond(error))
+                } else {
+                    response.respond(`I'm already mining`)
+                }
+            },
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
             match: ['breed'],
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, {
