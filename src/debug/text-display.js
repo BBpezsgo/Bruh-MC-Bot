@@ -67,7 +67,7 @@ module.exports = class TextDisplay extends DisplayEntity {
      */
     get text() {
         this._lastEvent = performance.now()
-        return this._text ? JSON.parse(this._text) : ''
+        return this._text ? JSON.parse(this._text) : { text: '' }
     }
     set text(value) {
         this._lastEvent = performance.now()

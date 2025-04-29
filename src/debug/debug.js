@@ -399,12 +399,10 @@ module.exports = class Debug {
         for (const other of Object.values(TextDisplay.registry)) {
             if (other.equals({ _options: data, _position: point })) {
                 other.touch()
-                // @ts-ignore
                 return other
             }
         }
 
-        // @ts-ignore
         return new TextDisplay(this._bot.commands, {
             data: data,
             maxIdleTime: time,
@@ -432,12 +430,10 @@ module.exports = class Debug {
         for (const other of Object.values(BlockDisplay.registry)) {
             if (other.equals({ _options: data, _position: new Vec3(point.x, point.y, point.z) })) {
                 other.touch()
-                // @ts-ignore
                 return other
             }
         }
 
-        // @ts-ignore
         return new BlockDisplay(this._bot.commands, {
             data: data,
             position: point,
@@ -456,7 +452,6 @@ module.exports = class Debug {
     item(point, item, time = 30000, tags = []) {
         if (!this.enabled) { return null }
 
-        // @ts-ignore
         return new ItemDisplay(this._bot.commands, {
             data: {
                 item: {
@@ -481,7 +476,7 @@ module.exports = class Debug {
         BlockDisplay.tick(this._bot)
         ItemDisplay.tick(this._bot)
 
-        const n = Math.min(10, this._pointQueue.length)
+        const n = Math.min(1, this._pointQueue.length)
         for (let i = 0; i < n; i++) {
             const point = this._pointQueue.shift()
             if (point.endColor) {

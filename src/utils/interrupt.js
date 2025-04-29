@@ -65,14 +65,18 @@ class TaskEventEmitter {
 }
 
 module.exports = class Interrupt {
-    /** @readonly @type {TaskEventEmitter<[InterruptType]>} */
+    /** @readonly @type {TaskEventEmitter<[InterruptType, any]>} */
     #emitter
 
     /** @type {boolean} */
     #isCancelled
+    /** @type {any} */
+    #cancelReason
 
     /** @type {boolean} */
     #isInterrupted
+    /** @type {any} */
+    #interruptReason
 
     /** @type {boolean} */
     get isCancelled() { return this.#isCancelled }
@@ -84,31 +88,42 @@ module.exports = class Interrupt {
         this.#emitter = new TaskEventEmitter()
         this.#isCancelled = false
         this.#isInterrupted = false
+        this.#cancelReason = null
+        this.#interruptReason = null
     }
 
     /**
      * @param {InterruptType} type
+     * @param {any} [reason]
      */
-    trigger(type) {
-        if (type === 'cancel') this.#isCancelled = true
-        if (type === 'interrupt') this.#isInterrupted = true
-        this.#emitter.emit(type)
+    trigger(type, reason = undefined) {
+        if (type === 'cancel') {
+            this.#isCancelled = true
+            this.#cancelReason = reason
+        }
+        if (type === 'interrupt') {
+            this.#isInterrupted = true
+            this.#interruptReason = reason
+        }
+        this.#emitter.emit(type, reason)
     }
 
     resume() {
         this.#isCancelled = false
+        this.#cancelReason = undefined
         this.#isInterrupted = false
+        this.#interruptReason = undefined
     }
 
-    /** @param {TaskEventCallback<[InterruptType]>} callback */
+    /** @param {TaskEventCallback<[InterruptType, any]>} callback */
     once(callback) {
         this.#emitter.once(callback)
     }
-    /** @param {TaskEventCallback<[InterruptType]>} callback */
+    /** @param {TaskEventCallback<[InterruptType, any]>} callback */
     on(callback) {
         this.#emitter.on(callback)
     }
-    /** @param {TaskEventCallback<[InterruptType]>} callback */
+    /** @param {TaskEventCallback<[InterruptType, any]>} callback */
     off(callback) {
         this.#emitter.off(callback)
     }

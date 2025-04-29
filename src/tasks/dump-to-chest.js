@@ -7,6 +7,7 @@ const { runtimeArgs } = require('../utils/tasks')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const GameError = require('../errors/game-error')
 const PermissionError = require('../errors/permission-error')
+const EnvironmentError = require('../errors/environment-error')
 
 /**
  * @type {import('../task').TaskDef<Freq<import('../utils/other').ItemId>, {
@@ -54,7 +55,7 @@ module.exports = {
                 }
             }
 
-            if (!chestBlock) { throw allChestsFull ? `All chests full` : `There is no chest` }
+            if (!chestBlock) { throw new EnvironmentError(allChestsFull ? `All chests full` : `There is no chest`) }
 
             const remainingItemsToDump = args.items.map(v => ({ item: v.item, count: v.count }))
 

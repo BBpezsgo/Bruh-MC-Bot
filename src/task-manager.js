@@ -57,9 +57,10 @@ module.exports = class TaskManager {
      * @param {boolean} save
      * @param {string | null} byPlayer
      * @param {boolean} isWhispered
+     * @param {boolean} [isBackground]
      * @returns {ManagedTask<TResult, TArgs> | null}
      */
-    push(bot, task, args, priority, save, byPlayer, isWhispered) {
+    push(bot, task, args, priority, save, byPlayer, isWhispered, isBackground) {
         if (this.#isStopping) {
             return null
         }
@@ -113,6 +114,8 @@ module.exports = class TaskManager {
             isWhispered
         )
 
+        newTask._isBackground = !!isBackground
+
         let added = false
         for (let i = 0; i < this.#tasks.length; i++) {
             const other = this.#tasks[i]
@@ -131,7 +134,7 @@ module.exports = class TaskManager {
         for (let i = this.#tasks.length - 1; i >= 0; i--) {
             const task = this.#tasks[i]
             console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
-            task.cancel()
+            task.cancel('death')
             this.#tasks.splice(i)
             if (this.#previousTask === task) this.#previousTask = null
         }
@@ -192,7 +195,7 @@ module.exports = class TaskManager {
 
         if (focusedTaskIndex !== -1) {
             if (this.#previousTask && this.#previousTask !== focusedTask) {
-                this.#previousTask.interrupt()
+                this.#previousTask.interrupt({ repalcementTask: focusedTask })
             }
 
             this.#previousTask = focusedTask
@@ -217,15 +220,16 @@ module.exports = class TaskManager {
     }
 
     /**
+     * @param {any} [reason]
      * @returns {Promise<boolean>}
      */
-    cancel() {
+    cancel(reason) {
         this.#isStopping = true
         return new Promise(resolve => {
             let didSomething = false
             const interval = setInterval(() => {
                 for (const task of this.#tasks) {
-                    task.cancel()
+                    task.cancel(reason)
                     didSomething = true
                 }
                 if (this.#tasks.length === 0) {
@@ -243,9 +247,12 @@ module.exports = class TaskManager {
         }
     }
 
-    interrupt() {
+    /**
+     * @param {any} [reason]
+     */
+    interrupt(reason) {
         for (const task of this.#tasks) {
-            task.interrupt()
+            task.interrupt(reason)
         }
     }
 

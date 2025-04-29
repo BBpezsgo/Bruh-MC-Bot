@@ -142,7 +142,7 @@ module.exports = {
 
         const movements = new Movements(bot.bot, bot.restrictedMovements)
         movements.scafoldingBlocks.push(...scaffoldingBlocks.map(v => bot.bot.registry.blocksByName[v].id))
-        movements.maxDropDown = 1
+        movements.maxDropDown = 2
 
         while (true) {
             if (args.interrupt.isCancelled) { break }

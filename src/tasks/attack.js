@@ -369,6 +369,7 @@ const meleeWeapons = (/** @type {Array<{ name: string; damage: number; speed: nu
  */
 
 const undeadMobs = [
+    'bogged',
     'drowned',
     'husk',
     'phantom',
@@ -680,6 +681,8 @@ function calculateScore(bot, entity) {
 
     const hurtCooldownScoreMultiplier = bot.env.isEntityHurting(entity) ?? (bot.env.entityHurtTimeRecords[entity.id]?.length) ? 0.1 : 1
 
+    return attackRangeScore
+
     return ((
         attackRangeScore +
         healthScore +
@@ -775,6 +778,7 @@ module.exports = {
         }
 
         const ensureMovement = function() {
+            // @ts-ignore
             if (bot.bot.pathfinder.goal?.['name'] === goal.name) return
             const options = {
                 timeout: 100,
@@ -812,6 +816,7 @@ module.exports = {
         }
 
         const stopMovement = function() {
+            // @ts-ignore
             if (bot.bot.pathfinder.goal?.['name'] !== goal.name) {
                 return
             }
@@ -900,7 +905,7 @@ module.exports = {
                 if (!isAlive(target)) return { target: null, targetScore: 0 }
                 targetScore = calculateScore(bot, target)
             } else {
-                for (const id of Object.keys(args.targets).map(Number.parseInt)) {
+                for (const id of Object.keys(args.targets).map(v => Number.parseInt(v))) {
                     const candidate = args.targets[id]
                     if (!isAlive(candidate)) {
                         delete args.targets[id]
@@ -922,14 +927,21 @@ module.exports = {
          * @param {Entity} entity
          */
         const onEntitySpawn = (entity) => {
-            return
-            if (entity.name !== 'arrow') return
-            if (entity.position.distanceTo(bot.bot.entity.position.offset(0, bot.bot.entity.eyeHeight ?? 1.6, 0)) > 1.5) return
-            const velocity = entity.velocity.clone().normalize()
-            const dir = entity.position.clone().subtract(bot.bot.entity.position).normalize()
-            const dot = velocity.dot(dir)
-            if (dot < 0) return
-            bot.memory.myArrows.push(entity.id)
+            if (entity.name === 'arrow') {
+                if (entity.position.distanceTo(bot.bot.entity.position.offset(0, bot.bot.entity.eyeHeight ?? 1.6, 0)) > 1.5) return
+                const velocity = entity.velocity.clone().normalize()
+                const dir = entity.position.clone().subtract(bot.bot.entity.position).normalize()
+                const dot = velocity.dot(dir)
+                if (dot < 0) return
+                bot.memory.myArrows.push(entity.id)
+            }
+        }
+
+        /**
+         * @param {Entity} entity
+         */
+        const onEntityDead = (entity) => {
+
         }
 
         const goalHawkeye = {
@@ -1065,10 +1077,12 @@ module.exports = {
         let target = null
 
         bot.bot.on('entitySpawn', onEntitySpawn)
+        bot.bot.on('entityDead', onEntityDead)
 
         const cleanup = () => {
             bot.bot.off('path_update', onPathUpdate)
             bot.bot.off('entitySpawn', onEntitySpawn)
+            bot.bot.off('entityDead', onEntityDead)
             if (bot.leftHand.isActivated) {
                 bot.deactivateHand()
             }
@@ -1108,6 +1122,7 @@ module.exports = {
                         reequipMeleeWeapon = true
                         isGoalChanged = movementState !== 'goto-melee'
                         movementState = 'goto-melee'
+                        // console.log(`distance (${distance.toFixed(2)}) > 4`)
                         continue
                     }
 
@@ -1175,13 +1190,16 @@ module.exports = {
                     }
 
                     if (now <= cooldownEndAt + extraCooldown) {
+                        // console.log(`Waiting ${(cooldownEndAt + extraCooldown - now).toFixed(0)} ms`)
                         continue
                     }
 
                     if (bot.env.isEntityHurting(target)) {
+                        // console.log(`Entity is hurting`)
                         continue
                     }
 
+                    // console.log('Attack')
                     bot.bot.attack(target)
                     bot.leftHand.isActivated = false
                     cooldownEndAt = now + cooldown

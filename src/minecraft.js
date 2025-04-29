@@ -1497,6 +1497,18 @@ module.exports = class Minecraft {
             rangeOfSight: 64,
             alwaysAngry: true,
         },
+        'bogged': {
+            rangeAttack: {
+                range: 15,
+                damage: [
+                    { type: 'physical', amount: 4 },
+                    { type: 'effect', effect: 'poison', time: 1000, level: 2 }, // ?
+                ],
+                cooldown: 3500,
+            },
+            rangeOfSight: 16,
+            alwaysAngry: true,
+        },
     })
 
     /**

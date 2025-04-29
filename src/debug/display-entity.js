@@ -58,7 +58,6 @@ module.exports = class DisplayEntity {
                     result += '['
                     let addComma = false
                     for (const item of data) {
-                        // @ts-ignore
                         const dataString = this.stringifyJsonData(item)
                         if (dataString) {
                             if (addComma) result += ','

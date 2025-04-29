@@ -217,9 +217,12 @@ class ManagedTask {
         return this._promise
     }
 
-    interrupt() {
+    /**
+     * @param {any} [reason]
+     */
+    interrupt(reason) {
         if (this._status !== 'running') return
-        this.args.interrupt.trigger('interrupt')
+        this.args.interrupt.trigger('interrupt', reason)
         this._status = 'interrupted'
         if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" interrupted`)
     }
@@ -231,12 +234,15 @@ class ManagedTask {
         if (logs) console.log(`[Bot "${this._bot.bot.username}"] Task "${this.id}" resumed`)
     }
 
-    cancel() {
+    /**
+     * @param {any} [reason]
+     */
+    cancel(reason) {
         if (!this._task) {
             this._status = 'cancelled'
         } else {
             this._status = 'cancelled'
-            this.args.interrupt.trigger('cancel')
+            this.args.interrupt.trigger('cancel', reason)
         }
     }
 
@@ -304,7 +310,7 @@ class ManagedTask {
             }
         } catch (error) {
             this._status = 'failed'
-            if (!(error instanceof Error)) {
+            if (typeof error !== 'object' || !('stack' in error)) {
                 console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error, this._stackTrace)
             } else {
                 console.error(`[Bot "${this._bot.bot.username}"] Task "${this.id}" failed:`, error)

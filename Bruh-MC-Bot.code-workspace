@@ -7,6 +7,9 @@
 			"path": "../mineflayer-pathfinder"
 		},
 		{
+			"path": "../mineflayer-movement"
+		},
+		{
 			"path": "../minecraftHawkEye"
 		},
 		{

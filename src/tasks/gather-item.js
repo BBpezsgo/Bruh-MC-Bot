@@ -153,6 +153,12 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
  *     retryCount: number;
  *     isGenerator: boolean;
  *   };
+ *   'kill': {
+ *     type: 'kill';
+ *     entity: import('prismarine-entity').Entity;
+ *     loot: import("minecraft-data").EntityLootEntry;
+ *     lock: import('../locks/entity-lock');
+ *   };
  * }} PlanSteps
  */
 
@@ -178,7 +184,7 @@ unorderedStepTypes.forEach((value, index) => unorderedStepPriorities[value] = in
 /**
  * @typedef {{
  *   depth: number;
- *   recursiveItems: Array<import('../utils/other').ItemId>;
+ *   recursiveItems: ReadonlyArray<import('../utils/other').ItemId>;
  *   isOptional: boolean;
  *   lockItems: boolean;
  *   localLocks: Array<ItemLock>;
@@ -377,7 +383,7 @@ function planCost(plan) {
                     break
                 }
                 case 'bundle-out': {
-                    cost += 0.1
+                    cost += 0.05
                     break
                 }
                 case 'smelt': {
@@ -402,6 +408,10 @@ function planCost(plan) {
                 }
                 case 'request-from-anyone': {
                     cost += 1000
+                    break
+                }
+                case 'kill': {
+                    cost += 1100
                     break
                 }
                 default:
@@ -482,6 +492,14 @@ function planResult(plan, item) {
                 }
                 continue
             }
+            if (step.type === 'kill') {
+                for (const drop of step.loot.drops) {
+                    if (isItemEquals(drop.item, item)) {
+                        count += Math.max(1, drop.stackSizeRange[0])
+                    }
+                }
+                continue
+            }
             if (isItemEquals(step.item, item)) {
                 switch (step.type) {
                     case 'chest':
@@ -513,6 +531,7 @@ function unlockPlanItems(plan) {
             lock.unlock()
         }
         if ('remoteLock' in step) step.remoteLock.unlock()
+        if ('lock' in step) step.lock.unlock()
     }
 }
 
@@ -1598,6 +1617,43 @@ const planners = [
             },
         ]
     },
+    function*(bot, item, count, permissions, context, planSoFar) {
+        if (!permissions.canKill) return null
+        if (typeof item !== 'string') return null
+
+        const loots = Object.values(bot.mc.registry.entityLoot)
+            .filter(v => v.drops.some(v => v.item === item))
+
+        /** @type {Array<{ entity: import('prismarine-entity').Entity; loot: import('minecraft-data').EntityLootEntry; distance: number; }>} */
+        const entityCanditates = []
+
+        for (const loot of loots) {
+            for (const entity of Object.values(bot.bot.entities)) {
+                if (entity === bot.bot.entity) continue
+                if (entity.name !== loot.entity) continue
+                if (bot.env.isEntityLocked(entity)) continue
+                entityCanditates.push({
+                    entity: entity,
+                    loot: loot,
+                    distance: Math.distance(bot.bot.entity.position, entity.position),
+                })
+            }
+        }
+
+        entityCanditates.sort((a, b) => a.distance - b.distance)
+
+        const first = entityCanditates[0]
+        if (!first) return null
+        const lock = bot.env.tryLockEntity(bot.username, first.entity)
+        if (!lock) return null
+
+        return [{
+            type: 'kill',
+            entity: first.entity,
+            loot: first.loot,
+            lock: lock,
+        }]
+    },
 ]
 
 /**
@@ -2293,6 +2349,37 @@ function* evaluatePlan(bot, plan, args) {
                         })
                         break
                     }
+                    case 'kill': {
+                        const entity = bot.bot.nearestEntity(e => e.id === step.entity.id)
+                        if (!entity) {
+                            throw new EnvironmentError(`The ${step.loot.entity} disappeared`)
+                        }
+                        if (!entity.isValid) {
+                            throw new EnvironmentError(`The ${step.loot.entity} is invalid`)
+                        }
+                        if (entity.name !== step.loot.entity) {
+                            throw new EnvironmentError(`The ${step.loot.entity} disappeared`)
+                        }
+                        const res = yield* require('./attack').task(bot, {
+                            target: step.entity,
+                            useBow: false,
+                            useMelee: true,
+                            useMeleeWeapon: true,
+                            ...runtimeArgs(args),
+                        })
+                        if (!res) {
+                            throw new GameError(`Couldn't kill the entity`)
+                        }
+                        yield* pickupItem.task(bot, {
+                            inAir: true,
+                            maxDistance: 8,
+                            minLifetime: 0,
+                            silent: true,
+                            point: entity.position.clone(),
+                            ...runtimeArgs(args),
+                        })
+                        continue
+                    }
                     default: debugger
                 }
             } catch (error) {
@@ -2391,6 +2478,10 @@ function stringifyPlan(bot, plan) {
             }
             case 'brew': {
                 builder += `Brew ${step.count} ${stringifyItem(step.recipe.result)}`
+                break
+            }
+            case 'kill': {
+                builder += `Kill ${step.entity.name}`
                 break
             }
             default: {
@@ -2645,7 +2736,7 @@ const def = {
                     localLocks: planningLocalLocks,
                     remoteLocks: planningRemoteLocks,
                     recursiveItems: [],
-                    force: false,
+                    force: args.force,
                 })
 
             yield

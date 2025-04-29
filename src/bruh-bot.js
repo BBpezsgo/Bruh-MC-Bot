@@ -245,7 +245,7 @@ module.exports = class BruhBot {
                 'freemotion': require('../plugins/freemotion'),
                 // 'elytra': require('mineflayer-elytrafly').elytrafly,
             },
-            version: '1.20.4',
+            version: '1.21.1',
         })
 
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
@@ -874,7 +874,11 @@ module.exports = class BruhBot {
                 return
             }
 
-            console.error(`[Bot "${this.username}"] Kicked:`, JSON.stringify(reason))
+            if (reason['type'] === 'string' && reason['value']) {
+                console.error(`[Bot "${this.username}"] Kicked:`, reason.value)
+            } else {
+                console.error(`[Bot "${this.username}"] Kicked:`, JSON.stringify(reason))
+            }
         })
 
         this.bot.on('error', (error) => {
@@ -969,9 +973,16 @@ module.exports = class BruhBot {
         const handlers = []
 
         handlers.push(/** @type {StringChatHandler} */({
+            match: 'crash',
+            command: (sender, message, response, isWhispered) => {
+                throw new Error('Crash')
+            }
+        }))
+
+        handlers.push(/** @type {StringChatHandler} */({
             match: 'pause',
             command: (sender, message, response, isWhispered) => {
-                this.tasks.interrupt()
+                this.tasks.interrupt('user')
             },
         }))
 
@@ -1210,7 +1221,7 @@ module.exports = class BruhBot {
                     canRequestFromPlayers: false,
                     canRequestFromBots: true,
                     canHarvestMobs: true,
-                    force: false,
+                    force: true,
                 }, priorities.user, true, sender, isWhispered)
                 if (task) {
                     response.respond(`Okay`)
@@ -1231,14 +1242,14 @@ module.exports = class BruhBot {
                                         }, priorities.user, false, sender, isWhispered)
                                             ?.wait()
                                             .then(() => response.respond(`There it is`))
-                                            .catch(error => error instanceof CancelledError || response.respond(error))
+                                            .catch(error => error instanceof CancelledError || console.error(error))
                                     }
                                 },
                                 id: `ask-if-${sender}-need-${result.count}-${stringifyItem(result.item)}`,
                                 humanReadableId: `Asking ${sender} something`,
                             }, {
                                 onNeedYesNo: response.askYesNo,
-                            }, priorities.user, false, sender, isWhispered)
+                            }, priorities.user, false, sender, isWhispered, true)
                                 ?.wait()
                                 .catch(error => error instanceof CancelledError || response.respond(error))
                         })
@@ -1897,7 +1908,7 @@ module.exports = class BruhBot {
                 if (!this.tasks.isIdle) {
                     response.respond(`Okay`)
                 }
-                this.tasks.cancel()
+                this.tasks.cancel('user')
                     .then(didSomething => didSomething ? response.respond(`I stopped`) : response.respond(`I don't do anything`))
                     .catch(error => response.respond(error))
             }
@@ -1939,7 +1950,7 @@ module.exports = class BruhBot {
             match: 'leave',
             command: (sender, message, response, isWhispered) => {
                 this._isLeaving = true
-                this.tasks.cancel()
+                this.tasks.cancel('left')
                     .then(() => this.bot.quit(`${sender} asked me to leave`))
             }
         }))
@@ -2618,7 +2629,7 @@ module.exports = class BruhBot {
 
         if (this.trySleepInterval?.done() &&
             tasks.sleep.can(this)) {
-            this.tasks.push(this, tasks.sleep, {}, priorities.low - 2, false, null, false)
+            this.tasks.push(this, tasks.sleep, {}, priorities.low + 1, false, null, false)
         }
 
         if (this.tasks.timeSinceImportantTask > 10000 || this.isFollowingButNotMoving) {
@@ -2743,7 +2754,7 @@ module.exports = class BruhBot {
                     ?.wait()
                     .catch(error => {
                         // TODO: better way of handling this
-                        if (String(error).startsWith(`Don't have`)) {
+                        if (String(error).replace('Error: ', '').startsWith(`Don't have`)) {
                             playerDeath.items.forEach(v => v.unlock())
                         }
                     })
@@ -4263,7 +4274,7 @@ module.exports = class BruhBot {
             this.bot.on('entitySpawn', onSpawn)
 
             try {
-                yield* taskUtils.wrap(this.bot.toss(this.mc.registry.itemsByName[have.name].id, null, tossCount))
+                yield* taskUtils.wrap(this.bot.toss(have.type, null, tossCount))
                 const waitTime = performance.now() - droppedAt
                 while (!droppedItemEntity && waitTime < 1000) {
                     yield* taskUtils.sleepTicks()
