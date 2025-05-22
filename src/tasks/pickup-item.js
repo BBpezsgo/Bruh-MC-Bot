@@ -51,7 +51,7 @@ function getClosestItem(bot, filter, args) {
         const droppedItem = entity.getDroppedItem()
         if (!droppedItem) { return false }
         if (filter && !filter(droppedItem)) { return false }
-        if (!args.evenIfFull && bot.isInventoryFull(droppedItem.name)) { return false }
+        if (!args.evenIfFull && bot.inventory.isInventoryFull(droppedItem.name)) { return false }
         if (args.minLifetime && bot.env.entitySpawnTimes[entity.id]) {
             const entityLifetime = performance.now() - bot.env.entitySpawnTimes[entity.id]
             if (entityLifetime < args.minLifetime) {
@@ -94,7 +94,7 @@ module.exports = {
         const item = nearest.getDroppedItem()
         if (!item) { throw new EnvironmentError(`This aint an item`) }
 
-        if (bot.isInventoryFull(item.name)) { throw new GameError(`Inventory is full`) }
+        if (bot.inventory.isInventoryFull(item.name)) { throw new GameError(`Inventory is full`) }
 
         const entityLock = bot.env.tryLockEntity(bot.username, nearest)
         if (!entityLock) { throw new GameError(`Entity is locked`) }
@@ -212,7 +212,7 @@ module.exports = {
         const item = nearest.getDroppedItem()
         if (!item) return false
 
-        if (bot.isInventoryFull(item.name)) return false
+        if (bot.inventory.isInventoryFull(item.name)) return false
 
         const goal = this.getGoal(nearest)
         if (bot.memory.isGoalUnreachable(goal)) return false

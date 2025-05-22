@@ -49,7 +49,7 @@ module.exports = {
                         if (args.interrupt.isCancelled) { break }
 
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = yield* bot.ensureItem({
+                        const bucket = yield* bot.inventory.ensureItem({
                             ...runtimeArgs(args),
                             item: 'bucket',
                             count: 1,

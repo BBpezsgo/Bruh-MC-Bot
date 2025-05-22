@@ -109,7 +109,7 @@ module.exports = {
 
             if (args.interrupt.isCancelled) { break }
 
-            const fishingRod = yield* bot.ensureItem({
+            const fishingRod = yield* bot.inventory.ensureItem({
                 ...runtimeArgs(args),
                 item: 'fishing_rod',
                 count: 1,
@@ -212,7 +212,7 @@ module.exports = {
             }
 
             args.interrupt.off(interrupt)
-            if (!bot.holds('fishing_rod')) { continue }
+            if (!bot.inventory.holds('fishing_rod')) { continue }
 
             if (bobber && bobber.isValid) {
                 bot.bot.activateItem(false)

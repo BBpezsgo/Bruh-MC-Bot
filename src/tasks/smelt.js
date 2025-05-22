@@ -53,7 +53,7 @@ function* findBestFurnace(bot, recipes) {
         if (furnaceId === bestFurnaceId) {
             _recipes.push(recipe)
         } else {
-            for (const furnaceBlock of bot.findBlocks({
+            for (const furnaceBlock of bot.blocks.find({
                 matching: furnaceId,
                 maxDistance: config.smelt.furnaceSearchRadius,
                 count: 1,
@@ -195,7 +195,7 @@ module.exports = {
 
                 for (const ingredient of recipe.ingredient) {
                     const actualIngredient = (ingredient.startsWith('#') ? bot.mc.local.resolveItemTag(ingredient.replace('#', '')) : [ingredient])
-                    const ingredientItem = bot.searchInventoryItem(furnace, ...actualIngredient)
+                    const ingredientItem = bot.inventory.searchInventoryItem(furnace, ...actualIngredient)
                     if (!ingredientItem) {
                         continue
                     }
@@ -213,9 +213,9 @@ module.exports = {
                     if (furnace.fuel <= 0 && !furnace.fuelItem()) {
                         let havePutSomething = false
                         for (const fuel of fuels) {
-                            const have = bot.searchInventoryItem(furnace, fuel.item)
+                            const have = bot.inventory.searchInventoryItem(furnace, fuel.item)
                             if (!have) continue
-                            const canPut = have.count - bot.isItemLocked(have)
+                            const canPut = have.count - bot.inventory.isItemLocked(have)
                             if (canPut > 0) {
                                 yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)), args.interrupt)
                                 havePutSomething = true

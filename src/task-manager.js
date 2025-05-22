@@ -133,6 +133,7 @@ module.exports = class TaskManager {
     death() {
         for (let i = this.#tasks.length - 1; i >= 0; i--) {
             const task = this.#tasks[i]
+            if (task._byPlayer) continue
             console.warn(`[Bot ?]: Task ${task.id} removed because I have died`)
             task.cancel('death')
             this.#tasks.splice(i)

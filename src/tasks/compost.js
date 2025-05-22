@@ -44,7 +44,7 @@ const waitCompost = function*(bot, composter, args) {
  * @returns {Item | null}
  */
 const getItem = function(bot, includeNono) {
-    const trashItems = bot.getTrashItems()
+    const trashItems = bot.inventory.getTrashItems()
     for (const trashItem of trashItems) {
         const compostable = Minecraft.compost[typeof trashItem.item === 'string' ? trashItem.item : trashItem.item.name]
         if (!compostable) { continue }
@@ -56,7 +56,7 @@ const getItem = function(bot, includeNono) {
             isSeed = isItemEquals(crop.seed, trashItem.item)
         }
         if (isSeed && trashItem.count <= 4) { continue }
-        const has = bot.searchInventoryItem(null, trashItem.item)
+        const has = bot.inventory.searchInventoryItem(null, trashItem.item)
         if (!has) { continue }
         return has
     }

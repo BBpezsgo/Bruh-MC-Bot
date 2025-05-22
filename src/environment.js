@@ -620,7 +620,7 @@ module.exports = class Environment {
             }
         }
 
-        const chestIterator = bot.findBlocks({
+        const chestIterator = bot.blocks.find({
             point: bot.bot.entity.position.clone(),
             maxDistance: config.scanChests.radius,
             matching: 'chest',
@@ -806,7 +806,7 @@ module.exports = class Environment {
 
         saved.content = new Freq(isItemEquals)
 
-        for (const item of bot.containerItems(chest)) {
+        for (const item of bot.inventory.containerItems(chest)) {
             saved.content.add(item, item.count)
         }
 
@@ -1168,7 +1168,7 @@ module.exports = class Environment {
          */
         const mushrooms = []
 
-        return bot.findBlocks({
+        return bot.blocks.find({
             matching: bot.mc.cropBlockIds,
             filter: block => this.cropFilter(bot, grown, block, mushrooms),
             point: farmPosition,
@@ -1617,7 +1617,7 @@ module.exports = class Environment {
         const locks = []
         for (const bot of this.bots) {
             if (bot.username === requestor) { continue }
-            const lock = bot.tryLockItem(requestor, item, count - locked)
+            const lock = bot.inventory.tryLockItem(requestor, item, count - locked)
             if (!lock) { continue }
             locked += lock.count
             locks.push(lock)

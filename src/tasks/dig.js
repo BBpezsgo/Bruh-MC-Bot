@@ -47,7 +47,7 @@ module.exports = {
          */
         let current = bot.bot.blockAt(args.block)
 
-        const itemsBefore = bot.inventoryItems().toArray().reduce((map, item) => {
+        const itemsBefore = bot.inventory.inventoryItems().toArray().reduce((map, item) => {
             map.add(item.name, -item.count)
             return map
         }, new Freq(isItemEquals))
@@ -148,9 +148,9 @@ module.exports = {
 
                     if (tool?.has) {
                         // console.log(`[Bot "${bot.username}"] Equipping "${tool.item.displayName}" ...`)
-                        yield* bot.equip(tool.item.name, 'hand')
+                        yield* bot.inventory.equip(tool.item.name, 'hand')
                     } else {
-                        yield* wrap(bot.tryUnequip(), args.interrupt)
+                        yield* wrap(bot.inventory.tryUnequip(), args.interrupt)
                     }
 
                     if (!current.canHarvest(bot.bot.heldItem?.type ?? null)) {
@@ -164,7 +164,7 @@ module.exports = {
                     const loot = bot.mc.registry.blockLoot[current.name]?.drops ?? []
 
                     // console.log(`[Bot "${bot.username}"] Digging ...`)
-                    yield* bot.dig(current, bot.instantLook, false, args.interrupt)
+                    yield* bot.blocks.dig(current, bot.instantLook, false, args.interrupt)
                     digged.push({
                         position: current.position.clone(),
                         loot: loot,
@@ -212,7 +212,7 @@ module.exports = {
                     if (!nearestEntity) { break }
                     const distance = position.position.distanceTo(nearestEntity.position)
                     if (distance < 1.5) {
-                        if (bot.isInventoryFull()) {
+                        if (bot.inventory.isInventoryFull()) {
                             throw new GameError(`Inventory is full`)
                         }
 
@@ -232,7 +232,7 @@ module.exports = {
             }
         }
 
-        const itemsDelta = args.pickUpItems ? bot.inventoryItems().toArray().reduce((map, item) => {
+        const itemsDelta = args.pickUpItems ? bot.inventory.inventoryItems().toArray().reduce((map, item) => {
             map.add(item.name, item.count)
             return map
         }, itemsBefore) : new Freq(isItemEquals)

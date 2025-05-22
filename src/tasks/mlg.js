@@ -37,15 +37,15 @@ module.exports = {
         const equipMlgItem = function*() {
             let haveMlgItem = 0
             let equipped = null
-            for (const item of bot.inventoryItems()) {
+            for (const item of bot.inventory.inventoryItems()) {
                 if (Minecraft.mlg.boats.includes(item.name) && haveMlgItem < 1) {
-                    equipped = yield* bot.equip(item)
+                    equipped = yield* bot.inventory.equip(item)
                     console.log(`[Bot "${bot.username}"] [MLG] Equipped ${stringifyItem(item)}`)
                     haveMlgItem = 1
                 }
 
                 if (Minecraft.mlg.mlgBlocks.includes(item.name) && haveMlgItem < 2) {
-                    equipped = yield* bot.equip(item)
+                    equipped = yield* bot.inventory.equip(item)
                     console.log(`[Bot "${bot.username}"] [MLG] Equipped ${stringifyItem(item)}`)
                     haveMlgItem = 2
                     return equipped
@@ -59,7 +59,7 @@ module.exports = {
         yield* sleepTicks()
         let equippedMlgItem = bot.bot.heldItem
         if (!bot.bot.heldItem) {
-            const chorusFruit = bot.searchInventoryItem(null, 'chorus_fruit')
+            const chorusFruit = bot.inventory.searchInventoryItem(null, 'chorus_fruit')
             if (chorusFruit) {
                 const eatStarted = performance.now()
 
@@ -162,9 +162,9 @@ module.exports = {
                     }
                     if (junkBlock) {
                         console.log(`[Bot "${bot.username}"] Equip bucket ...`)
-                        const bucket = bot.searchInventoryItem(null, 'bucket')
+                        const bucket = bot.inventory.searchInventoryItem(null, 'bucket')
                         if (bucket) {
-                            yield* bot.equip(bucket)
+                            yield* bot.inventory.equip(bucket)
                             yield* wrap(bot.bot.lookAt(junkBlock.position, true), args.interrupt)
                             bot.bot.activateItem(false)
                             console.log(`[Bot "${bot.username}"] Water cleared`)

@@ -78,7 +78,7 @@ module.exports = {
                 let foodCount = 0
 
                 for (const _food of foods) {
-                    let _foodCount = bot.inventoryItemCount(null, _food)
+                    let _foodCount = bot.inventory.inventoryItemCount(null, _food)
 
                     if (_foodCount >= animals.length) {
                         foodCount = _foodCount
@@ -86,13 +86,13 @@ module.exports = {
                         break
                     }
 
-                    yield* bot.ensureItem({
+                    yield* bot.inventory.ensureItem({
                         ...runtimeArgs(args),
                         item: _food,
                         count: animals.length,
                     })
 
-                    _foodCount = bot.inventoryItemCount(null, _food)
+                    _foodCount = bot.inventory.inventoryItemCount(null, _food)
 
                     if (_foodCount >= animals.length) {
                         foodCount = _foodCount
@@ -119,14 +119,14 @@ module.exports = {
                 }
 
                 for (const animal of animals) {
-                    let foodItem = bot.searchInventoryItem(null, food)
+                    let foodItem = bot.inventory.searchInventoryItem(null, food)
                     if (!foodItem) { continue }
                     yield* goto.task(bot, {
                         entity: animal,
                         distance: 4,
                         ...runtimeArgs(args),
                     })
-                    foodItem = bot.searchInventoryItem(null, food)
+                    foodItem = bot.inventory.searchInventoryItem(null, food)
                     if (!foodItem) { continue }
                     if (args.interrupt.isCancelled) { break }
                     yield* wrap(bot.bot.equip(foodItem, 'hand'), args.interrupt)

@@ -5,6 +5,8 @@ const goto = require('./goto')
 const config = require('../config')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const GameError = require('../errors/game-error')
+const { Movements } = require('mineflayer-pathfinder')
+const { EntityPose } = require('../entity-metadata')
 
 /**
  * @type {import('../task').TaskDef<void, {
@@ -116,11 +118,15 @@ module.exports = {
 
             try {
                 if (bot.bot.players[args.player]?.entity) {
+                    const movements = new Movements(bot.bot, bot.restrictedMovements)
+                    const _sneak = movements.sneak
+                    movements.sneak = () => (_sneak ? _sneak() : false) || (bot.bot.players[args.player].entity.metadata[6] === EntityPose.SNEAKING)
                     yield* goto.task(bot, {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,
                         options: {
                             sprint: distance > 10,
+                            movements: movements,
                         },
                         ...runtimeArgs(args),
                     })

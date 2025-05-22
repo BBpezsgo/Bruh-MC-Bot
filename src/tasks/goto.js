@@ -43,7 +43,7 @@ class GoalBlockSimple extends goals.Goal {
      */
     isEnd(node) {
         if (node.offset(0, this.entityHeight, 0).distanceTo(this.pos.offset(0.5, 0.5, 0.5)) > this.reach) return false
-        if (this.raycast && !this.bot.blockInView(this.bot.bot.blockAt(this.pos), node.offset(0, 1.6, 0))) return false
+        if (this.raycast && !this.bot.blocks.inView(this.bot.bot.blockAt(this.pos), node.offset(0, 1.6, 0))) return false
         return true
     }
 }
@@ -350,7 +350,8 @@ function setOptions(bot, args) {
     newMovements.canDig &&= !bot.quietMode
     newMovements.canOpenDoors = true && !bot.quietMode
     newMovements.infiniteLiquidDropdownDistance &&= !bot.quietMode
-    newMovements.sneak ||= bot.quietMode
+    const _sneak = newMovements.sneak
+    newMovements.sneak = () => bot.quietMode || (_sneak ? _sneak() : false)
 
     newMovements.liquidCost = 100 // bot.bot.blockAt(bot.bot.entity.position)?.name === 'water' ? 100 : Infinity
     newMovements.allowSprinting = !bot.quietMode && Boolean(args.sprint)

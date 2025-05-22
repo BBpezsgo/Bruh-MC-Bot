@@ -117,7 +117,7 @@ function searchRangeWeapon(bot) {
     const keys = Object.values(Weapons)
 
     for (const weapon of keys) {
-        const found = bot.searchInventoryItem(null, weapon)
+        const found = bot.inventory.searchInventoryItem(null, weapon)
         if (!found) { continue }
 
         let ammo = 0
@@ -401,7 +401,7 @@ function searchMeleeWeapon(bot, targetEntity) {
     let bestScore = 0
     let bestWeapon = null
     for (const meleeWeapon of meleeWeapons) {
-        const item = bot.searchInventoryItem(null, meleeWeapon.name)
+        const item = bot.inventory.searchInventoryItem(null, meleeWeapon.name)
         if (!item) { continue }
         const weapon = resolveMeleeWeapon({
             ...meleeWeapon,
@@ -874,7 +874,7 @@ module.exports = {
         /** @type {ReturnType<searchMeleeWeapon> | null}*/
         let meleeWeapon = null
         /** @type {Item | null} */
-        let shield = bot.searchInventoryItem(null, 'shield')
+        let shield = bot.inventory.searchInventoryItem(null, 'shield')
 
         let noPath = {
             range: 0,
@@ -1172,9 +1172,9 @@ module.exports = {
                         reequipMeleeWeapon = false
                     }
 
-                    shield = bot.searchInventoryItem(null, 'shield')
+                    shield = bot.inventory.searchInventoryItem(null, 'shield')
                     if (shield) {
-                        if (!bot.holds('shield', true)) {
+                        if (!bot.inventory.holds('shield', true)) {
                             yield* wrap(bot.bot.equip(shield.type, 'off-hand'), args.interrupt)
                         }
                         bot.bot.lookAt(target.position.offset(0, target.height, 0), true)
@@ -1300,14 +1300,14 @@ module.exports = {
                             yield* sleepG(weapon.chargeTime)
 
                             if (!target || !target.isValid || target.velocity.y < -0.1) {
-                                if (!(yield* bot.clearMainHand())) {
+                                if (!(yield* bot.inventory.clearMainHand())) {
                                     console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
                                 }
                             }
 
                             grade = getGrade(target, weapon.weapon)
                             if (!grade || grade.blockInTrayect) {
-                                if (!(yield* bot.clearMainHand())) {
+                                if (!(yield* bot.inventory.clearMainHand())) {
                                     console.warn(`[Bot "${bot.username}"] Unnecessary shot`)
                                 }
                                 reequipMeleeWeapon = true

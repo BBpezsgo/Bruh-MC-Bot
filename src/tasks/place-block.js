@@ -229,7 +229,7 @@ module.exports = {
         const item = ('item' in args) ? ((typeof args.item === 'string') ? args.item : args.item.name) : getCorrectItem(args.block)
         const block = ('block' in args) ? args.block : getCorrectBlock((typeof args.item === 'string') ? args.item : args.item.name)[0]
 
-        if (!args.cheat && !bot.searchInventoryItem(null, item)) { throw new GameError(`I don't have ${item}`) }
+        if (!args.cheat && !bot.inventory.searchInventoryItem(null, item)) { throw new GameError(`I don't have ${item}`) }
 
         const allFaceVectors = Object.freeze([
             new Vec3(1, 0, 0),
@@ -508,7 +508,7 @@ module.exports = {
 
                     if (args.interrupt.isCancelled) { return }
 
-                    yield* bot.dig(blockHere, bot.instantLook, false, args.interrupt)
+                    yield* bot.blocks.dig(blockHere, bot.instantLook, false, args.interrupt)
                 } finally {
                     digLock.unlock()
                 }
@@ -555,7 +555,7 @@ module.exports = {
 
                     if (args.interrupt.isCancelled) { return }
 
-                    if (!bot.searchInventoryItem(null, item)) {
+                    if (!bot.inventory.searchInventoryItem(null, item)) {
                         if (args.cheat) {
                             yield* wrap(bot.commands.sendAsync(`/give @p ${item}`), args.interrupt)
                         } else {

@@ -216,7 +216,7 @@ module.exports = {
                         let hasFreeSlot = true
                         const drops = bot.mc.registry.blockLoot[block.name]?.drops ?? []
                         for (const drop of drops) {
-                            if (bot.firstFreeInventorySlot(null, drop.item) === null) {
+                            if (bot.inventory.firstFreeInventorySlot(null, drop.item) === null) {
                                 hasFreeSlot = false
                                 break
                             }
@@ -231,7 +231,7 @@ module.exports = {
                             ...runtimeArgs(args),
                         })
                         yield* dumpToChest.task(bot, {
-                            items: bot.getTrashItems(),
+                            items: bot.inventory.getTrashItems(),
                             ...runtimeArgs(args),
                         })
                         infinityDumpGuard++
@@ -276,7 +276,7 @@ module.exports = {
                 if (staircase) {
                     const shouldBeSolid = minePosition.offset(staircase.x, staircase.y + y - 1, staircase.z)
                     if (bot.bot.blocks.at(shouldBeSolid).name === 'air') {
-                        const scaffoldingBlock = bot.searchInventoryItem(null, ...scaffoldingBlocks)
+                        const scaffoldingBlock = bot.inventory.searchInventoryItem(null, ...scaffoldingBlocks)
                         if (!scaffoldingBlock) {
                             throw new GameError(`I dont have any scaffolding blocks`)
                         }

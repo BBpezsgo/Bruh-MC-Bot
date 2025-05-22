@@ -23,7 +23,7 @@ module.exports = {
         while (true) {
             yield
 
-            if (!args.items.some(v => bot.inventoryItemCount(null, v.item))) break
+            if (!args.items.some(v => bot.inventory.inventoryItemCount(null, v.item))) break
 
             let chestBlock = null
             let searchChestFailCount = 0
@@ -86,9 +86,9 @@ module.exports = {
                         const itemToDump = remainingItemsToDump[i]
                         if (itemToDump.count <= 0) continue
 
-                        if (bot.firstFreeContainerSlot(chest, itemToDump.item) === null) continue
+                        if (bot.inventory.firstFreeContainerSlot(chest, itemToDump.item) === null) continue
 
-                        const deposited = yield* bot.chestDeposit(
+                        const deposited = yield* bot.inventory.chestDeposit(
                             chest,
                             chestBlock.position,
                             itemToDump.item,

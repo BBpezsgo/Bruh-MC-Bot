@@ -22,7 +22,7 @@ module.exports = {
             return 'here'
         }
 
-        const enderpearl = bot.searchInventoryItem(null, 'ender_pearl')
+        const enderpearl = bot.inventory.searchInventoryItem(null, 'ender_pearl')
         if (!enderpearl) {
             throw new GameError(`I have no enderpearl`)
         }

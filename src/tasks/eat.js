@@ -33,7 +33,7 @@ module.exports = {
         if ('food' in args) {
             food = args.food
         } else {
-            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), {
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.inventory.isItemLocked(v)), {
                 sortBy: args.sortBy,
                 includeRaw: args.includeRaw,
                 includeBadEffects: args.includeBadEffects,
@@ -94,7 +94,7 @@ module.exports = {
         if ('food' in args) {
             food = args.food
         } else {
-            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.isItemLocked(v)), {
+            const foods = bot.mc.filterFoods(bot.bot.inventory.items().filter(v => args.includeLocked ? true : !bot.inventory.isItemLocked(v)), {
                 includeRaw: args.includeRaw,
                 includeBadEffects: args.includeBadEffects,
                 includeSideEffects: args.includeSideEffects,

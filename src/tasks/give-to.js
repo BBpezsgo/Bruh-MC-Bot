@@ -24,7 +24,7 @@ module.exports = {
         const tossedMap = new Freq(isItemEquals)
 
         if (args.interrupt.isCancelled) { return tossedMap }
-        if (bot.inventoryItems().isEmpty()) { throw new GameError(`I don't have anything`) }
+        if (bot.inventory.inventoryItems().isEmpty()) { throw new GameError(`I don't have anything`) }
 
         let canGiveSomething = false
 
@@ -42,7 +42,7 @@ module.exports = {
         }
 
         for (const itemToGive of itemsToGive) {
-            const has = bot.inventoryItemCount(null, itemToGive.item)
+            const has = bot.inventory.inventoryItemCount(null, itemToGive.item)
             if (!has) { continue }
             canGiveSomething = true
             break
@@ -97,7 +97,7 @@ module.exports = {
 
             if (collector.username && bots[collector.username] && 'request' in args && isItemEquals(args.request.lock.item, collectedItem)) {
                 const badBot = bots[collector.username]
-                const lock = badBot.forceLockItem(player, collectedItem, collectedItem.count)
+                const lock = badBot.inventory.forceLockItem(player, collectedItem, collectedItem.count)
                 if (!lock) {
                     console.warn(`[Bot "${bot.username}"] The bot \"${collector.username}\" picked up the item I just dropped and it aint want to give it back`)
                     args.request.status = 'failed'
@@ -181,7 +181,7 @@ module.exports = {
 
                 const itemToGive = itemsToGive.shift()
 
-                const has = bot.inventoryItemCount(null, itemToGive.item)
+                const has = bot.inventory.inventoryItemCount(null, itemToGive.item)
                 if (!has) {
                     if ('request' in args) args.request.status = 'failed'
                     continue
@@ -190,7 +190,7 @@ module.exports = {
                 yield* wrap(bot.bot.lookAt(target.xyz(bot.dimension).offset(0, 0.2, 0), bot.instantLook), args.interrupt)
 
                 const countCanGive = Math.min(has, itemToGive.count)
-                const { tossed, droppedItems } = yield* bot.toss(itemToGive.item, countCanGive)
+                const { tossed, droppedItems } = yield* bot.inventory.toss(itemToGive.item, countCanGive)
 
                 if ('request' in args) {
                     args.request.itemEntity = droppedItems[0]

@@ -6,7 +6,6 @@
 
 const fs = require('fs')
 const MineFlayer = require('mineflayer')
-const { Item } = require('prismarine-item')
 const path = require('path')
 const levenshtein = require('damerau-levenshtein')
 const MineFlayerMovement = require('mineflayer-movement')
@@ -25,31 +24,19 @@ const Memory = require('./memory')
 const Debug = require('./debug/debug')
 const Commands = require('./commands')
 const tasks = require('./tasks')
-const { EntityPose } = require('./entity-metadata')
-const { filterOutEquipment, filterOutItems } = require('./utils/items')
 const Vec3Dimension = require('./utils/vec3-dimension')
 const { Vec3 } = require('vec3')
-const Iterable = require('./utils/iterable')
 const config = require('./config')
 const Freq = require('./utils/freq')
 const ItemLock = require('./locks/item-lock')
 const CancelledError = require('./errors/cancelled-error')
 const GameError = require('./errors/game-error')
 const TimeoutError = require('./errors/timeout-error')
-const EnvironmentError = require('./errors/environment-error')
 const KnowledgeError = require('./errors/knowledge-error')
+const priorities = require('./priorities')
 
 //#endregion
 
-const priorities = Object.freeze({
-    critical: 300,
-    surviving: 200,
-    user: 100,
-    otherBots: 50,
-    cleanup: -1,
-    low: -100,
-    unnecessary: -200,
-})
 
 /**
  * @typedef {{
@@ -133,22 +120,8 @@ module.exports = class BruhBot {
     /** @readonly @type {import('mineflayer-pathfinder').Movements} */ restrictedMovements
     /** @readonly @type {import('mineflayer-pathfinder').Movements} */ cutTreeMovements
 
-    /** @private @readonly @type {Interval} */ ensureEquipmentInterval
-    /** @private @readonly @type {Interval} */ dumpTrashInterval
-    /** @private @readonly @type {Interval} */ forceDumpTrashInterval
     /** @private @readonly @type {Interval} */ saveInterval
     /** @private @readonly @type {Interval} */ saveTasksInterval
-    /** @private @readonly @type {Interval} */ trySleepInterval
-    /** @private @readonly @type {Interval} */ checkQuietInterval
-    /** @private @readonly @type {Interval} */ randomLookInterval
-    /** @private @readonly @type {Interval} */ clearHandInterval
-    /** @private @readonly @type {Interval} */ lookAtPlayerTimeout
-    /** @private @readonly @type {Interval} */ moveAwayInterval
-    /** @private @readonly @type {Interval} */ tryAutoHarvestInterval
-    /** @private @readonly @type {Interval} */ tryRestoreCropsInterval
-    /** @private @readonly @type {Interval} */ breedAnimalsInterval
-    /** @private @readonly @type {Interval} */ loadCrossbowsInterval
-    /** @private @readonly @type {Interval} */ giveBackItemsInterval
 
     /** @readonly @type {{ isActivated: boolean; activatedTime: number; }} */ leftHand
     /** @readonly @type {{ isActivated: boolean; activatedTime: number; }} */ rightHand
@@ -161,7 +134,7 @@ module.exports = class BruhBot {
     bot
     /** @readonly @type {Minecraft} */
     mc
-    /** @private @readonly @type {TaskManager} */
+    /** @readonly @type {TaskManager} */
     tasks
     /** @readonly @type {Array<ChatAwait>} */
     chatAwaits
@@ -180,20 +153,18 @@ module.exports = class BruhBot {
     /** @type {boolean} */
     instantLook
 
-    /** @private @type {import('./managed-task')} */
+    /** @type {import('./managed-task')} */
     _runningTask
     /** @private @type {import('mineflayer-pathfinder').PartiallyComputedPath | null} */
     _currentPath
     /** @private @readonly @type {Readonly<BotConfig>} */
     _config
-    /** @private @type {number} */
-    _lookAtPlayer
 
     /** @readonly @type {import('mineflayer').Dimension} */ get dimension() { return this.bot.game.dimension }
 
     /** @readonly @type {string} */ get username() { return this.bot.username ?? this._config.bot.username }
 
-    /** @private @type {boolean} */ _quietMode
+    /** @type {boolean} */ _quietMode
     /** @readonly @type {boolean} */ get quietMode() { return this._quietMode || this.userQuiet }
 
     /** @private @type {boolean} */ _isLeaving
@@ -388,22 +359,7 @@ module.exports = class BruhBot {
         this.saveInterval = new Interval(30000)
         this.saveTasksInterval = new Interval(5000)
 
-        this.randomLookInterval = new Interval(5000)
         this.lookAtPlayerTimeout = new Interval(3000)
-        this.moveAwayInterval = new Interval(1000)
-        this.clearHandInterval = new Interval(5000)
-        this.giveBackItemsInterval = new Interval(5000)
-
-        if (config.bot.behavior?.checkQuiet) this.checkQuietInterval = new Interval(500)
-        if (config.bot.behavior?.loadCrossbows) this.loadCrossbowsInterval = new Interval(5000)
-        if (config.bot.behavior?.dumpTrash) this.dumpTrashInterval = new Interval(5000)
-        if (config.bot.behavior?.dumpTrash) this.forceDumpTrashInterval = new Interval(120000)
-        if (config.bot.behavior?.sleep) this.trySleepInterval = new Interval(5000)
-
-        if (config.bot.behavior?.ensureEquipment) this.ensureEquipmentInterval = new Interval(60000)
-        if (config.bot.behavior?.harvest) this.tryAutoHarvestInterval = new Interval(60000)
-        if (config.bot.behavior?.restoreCrops) this.tryRestoreCropsInterval = new Interval(60000)
-        if (config.bot.behavior?.breedAnimals) this.breedAnimalsInterval = new Interval(60000)
 
         this.permissiveMovements = null
         this.restrictedMovements = null
@@ -412,6 +368,46 @@ module.exports = class BruhBot {
         this.debug = new Debug(this, Boolean(config.debug))
 
         this.chatHandlers = this.setupChatHandlers()
+
+        this.inventory = require('./utils/inventory')(this)
+        this.blocks = require('./utils/blocks')(this)
+
+        this.autos = [
+            require('./auto/important/creeper-defense')(this),
+            require('./auto/important/fireball-defense')(this),
+            require('./auto/important/fire-lava-defense')(this),
+            require('./auto/important/drink-milk')(this),
+            require('./auto/important/hostile-defense')(this),
+            require('./auto/important/lava-water-defense')(this),
+            require('./auto/important/eating')(this),
+            require('./auto/important/attack-response')(this),
+            require('./auto/important/item-serving')(this),
+        ]
+
+        if (config.bot.behavior?.checkQuiet) this.autos.push(require('./auto/important/keep-quiet')(this))
+        if (config.bot.behavior?.sleep) this.autos.push(require('./auto/important/sleep')(this))
+
+        this.boredomAutos = [
+            require('./auto/boredom/cleanup-arrows')(this),
+            require('./auto/boredom/cleanup-mlg')(this),
+            require('./auto/boredom/give-back')(this),
+            require('./auto/boredom/pickup-items')(this),
+            require('./auto/boredom/pickup-xps')(this),
+        ]
+
+        this.nothingAutos = [
+            require('./auto/nothing/goto-idle')(this),
+            require('./auto/nothing/move-away')(this),
+            require('./auto/nothing/look')(this),
+            require('./auto/nothing/clear-hand')(this),
+        ]
+
+        if (config.bot.behavior?.loadCrossbows) this.boredomAutos.push(require('./auto/boredom/load-crossbow')(this))
+        if (config.bot.behavior?.dumpTrash) this.boredomAutos.push(require('./auto/boredom/dump-trash')(this))
+        if (config.bot.behavior?.ensureEquipment) this.boredomAutos.push(require('./auto/boredom/ensure-equipment')(this))
+        if (config.bot.behavior?.harvest) this.boredomAutos.push(require('./auto/boredom/harvest')(this))
+        if (config.bot.behavior?.restoreCrops) this.boredomAutos.push(require('./auto/boredom/restore-crops')(this))
+        if (config.bot.behavior?.breedAnimals) this.boredomAutos.push(require('./auto/boredom/breed-animals')(this))
 
         const stringifyMessage = function(/** @type {any} */ message) {
             if (typeof message === 'string') {
@@ -508,10 +504,10 @@ module.exports = class BruhBot {
 
                     return
 
-                    const shield = bot.searchInventoryItem(null, 'shield')
+                    const shield = bot.inventory.searchInventoryItem(null, 'shield')
                     if (shield) {
-                        if (!bot.holds(shield, true)) {
-                            yield* bot.equip(shield, 'off-hand')
+                        if (!bot.inventory.holds(shield, true)) {
+                            yield* bot.inventory.equip(shield, 'off-hand')
                         }
                         bot.bot.lookAt(args.entity.position.offset(0, 1.6, 0), true)
                         bot.activateHand('left', 5000)
@@ -964,6 +960,7 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @private
      * @returns {ReadonlyArray<ChatHandler>}
      */
     setupChatHandlers() {
@@ -1093,7 +1090,7 @@ module.exports = class BruhBot {
             match: ['dump', 'dump trash'],
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.dumpToChest, {
-                    items: this.getTrashItems()
+                    items: this.inventory.getTrashItems()
                 }, priorities.user, false, sender, isWhispered)
 
                 if (task) {
@@ -1111,7 +1108,7 @@ module.exports = class BruhBot {
             match: 'dump all',
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.dumpToChest, {
-                    items: this.inventoryItems().map(v => ({ item: v, count: v.count })).toArray(),
+                    items: this.inventory.inventoryItems().map(v => ({ item: v, count: v.count })).toArray(),
                 }, priorities.user, false, sender, isWhispered)
 
                 if (task) {
@@ -1173,7 +1170,7 @@ module.exports = class BruhBot {
                         if (bot.dimension !== location.dimension) {
                             throw new GameError(`We are in a different dimension`)
                         }
-                        const elytraItem = bot.searchInventoryItem(null, 'elytra')
+                        const elytraItem = bot.inventory.searchInventoryItem(null, 'elytra')
                         if (!elytraItem) {
                             throw new GameError(`I have no elytra`)
                         }
@@ -1215,7 +1212,7 @@ module.exports = class BruhBot {
                     canSmelt: true,
                     canDigGenerators: true,
                     canDigEnvironment: true,
-                    canKill: false,
+                    canKill: true,
                     canUseChests: true,
                     canUseInventory: true,
                     canRequestFromPlayers: false,
@@ -1791,7 +1788,7 @@ module.exports = class BruhBot {
             command: (sender, message, response, isWhispered) => {
                 const task = this.tasks.push(this, tasks.giveTo, {
                     player: sender,
-                    items: this.getTrashItems(),
+                    items: this.inventory.getTrashItems(),
                     response: response,
                 }, priorities.user, true, sender, isWhispered)
                 if (task) {
@@ -2059,588 +2056,28 @@ module.exports = class BruhBot {
 
         this._runningTask = this.tasks.tick()
 
-        //#region Fall damage prevention
-        if (this.bot.entity.velocity.y < Minecraft.general.fallDamageVelocity) {
-            this.tasks.tick()
-            this.tasks.push(this, tasks.mlg, {}, priorities.critical, false, null, false)
-            return
+        for (const auto of this.autos) {
+            if (auto()) return
         }
-        //#endregion
-
-        //#region Creeper
-        {
-            const explodingCreeper = this.env.getExplodingCreeper(this)
-
-            if (explodingCreeper) {
-                this.tasks.push(this, tasks.goto, {
-                    flee: explodingCreeper,
-                    distance: 8,
-                    options: {
-                        timeout: 300,
-                        sprint: true,
-                        retryCount: 10,
-                    },
-                }, priorities.critical, false, null, false)
-                return
-            }
-
-            const creeper = this.bot.nearestEntity((entity) => entity.name === 'creeper')
-            if (creeper && this.bot.entity.position.distanceTo(creeper.position) < 3) {
-                this.tasks.push(this, tasks.goto, {
-                    flee: creeper,
-                    distance: 8,
-                    options: {
-                        timeout: 300,
-                        sprint: true,
-                    },
-                }, priorities.critical - 1, false, null, false)
-                return
-            }
-        }
-        //#endregion
-
-        //#region Fireball
-        {
-            this.bot.nearestEntity(e => {
-                if (!e.velocity.x && !e.velocity.y && !e.velocity.z) { return false }
-
-                if (e.name === 'fireball') {
-                    const entityPosition = e.position.clone()
-                    if ('time' in e) {
-                        const deltaTime = (performance.now() - e.time) / 1000
-                        entityPosition.add(e.velocity.scaled(deltaTime))
-                    }
-                    const directionToMe = this.bot.entity.position.clone().subtract(entityPosition).normalize()
-                    const fireballDirection = e.velocity.clone().normalize()
-                    const dot = fireballDirection.dot(directionToMe)
-                    if (dot < 0) { return false }
-                    const distance = this.bot.entity.position.offset(0, 1.6, 0).distanceTo(entityPosition)
-                    if (distance > 5) { return false }
-                    if (distance < 3) { return false }
-                    const ghast = this.bot.nearestEntity(v => v.name === 'ghast')
-                    if (ghast) {
-                        const directionToGhast = ghast.position.clone().subtract(entityPosition)
-                        const yaw = Math.atan2(-directionToGhast.x, -directionToGhast.z)
-                        const groundDistance = Math.sqrt(directionToGhast.x * directionToGhast.x + directionToGhast.z * directionToGhast.z)
-                        const pitch = Math.atan2(directionToGhast.y, groundDistance)
-                        this.bot.look(yaw, pitch, true)
-                    }
-                    console.log(`[Bot "${this.bot.username}"] Attacking ${e.name ?? e.uuid ?? e.id}`)
-                    this.bot.attack(e)
-                    return true
-                }
-
-                if (e.name === 'small_fireball') {
-                    const entityPosition = e.position.clone()
-                    if ('time' in e) {
-                        const deltaTime = (performance.now() - e.time) / 1000
-                        entityPosition.add(e.velocity.scaled(deltaTime))
-                    }
-                    const directionToMe = this.bot.entity.position.clone().subtract(entityPosition).normalize()
-                    const fireballDirection = e.velocity.clone().normalize()
-                    const dot = fireballDirection.dot(directionToMe)
-                    if (dot < 0) { return false }
-                    const a = entityPosition.clone()
-                    const b = this.bot.entity.position.clone().add(
-                        fireballDirection.scaled(10)
-                    )
-                    this.debug.drawLine(a, b, [1, 0, 0], [1, 0.4, 0])
-                    /**
-                     * @param {Vec3} p
-                     */
-                    const d = (p) => Math.lineDistanceSquared(p, a, b)
-                    this.tasks.push(this, {
-                        task: tasks.goto.task,
-                        id: `flee-from-${e.id}`,
-                        humanReadableId: `Flee from small fireball`,
-                    }, {
-                        goal: {
-                            heuristic: node => {
-                                return -d(node.offset(0, 1, 0))
-                            },
-                            isEnd: node => {
-                                return d(node.offset(0, 1, 0)) > 2
-                            },
-                        },
-                        options: {
-                            searchRadius: 5,
-                            sprint: true,
-                            timeout: 500,
-                        },
-                    }, priorities.critical - 1, false, null, false)
-                    return true
-                }
-
-                return false
-            })
-        }
-        //#endregion
-
-        //#region Fire & Lava
-        {
-            for (const blockAt of this.touchingBlocks()) {
-                if (this.bot.entity.metadata[0] & 0x01 &&
-                    blockAt.name !== 'lava') {
-                    this.tasks.push(this, {
-                        task: function*(bot, args) {
-                            const waterBucketItem = bot.searchInventoryItem(null, 'water_bucket')
-                            if (waterBucketItem) {
-                                let refBlock = bot.bot.blockAt(bot.bot.entity.position)
-                                if (refBlock.name === 'fire') {
-                                    yield* bot.dig(refBlock, 'ignore', false, args.interrupt)
-                                    yield
-                                }
-                                refBlock = bot.bot.blockAt(bot.bot.entity.position)
-                                if (refBlock.name === 'air') {
-                                    yield* taskUtils.wrap(bot.bot.lookAt(refBlock.position.offset(0.5, 0.1, 0.5), bot.instantLook), args.interrupt)
-                                    yield* taskUtils.wrap(bot.bot.equip(waterBucketItem, 'hand'), args.interrupt)
-                                    bot.bot.activateItem(false)
-                                    while (bot.bot.entity.metadata[0] & 0x01) {
-                                        yield
-                                    }
-                                    const bucketItem = bot.searchInventoryItem(null, 'bucket')
-                                    if (bucketItem) {
-                                        const water = bot.findBlocks({
-                                            matching: 'water',
-                                            count: 1,
-                                            force: true,
-                                            maxDistance: 2,
-                                        }).filter(Boolean).first()
-                                        if (water) {
-                                            yield* taskUtils.wrap(bot.bot.equip(bucketItem, 'hand'), args.interrupt)
-                                            yield* taskUtils.wrap(bot.bot.lookAt(water.position.offset(0.5, 0.1, 0.5), bot.instantLook), args.interrupt)
-                                            bot.bot.activateItem(false)
-                                        }
-                                    }
-                                    return
-                                }
-                            }
-
-                            const water = bot.bot.findBlock({
-                                matching: bot.mc.registry.blocksByName['water'].id,
-                                count: 1,
-                                maxDistance: config.criticalSurviving.waterSearchRadius,
-                            })
-                            if (water) {
-                                yield* tasks.goto.task(bot, {
-                                    point: water.position,
-                                    distance: 0,
-                                    options: {
-                                        sprint: true,
-                                    },
-                                    ...taskUtils.runtimeArgs(args),
-                                })
-                            }
-                        },
-                        id: `extinguish-myself`,
-                        humanReadableId: `Extinguish myself`,
-                    }, {}, priorities.critical - 4, false, null, false)
-                    break
-                }
-
-                if (blockAt.name === 'fire') {
-                    this.tasks.push(this, {
-                        task: function*(bot, args) {
-                            yield* bot.dig(blockAt, 'ignore', false, args.interrupt)
-                        },
-                        id: `extinguish-myself`,
-                        humanReadableId: `Extinguish myself`,
-                    }, {}, priorities.critical - 3, false, null, false)
-                    break
-                }
-
-                if (blockAt.name === 'campfire') {
-                    this.tasks.push(this, {
-                        task: tasks.goto.task,
-                        id: `get-out-campfire`,
-                        humanReadableId: `Extinguish myself`,
-                    }, {
-                        flee: blockAt.position,
-                        distance: 2,
-                    }, priorities.critical - 3, false, null, false)
-                    break
-                }
-            }
-        }
-        //#endregion
-
-        //#region Quiet
-        if (this.checkQuietInterval?.done()) {
-            let shouldBeQuiet = false
-
-            if (!shouldBeQuiet && this.bot.findBlock({
-                matching: this.mc.registry.blocksByName['sculk_sensor'].id,
-                maxDistance: 8,
-                count: 1,
-                point: this.bot.entity.position,
-                useExtraInfo: false,
-            })) { shouldBeQuiet = true }
-
-            if (!shouldBeQuiet && this.bot.findBlock({
-                matching: this.mc.registry.blocksByName['calibrated_sculk_sensor'].id,
-                maxDistance: 16,
-                count: 1,
-                point: this.bot.entity.position,
-                useExtraInfo: false,
-            })) { shouldBeQuiet = true }
-
-            if (!shouldBeQuiet && this.bot.nearestEntity(entity => {
-                if (entity.name !== 'warden') { return false }
-                const distance = entity.position.distanceTo(this.bot.entity.position)
-                if (distance > 16) { return false }
-                return true
-            })) { shouldBeQuiet = true }
-
-            this.checkQuietInterval.time = shouldBeQuiet ? 5000 : 500
-
-            if (this.tasks.isIdle) {
-                if (!shouldBeQuiet && this.bot.controlState.sneak) {
-                    this.bot.setControlState('sneak', false)
-                } else if (shouldBeQuiet && !this.bot.controlState.sneak) {
-                    this.bot.setControlState('sneak', true)
-                }
-            }
-
-            this.permissiveMovements.sneak = shouldBeQuiet
-            this.restrictedMovements.sneak = shouldBeQuiet
-            this.cutTreeMovements.sneak = shouldBeQuiet
-            this._quietMode = shouldBeQuiet
-        }
-        //#endregion
-
-        //#region Bad effects (have to drink milk)
-        {
-            const badEffects = this.mc.registry.effectsArray.filter(v => v.type === 'bad').map(v => v.id)
-
-            if (Object.keys(this.bot.entity.effects).length > 0) {
-                for (const badEffect of badEffects) {
-                    if (this.bot.entity.effects[badEffect]) {
-                        const milk = this.searchInventoryItem(null, 'milk_bucket')
-                        if (milk) {
-                            this.tasks.push(this, {
-                                task: function*(bot, args) {
-                                    const milk = bot.searchInventoryItem(null, 'milk_bucket')
-                                    if (!milk) { throw new GameError(`I have no milk`) }
-                                    yield* taskUtils.wrap(bot.bot.equip(milk, 'hand'), args.interrupt)
-                                    yield* taskUtils.wrap(bot.bot.consume(), args.interrupt)
-                                },
-                                id: 'consume-milk',
-                            }, {}, priorities.critical - 5, false, null, false)
-                        }
-                    }
-                }
-            }
-        }
-        //#endregion
 
         if (this._runningTask && this._runningTask.priority >= priorities.critical) {
             return
         }
-
-        //#region Hostile mobs
-        {
-            const hostile = this.bot.nearestEntity(v => {
-                if (v.metadata[2]) { // Has custom name
-                    // console.log(`"${v.name}": Has custom name`)
-                    return false
-                }
-                if (v.metadata[6] === EntityPose.DYING) {
-                    // console.log(`"${v.name}": Dying`)
-                    return false
-                }
-
-                if (this.defendMyselfGoal &&
-                    !this.defendMyselfGoal.isDone &&
-                    this.tasks.get(this.defendMyselfGoal.id) &&
-                    'targets' in this.defendMyselfGoal.args &&
-                    this.defendMyselfGoal.args.targets[v.id]) {
-                    // console.log(`"${v.name}": Already attacking`)
-                    return false
-                }
-
-                const _hostile = Minecraft.hostiles[v.name]
-                if (!_hostile) {
-                    // console.log(`"${v.name}": Not hostile`)
-                    return false
-                }
-
-                if (!_hostile.alwaysAngry) {
-                    if (v.name === 'enderman') {
-                        // Isn't screaming
-                        if (!v.metadata[17]) {
-                            // console.log(`"${v.name}": Not screaming`)
-                            return false
-                        }
-                    } else if (!(v.metadata[15] & 0x04)) { // Not aggressive
-                        // console.log(`"${v.name}": Not aggressive`)
-                        // console.log(v.name)
-                        return false
-                    }
-                }
-
-                if ((typeof v.metadata[15] === 'number') &&
-                    (v.metadata[15] & 0x01)) { // Has no AI
-                    // console.log(`"${v.name}": No AI`)
-                    return false
-                }
-
-                const distance = v.position.distanceTo(this.bot.entity.position)
-
-                if (distance > _hostile.rangeOfSight) {
-                    // console.log(`${distance.toFixed(2)} > ${_hostile.rangeOfSight.toFixed(2)}`)
-                    return false
-                }
-
-                const raycast = this.bot.world.raycast(
-                    this.bot.entity.position.offset(0, 1.6, 0),
-                    v.position.clone().subtract(this.bot.entity.position).normalize(),
-                    distance + 2,
-                    block => { return !block.transparent })
-                if (raycast) {
-                    // console.log(`Can't see`)
-                    return false
-                }
-
-                return true
-            })
-
-            if (hostile) {
-                this.defendAgainst(hostile)
-            }
-        }
-        //#endregion
-
-        //#region Lava & Water
-        if (!this.bot.pathfinder.path?.length) {
-            if (this.bot.blocks.at(this.bot.entity.position.offset(0, 1, 0))?.name === 'lava' ||
-                this.bot.blocks.at(this.bot.entity.position.offset(0, 0, 0))?.name === 'lava') {
-                this.tasks.push(this, {
-                    task: function(bot, args) {
-                        return tasks.goto.task(bot, {
-                            goal: {
-                                isEnd: (node) => {
-                                    const blockGround = bot.bot.blocks.at(node.offset(0, -1, 0))
-                                    const blockFoot = bot.bot.blocks.at(node)
-                                    const blockHead = bot.bot.blocks.at(node.offset(0, 1, 0))
-                                    if (blockFoot.name !== 'lava' &&
-                                        blockHead.name !== 'lava' &&
-                                        blockGround.name !== 'air' &&
-                                        blockGround.name !== 'lava') {
-                                        return true
-                                    }
-                                    return false
-                                },
-                                heuristic: (node) => {
-                                    const dx = bot.bot.entity.position.x - node.x
-                                    const dy = bot.bot.entity.position.y - node.y
-                                    const dz = bot.bot.entity.position.z - node.z
-                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                                },
-                            },
-                            options: {
-                                searchRadius: 20,
-                                timeout: 1000,
-                            },
-                            ...taskUtils.runtimeArgs(args),
-                        })
-                    },
-                    id: `get-out-lava`,
-                    humanReadableId: `Getting out of lava`,
-                }, {}, priorities.surviving + ((priorities.critical - priorities.surviving) / 2) + 2, false, null, false)
-            } else if (this.bot.oxygenLevel < 20 &&
-                (this.bot.blocks.at(this.bot.entity.position.offset(0, 1, 0))?.name === 'water' ||
-                 this.bot.blocks.at(this.bot.entity.position.offset(0, 0, 0))?.name === 'water')) {
-                this.tasks.push(this, {
-                    task: function(bot, args) {
-                        return tasks.goto.task(bot, {
-                            goal: {
-                                isEnd: (node) => {
-                                    const blockGround = bot.bot.blocks.at(node.offset(0, -1, 0))
-                                    const blockFoot = bot.bot.blocks.at(node)
-                                    const blockHead = bot.bot.blocks.at(node.offset(0, 1, 0))
-                                    if (blockFoot.name !== 'water' &&
-                                        blockHead.name !== 'water' &&
-                                        blockGround.name !== 'air' &&
-                                        blockGround.name !== 'water') {
-                                        return true
-                                    }
-                                    return false
-                                },
-                                heuristic: (node) => {
-                                    const dx = bot.bot.entity.position.x - node.x
-                                    const dy = bot.bot.entity.position.y - node.y
-                                    const dz = bot.bot.entity.position.z - node.z
-                                    return Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
-                                },
-                            },
-                            options: {
-                                searchRadius: 20,
-                            },
-                            ...taskUtils.runtimeArgs(args),
-                        })
-                    },
-                    id: `get-out-water`,
-                    humanReadableId: `Getting out of water`,
-                }, {}, this.bot.oxygenLevel < 20 ? priorities.surviving + 1 : priorities.low, false, null, false)
-
-                if (this.bot.pathfinder.path.length === 0) {
-                    if (this.bot.blocks.at(this.bot.entity.position.offset(0, 0.5, 0))?.name === 'water') {
-                        this.bot.setControlState('jump', true)
-                    } else if (this.bot.controlState['jump']) {
-                        this.bot.setControlState('jump', false)
-                    }
-                }
-            } else {
-                /**
-                 * @param {Vec3} point
-                 */
-                const danger = (point) => {
-                    let res = 0
-                    if (this.bot.blocks.at(point.offset(0, 0, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(1, 0, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, 0, 1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, 0, -1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(-1, 0, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, 1, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(1, 1, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, 1, 1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, 1, -1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(-1, 1, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, -1, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(1, -1, 0))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, -1, 1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(0, -1, -1))?.name === 'lava') res++
-                    if (this.bot.blocks.at(point.offset(-1, -1, 0))?.name === 'lava') res++
-                    return res
-                }
-                if (danger(this.bot.entity.position.floored())) {
-                    this.tasks.push(this, {
-                        task: tasks.goto.task,
-                        id: 'get-away-from-lava',
-                        humanReadableId: 'Getting away from lava',
-                    }, {
-                        goal: {
-                            heuristic: (node) => {
-                                return 16 - danger(node)
-                            },
-                            isEnd: (node) => {
-                                return danger(node) === 0
-                            },
-                        },
-                        options: {
-                            searchRadius: 20,
-                            timeout: 1000,
-                        },
-                    }, priorities.surviving - 50, false, null, false)
-                }
-            }
-        }
-        //#endregion
-
-        //#region Eating
-        if (this.bot.food < 18 && tasks.eat.can(this, { includeLocked: this.bot.food === 0 })) {
-            this.tasks.push(this, tasks.eat, {
-                sortBy: 'foodPoints',
-                includeLocked: this.bot.food === 0,
-            }, priorities.surviving, false, null, false)
-            return
-        }
-        //#endregion
-
-        //#region Someone attacking me!
-        {
-            const now = performance.now()
-            for (const _by of Object.keys(this.memory.hurtBy)) {
-                const entityId = Number(_by)
-                const by = this.memory.hurtBy[entityId]
-
-                for (let i = by.times.length - 1; i >= 0; i--) {
-                    if (now - by.times[i] > config.hurtByMemory) {
-                        by.times.splice(i, 1)
-                    }
-                }
-
-                if (by.times.length === 0 || !by.entity || !by.entity.isValid) {
-                    delete this.memory.hurtBy[entityId]
-                    continue
-                }
-
-                const player = by.entity.type === 'player'
-                    ? Object.values(this.bot.players).find(v => v && v.entity && Number(v.entity.id) === Number(by.entity.id))
-                    : null
-
-                if (player && (
-                    player.gamemode === 1 ||
-                    player.gamemode === 3 ||
-                    bots[player.username]
-                )) {
-                    console.warn(`[Bot "${this.username}"] Can't attack ${by.entity.name}`)
-                    delete this.memory.hurtBy[entityId]
-                    continue
-                }
-
-                if (by.entity.type === 'hostile' || by.entity.type === 'mob') {
-                    this.defendAgainst(by.entity)
-                    continue
-                }
-
-                if (player && Math.entityDistance(this.bot.entity.position.offset(0, 1.6, 0), by.entity) < 4) {
-                    console.log(`[Bot "${this.bot.username}"] Attacking ${by.entity.name ?? by.entity.uuid ?? by.entity.id}`)
-                    this.bot.attack(by.entity)
-                    delete this.memory.hurtBy[entityId]
-                }
-            }
-        }
-        //#endregion
 
         if (this.defendMyselfGoal &&
             !this.defendMyselfGoal.isDone) {
             return
         }
 
-        for (const request of this.env.itemRequests) {
-            if (request.lock.by === this.username) { continue }
-            if (request.status) { continue }
-            if (!this.lockedItems.some(v => v === request.lock)) { continue }
-            if (!this.inventoryItemCount(null, request.lock.item)) { continue }
-            this.tasks.push(this, {
-                task: function*(bot, args) {
-                    if (request.status) {
-                        console.log(`[Bot "${bot.username}"] Someone else already serving \"${request.lock.by}\" ...`)
-                        return
-                    }
-                    console.log(`[Bot "${bot.username}"] Serving \"${request.lock.by}\" with ${stringifyItem(request.lock.item)} ...`)
-                    yield* tasks.giveTo.task(bot, args)
-                    console.log(`[Bot "${bot.username}"] \"${request.lock.by}\" served with ${stringifyItem(request.lock.item)}`)
-                },
-                id: `serve-${request.lock.by}-${stringifyItem(request.lock.item)}-${request.lock.count}`,
-                humanReadableId: `Serving ${request.lock.by}`,
-            }, {
-                request: request,
-                waitUntilTargetPickedUp: true,
-            }, request.priority ?? priorities.otherBots, false, null, false)
-                ?.wait()
-                .catch(reason => {
-                    console.error(`[Bot "${this.username}"] Failed to serve \"${request.lock.by}\" with ${stringifyItem(request.lock.item)}:`, reason)
-                    request.status = 'failed'
-                    request.lock.unlock()
-                })
-        }
-
-        if (this.trySleepInterval?.done() &&
-            tasks.sleep.can(this)) {
-            this.tasks.push(this, tasks.sleep, {}, priorities.low + 1, false, null, false)
-        }
-
-        if (this.tasks.timeSinceImportantTask > 10000 || this.isFollowingButNotMoving) {
-            this.doSimpleBoredomTasks()
-        }
-
         if (this.tasks.timeSinceImportantTask > 10000) {
-            this.doBoredomTasks()
+            for (const auto of this.boredomAutos) {
+                if (auto()) return
+            }
         }
 
-        this.doNothing()
+        for (const auto of this.nothingAutos) {
+            if (auto()) return
+        }
     }
 
     get isFollowingButNotMoving() {
@@ -2649,242 +2086,6 @@ module.exports = class BruhBot {
             this._runningTask.id.startsWith('follow') &&
             !this.bot.pathfinder.goal
         )
-    }
-
-    doSimpleBoredomTasks() {
-        if (this.loadCrossbowsInterval?.done()) {
-            this.tasks.push(this, {
-                task: function*(bot, args) {
-                    const crossbows =
-                        bot.inventoryItems(null)
-                            .filter(v => v.name === 'crossbow')
-                            .toArray()
-                    // console.log(`[Bot "${bot.username}"] Loading ${crossbows.length} crossbows`)
-                    for (const crossbow of crossbows) {
-                        if (!tasks.attack.isCrossbowCharged(crossbow) &&
-                            bot.searchInventoryItem(null, 'arrow')) {
-                            const weapon = tasks.attack.resolveRangeWeapon(crossbow)
-                            yield* taskUtils.wrap(bot.bot.equip(crossbow, 'hand'), args.interrupt)
-                            bot.activateHand('right')
-                            yield* taskUtils.sleepG(Math.max(100, weapon.chargeTime))
-                            bot.deactivateHand()
-                        }
-                    }
-                },
-                id: 'load-crossbow',
-            }, {
-                silent: true,
-            }, priorities.low, false, null, false)
-        }
-
-        if (this.tasks.isIdle && this.memory.mlgJunkBlocks.length > 0) {
-            this.tasks.push(this, tasks.clearMlgJunk, {}, priorities.cleanup, false, null, false)
-            return
-        }
-
-        if (this.memory.myArrows.length > 0) {
-            this.tasks.push(this, {
-                task: function*(bot, args) {
-                    const myArrow = bot.memory.myArrows.shift()
-                    if (!myArrow) {
-                        return
-                    }
-                    const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
-                    if (!entity) {
-                        console.warn(`[Bot "${bot.username}"] Can't find the arrow`)
-                        return
-                    }
-                    yield* tasks.goto.task(bot, {
-                        point: entity.position,
-                        distance: 1,
-                        ...taskUtils.runtimeArgs(args),
-                    })
-                    yield* taskUtils.sleepG(1000)
-                    if (entity.isValid) {
-                        console.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
-                    } else {
-                        console.log(`[Bot "${bot.username}"] Arrow picked up`)
-                    }
-                },
-                id: `pickup-my-arrows`,
-                humanReadableId: `Picking up my arrows`,
-            }, {}, priorities.cleanup, false, null, false)
-        }
-
-        {
-            /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-item')>} */
-            const options = {
-                inAir: false,
-                maxDistance: config.boredom.pickupItemRadius,
-                minLifetime: config.boredom.pickupItemMinAge,
-                pathfinderOptions: {
-                    savePathError: true,
-                },
-            }
-            if (tasks.pickupItem.can(this, options)) {
-                this.tasks.push(this, tasks.pickupItem, options, priorities.low, false, null, false)
-            }
-        }
-
-        {
-            /** @type {import('./managed-task').TaskArgs<import('./tasks/pickup-xp')>} */
-            const options = {
-                maxDistance: config.boredom.pickupXpRadius,
-            }
-            if (tasks.pickupXp.getClosestXp(this, options)) {
-                this.tasks.push(this, tasks.pickupXp, options, priorities.low, false, null, false)
-            }
-        }
-
-        if (this.giveBackItemsInterval?.done() && this.memory.playerDeathLoots.length > 0) {
-            const playerDeath = this.memory.playerDeathLoots[0]
-            for (let i = 0; i < playerDeath.items.length; i++) {
-                if (playerDeath.items[i].count <= 0 || playerDeath.items[i].isUnlocked) {
-                    playerDeath.items.splice(i, 1)
-                    i--
-                }
-            }
-            if (playerDeath.items.length === 0) {
-                this.memory.playerDeathLoots.shift()
-            } else {
-                this.tasks.push(this, tasks.giveTo, {
-                    player: playerDeath.username,
-                    items: playerDeath.items,
-                }, priorities.low - 1, false, null, false)
-                    ?.wait()
-                    .catch(error => {
-                        // TODO: better way of handling this
-                        if (String(error).replace('Error: ', '').startsWith(`Don't have`)) {
-                            playerDeath.items.forEach(v => v.unlock())
-                        }
-                    })
-            }
-        }
-    }
-
-    doBoredomTasks() {
-        if (this.tasks.isIdle && this.tryAutoHarvestInterval?.done()) {
-            this.tasks.push(this, {
-                task: BruhBot.tryHarvestCrops,
-                id: `harvest-crops`,
-                humanReadableId: 'Harvest crops',
-            }, {}, priorities.unnecessary, false, null, false)
-        }
-
-        if (this.tasks.isIdle && this.tryRestoreCropsInterval?.done()) {
-            this.tasks.push(this, {
-                task: BruhBot.tryRestoreCrops,
-                id: `check-crops`,
-                humanReadableId: `Checking crops`,
-            }, {}, priorities.unnecessary, false, null, false)
-        }
-
-        if (this.tasks.isIdle && this.breedAnimalsInterval?.done()) {
-            this.tasks.push(this, {
-                task: BruhBot.breedAnimals,
-                id: `breed-animals`,
-                humanReadableId: `Breed animals`,
-            }, {}, priorities.unnecessary, false, null, false)
-        }
-
-        if (this.tasks.isIdle && this.dumpTrashInterval?.done()) {
-            const freeSlots = this.inventorySlots().filter(v => !this.bot.inventory.slots[v]).toArray()
-            if (freeSlots.length < 10 || this.forceDumpTrashInterval?.done()) {
-                const trashItems = this.getTrashItems()
-                this.tasks.push(this, {
-                    task: tasks.dumpToChest.task,
-                    id: 'dump-trash',
-                    humanReadableId: 'Dump trash',
-                }, {
-                    items: trashItems,
-                }, priorities.unnecessary, false, null, false)
-                    ?.wait()
-                    .then(dumped => {
-                        if (dumped.isEmpty) return
-                        console.log(`Dumped ${dumped.keys.map(v => `${dumped.get(v)} ${stringifyItem(v)}`).join(', ')}`)
-                    })
-                    .catch(() => { })
-            }
-        }
-
-        if (this.tasks.isIdle && this.ensureEquipmentInterval?.done()) {
-            this.tasks.push(this, {
-                task: BruhBot.ensureEquipment,
-                id: 'ensure-equipment',
-                humanReadableId: 'Ensure equipment',
-            }, {
-                explicit: false,
-            }, priorities.unnecessary, false, null, false)
-        }
-    }
-
-    doNothing() {
-        if (this.tasks.timeSinceImportantTask > 10000 &&
-            this.tasks.isIdleOrThinking &&
-            this.memory.idlePosition &&
-            this.dimension === this.memory.idlePosition.dimension &&
-            this.bot.entity.position.distanceTo(this.memory.idlePosition.xyz(this.dimension)) > 10) {
-            this.tasks.push(this, {
-                task: tasks.goto.task,
-                id: `goto-idle-position`,
-                humanReadableId: `Goto idle position`,
-            }, {
-                point: this.memory.idlePosition,
-                distance: 4,
-                options: {
-                    sprint: false,
-                },
-            }, -999, false, null, false)
-        }
-
-        if (this.tasks.isIdleOrThinking || this.isFollowingButNotMoving) {
-            if (this.moveAwayInterval?.done()) {
-                for (const playerName in this.bot.players) {
-                    if (playerName === this.username) { continue }
-                    const playerEntity = this.bot.players[playerName].entity
-                    if (!playerEntity) { continue }
-                    if (this.bot.entity.position.distanceTo(playerEntity.position) < 1) {
-                        this.tasks.push(this, {
-                            task: tasks.move.task,
-                            id: `move-away-${playerName}`,
-                            humanReadableId: `Move away from ${playerName}`,
-                        }, {
-                            goal: {
-                                distance: this.bot.movement.heuristic.new('distance'),
-                                danger: this.bot.movement.heuristic.new('danger')
-                                    .weight(5),
-                                proximity: this.bot.movement.heuristic.new('proximity'),
-                            },
-                            freemotion: true,
-                            update: (goal) => {
-                                goal.proximity
-                                    .target(playerEntity.position)
-                                    .avoid(true)
-                            },
-                            isDone: () => this.bot.entity.position.distanceSquared(playerEntity.position) > 1,
-                        }, this._runningTask ? this._runningTask.priority + 1 : priorities.unnecessary, false, null, false)
-                        return
-                    }
-                }
-            }
-
-            if ((!this.tasks.isIdleOrThinking || this.tasks.timeSinceImportantTask > 1000) && this.lookAtNearestPlayer()) {
-                this.randomLookInterval?.restart()
-                return
-            }
-
-            if ((!this.tasks.isIdle || this.tasks.timeSinceImportantTask > 1000) && this.randomLookInterval?.done()) {
-                this.lookRandomly()
-                return
-            }
-
-            if ((!this.tasks.isIdleOrThinking || this.tasks.timeSinceImportantTask > 1000) && this.bot.heldItem && this.clearHandInterval?.done()) {
-                this.tryUnequip()
-                    .then(v => v || console.log(`[Bot "${this.username}"] Failed to clear hand`))
-                    .catch(v => console.error(`[Bot "${this.username}"]`, v))
-                return
-            }
-        }
     }
 
     *touchingBlocks() {
@@ -2905,6 +2106,7 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @private
      * @param {string} itemInput
      */
     resolveItemInput(itemInput) {
@@ -2967,7 +2169,7 @@ module.exports = class BruhBot {
          */
         function calculateFoodPoints(future) {
             let items = (future ? tasks.gatherItem.PredictedEnvironment.applyDelta(bot.bot.inventory.items(), future.inventory, isItemEquals) : bot.bot.inventory.items())
-                .filter(v => !bot.isItemLocked(v.name))
+                .filter(v => !bot.inventory.isItemLocked(v.name))
                 .filter(v => bot.mc.registry.foodsByName[v.name])
             items = bot.mc.filterFoods(items, {
                 includeRaw: false,
@@ -3005,7 +2207,7 @@ module.exports = class BruhBot {
             canSmelt: true,
             canBrew: true,
             canDigGenerators: true,
-            canKill: false,
+            canKill: true,
             canUseChests: true,
             canUseInventory: true,
             canRequestFromBots: true,
@@ -3078,7 +2280,7 @@ module.exports = class BruhBot {
                 }
                 case 'single': {
                     try {
-                        if (bot.inventoryItemCount(null, item.item) > 0) { break }
+                        if (bot.inventory.inventoryItemCount(null, item.item) > 0) { break }
                         // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
                             item: item.item,
@@ -3096,7 +2298,7 @@ module.exports = class BruhBot {
                     break
                 }
                 case 'any': {
-                    if (item.item.find(v => bot.inventoryItemCount(null, v) > 0)) { break }
+                    if (item.item.find(v => bot.inventory.inventoryItemCount(null, v) > 0)) { break }
                     try {
                         // console.log(`[Bot "${bot.username}"]`, item.type, item)
                         const res = yield* tasks.gatherItem.task(bot, {
@@ -3212,6 +2414,7 @@ module.exports = class BruhBot {
     }
 
     /**
+     * @private
      * @type {import('./task').SimpleTaskDef<Freq<string>>}
      */
     static *scanCrops(bot, args) {
@@ -3230,7 +2433,7 @@ module.exports = class BruhBot {
             }
         }
 
-        const blocks = bot.findBlocks({
+        const blocks = bot.blocks.find({
             matching: new Set(
                 Object.keys(Minecraft.cropsByBlockName)
                     .map(v => bot.mc.registry.blocksByName[v].id)
@@ -3314,66 +2517,6 @@ module.exports = class BruhBot {
 
     /**
      * @private
-     */
-    lookAtNearestPlayer() {
-        const selfEye = (this.bot.entity.metadata[6] === 5)
-            ? this.bot.entity.position.offset(0, 1.2, 0)
-            : this.bot.entity.position.offset(0, 1.6, 0)
-
-        const players = Object.values(this.bot.players)
-            .filter(v => v.username !== this.username)
-            .filter(v => !bots[v.username])
-            .filter(v => v.entity)
-            .filter(v => v.entity.position.distanceTo(this.bot.entity.position) < 5)
-            .filter(v => {
-                const playerEye = (v.entity.metadata[6] === 5)
-                    ? v.entity.position.offset(0, 1.2, 0)
-                    : v.entity.position.offset(0, 1.6, 0)
-
-                const dirToSelf = selfEye.clone().subtract(playerEye).normalize()
-                const playerDir = Math.rotationToVectorRad(v.entity.pitch, v.entity.yaw)
-                return dirToSelf.dot(playerDir) > 0.9
-            })
-
-        if (players.length === 0) { return false }
-
-        if (this.lookAtPlayerTimeout.done()) {
-            this.lookAtPlayerTimeout.restart()
-            this._lookAtPlayer++
-        }
-
-        while (this._lookAtPlayer < 0) {
-            this.lookAtPlayerTimeout.restart()
-            this._lookAtPlayer += players.length
-        }
-
-        while (this._lookAtPlayer >= players.length) {
-            this.lookAtPlayerTimeout.restart()
-            this._lookAtPlayer -= players.length
-        }
-
-        const selected = players[this._lookAtPlayer]
-
-        if (!selected?.entity) { return false }
-
-        const playerEye = (selected.entity.metadata[6] === 5)
-            ? selected.entity.position.offset(0, 1.2, 0)
-            : selected.entity.position.offset(0, 1.6, 0)
-
-        this.bot.lookAt(playerEye, false)
-        return true
-    }
-
-    /**
-     * @private
-     */
-    lookRandomly() {
-        const pitch = Math.randomInt(-40, 30)
-        const yaw = Math.randomInt(-180, 180)
-        return this.bot.look(yaw * Math.deg2rad, pitch * Math.deg2rad, false)
-    }
-
-    /**
      * @param {string} sender
      * @param {string} message
      * @param {ChatResponseHandler} response
@@ -3513,639 +2656,6 @@ module.exports = class BruhBot {
 
     //#endregion
 
-    //#region Items & Inventory
-
-    async tryUnequip() {
-        const QUICK_BAR_COUNT = 9
-        const QUICK_BAR_START = 36
-
-        for (let i = 0; i < QUICK_BAR_COUNT; ++i) {
-            if (!this.bot.inventory.slots[QUICK_BAR_START + i]) {
-                this.bot.setQuickBarSlot(i)
-                return true
-            }
-        }
-
-        const slot = this.bot.inventory.firstEmptyInventorySlot()
-        if (!slot) {
-            return false
-        }
-
-        const equipSlot = QUICK_BAR_START + this.bot.quickBarSlot
-        await this.bot.clickWindow(equipSlot, 0, 0)
-        await this.bot.clickWindow(slot, 0, 0)
-        if (this.bot.inventory.selectedItem) {
-            await this.bot.clickWindow(equipSlot, 0, 0)
-            return false
-        }
-        return true
-    }
-
-    /**
-     * @param {import('./utils/other').ItemId} item
-     * @param {MineFlayer.EquipmentDestination} destination
-     */
-    *equip(item, destination = 'hand') {
-        const _item = (typeof item === 'object' && 'slot' in item) ? item : this.searchInventoryItem(null, item)
-        if (!_item) { throw new GameError(`Item ${stringifyItemH(item)} not found to equip`) }
-
-        const sourceSlot = _item.slot
-        const destSlot = this.bot.getEquipmentDestSlot(destination)
-
-        if (sourceSlot === destSlot) {
-            return this.bot.inventory.slots[destSlot]
-        }
-
-        yield* taskUtils.wrap(this.bot.equip(_item, destination))
-        yield* taskUtils.sleepTicks()
-        return this.bot.inventory.slots[destSlot]
-    }
-
-    /**
-     * @returns {Array<{ item: import('./utils/other').ItemId; count: number; }>}
-     */
-    getTrashItems() {
-        const locked = this.lockedItems
-            .filter(v => !v.isUnlocked)
-            .map(v => ({ ...v }))
-
-        let result = this.inventoryItems()
-            .toArray()
-            .map(v => /** @type {{item: import('./utils/other').ItemId; count: number;}} */({ item: v, count: v.count }))
-        result = filterOutEquipment(result, this.mc.registry)
-        result = filterOutItems(result, locked)
-        return result
-    }
-
-    /**
-     * @param {string} by
-     * @param {import('./utils/other').ItemId} item
-     * @param {number} count
-     * @returns {import('./locks/item-lock')}
-     */
-    forceLockItem(by, item, count) {
-        if (!count) { return null }
-        const lock = new ItemLock(by, item, Math.min(count, count))
-        this.lockedItems.push(lock)
-        // console.log(`[Bot "${this.username}"] Item forcefully ${stringifyItem(item)} locked by ${by}`)
-        return lock
-    }
-
-    /**
-     * @param {string} by
-     * @param {import('./utils/other').ItemId} item
-     * @param {number} count
-     * @returns {import('./locks/item-lock') | null}
-     */
-    tryLockItem(by, item, count) {
-        if (!count) { return null }
-        const trash = this.getTrashItems().filter(v => isItemEquals(v.item, item))
-        if (trash.length === 0) { return null }
-        let have = 0
-        for (const trashItem of trash) { have += trashItem.count }
-        const lock = new ItemLock(by, item, Math.min(count, have))
-        this.lockedItems.push(lock)
-        // console.log(`[Bot "${this.username}"] Item ${stringifyItem(item)} locked by ${by}`)
-        return lock
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window | null} window
-     * @param {ReadonlyArray<import('./utils/other').ItemId>} items
-     * @returns {Item | null}
-     */
-    searchInventoryItem(window, ...items) {
-        return this.inventoryItems(window).filter(v => {
-            for (const searchFor of items) {
-                if (!isItemEquals(v, searchFor)) continue
-                return true
-            }
-            return false
-        }).first() ?? null
-    }
-
-    /**
-     * @param {import('./utils/other').ItemId} item
-     */
-    isItemLocked(item) {
-        let n = 0
-        for (const lock of this.lockedItems) {
-            if (!isItemEquals(lock.item, item)) continue
-            if (lock.isUnlocked) continue
-            n += lock.count
-        }
-        return n
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} [window]
-     * @returns {Iterable<Item>}
-     */
-    inventoryItems(window) {
-        if (!this.bot.inventory) { return new Iterable(function*() { }) }
-        window = this.bot.currentWindow
-        const hasWindow = !!window
-        window ??= this.bot.inventory
-
-        const specialSlotIds = hasWindow ? [] : [
-            this.bot.getEquipmentDestSlot('head'),
-            this.bot.getEquipmentDestSlot('torso'),
-            this.bot.getEquipmentDestSlot('legs'),
-            this.bot.getEquipmentDestSlot('feet'),
-            this.bot.getEquipmentDestSlot('off-hand'),
-        ]
-
-        /** @type {Set<number>} */
-        const set = new Set()
-
-        return new Iterable(function*() {
-            const hotbarEnd = window.hotbarStart + 9
-
-            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
-                const item = window.slots[i]
-                if (!item) { continue }
-                if (set.has(i)) { continue }
-                set.add(i)
-                yield item
-            }
-
-            for (let i = window.hotbarStart; i < hotbarEnd; i++) {
-                const item = window.slots[i]
-                if (!item) { continue }
-                if (set.has(i)) { continue }
-                set.add(i)
-                yield item
-            }
-
-            for (const specialSlotId of specialSlotIds) {
-                if (specialSlotId >= window.inventoryStart && specialSlotId < window.inventoryEnd) { continue }
-                if (specialSlotId >= window.hotbarStart && specialSlotId < hotbarEnd) { continue }
-                const item = window.slots[specialSlotId]
-                if (!item) { continue }
-                if (set.has(specialSlotId)) { continue }
-                set.add(specialSlotId)
-                yield item
-            }
-        })
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} [window]
-     * @returns {Iterable<number>}
-     */
-    inventorySlots(window) {
-        const hasWindow = !!window
-        window ??= this.bot.inventory
-
-        const specialSlotIds = hasWindow ? [] : [
-            this.bot.getEquipmentDestSlot('head'),
-            this.bot.getEquipmentDestSlot('torso'),
-            this.bot.getEquipmentDestSlot('legs'),
-            this.bot.getEquipmentDestSlot('feet'),
-            this.bot.getEquipmentDestSlot('hand'),
-            this.bot.getEquipmentDestSlot('off-hand'),
-        ]
-
-        /** @type {Set<number>} */
-        const set = new Set()
-
-        return new Iterable(function*() {
-            const hotbarEnd = window.hotbarStart + 9
-
-            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
-                if (set.has(i)) { continue }
-                set.add(i)
-                yield i
-            }
-
-            for (let i = window.hotbarStart; i < hotbarEnd; i++) {
-                if (set.has(i)) { continue }
-                set.add(i)
-                yield i
-            }
-
-            for (const specialSlotId of specialSlotIds) {
-                if (specialSlotId >= window.inventoryStart && specialSlotId < window.inventoryEnd) { continue }
-                if (specialSlotId >= window.hotbarStart && specialSlotId < hotbarEnd) { continue }
-                if (set.has(specialSlotId)) { continue }
-                set.add(specialSlotId)
-                yield specialSlotId
-            }
-        })
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     * @returns {Iterable<Item>}
-     */
-    containerItems(window) {
-        return new Iterable(function*() {
-            for (let i = 0; i < window.inventoryStart; ++i) {
-                const item = window.slots[i]
-                if (!item) { continue }
-                yield item
-            }
-        })
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     */
-    containerSlots(window) {
-        /**
-         * @type {Record<number, Item>}
-         */
-        const slots = {}
-
-        for (let i = 0; i < window.inventoryStart; i++) {
-            const item = window.slots[i]
-            if (!item) { continue }
-            console.assert(item.slot === i)
-            slots[i] = item
-        }
-
-        return slots
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     * @param {Readonly<import('./utils/other').ItemId>} item
-     * @returns {number}
-     */
-    inventoryItemCount(window, item) {
-        let count = 0
-
-        for (const matchedItem of this.inventoryItems(window).filter(v => isItemEquals(v, item))) {
-            count += matchedItem.count
-        }
-
-        return count
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     * @param {Readonly<import('./utils/other').ItemId>} item
-     * @returns {number}
-     */
-    containerItemCount(window, item) {
-        let count = 0
-
-        for (const matchedItem of this.containerItems(window).filter(v => isItemEquals(v, item))) {
-            count += matchedItem.count
-        }
-
-        return count
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window | null} [window]
-     * @param {Readonly<import('./utils/other').ItemId> | null} [item]
-     * @returns {number | null}
-     */
-    firstFreeInventorySlot(window = null, item = null) {
-        const hasWindow = !!window
-        window ??= this.bot.inventory
-
-        const specialSlotIds = hasWindow ? [] : [
-            // this.bot.getEquipmentDestSlot('head'),
-            // this.bot.getEquipmentDestSlot('torso'),
-            // this.bot.getEquipmentDestSlot('legs'),
-            // this.bot.getEquipmentDestSlot('feet'),
-            this.bot.getEquipmentDestSlot('hand'),
-            // this.bot.getEquipmentDestSlot('off-hand'),
-        ]
-
-        if (item) {
-            for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
-                const _item = window.slots[i]
-                if (!_item) { continue }
-                if (!isItemEquals(_item, item)) { continue }
-                if (_item.count >= _item.stackSize) { continue }
-                return i
-            }
-
-            for (const i of specialSlotIds) {
-                const _item = window.slots[i]
-                if (!_item) { continue }
-                if (!isItemEquals(_item, item)) { continue }
-                if (_item.count >= _item.stackSize) { continue }
-                return i
-            }
-        }
-
-        for (let i = window.inventoryStart; i < window.inventoryEnd; i++) {
-            if (!window.slots[i]) { return i }
-        }
-
-        for (const i of specialSlotIds) {
-            if (!window.slots[i]) { return i }
-        }
-
-        return null
-    }
-
-    /**
-     * @param {import('prismarine-windows').Window} window
-     * @param {Readonly<import('./utils/other').ItemId> | null} [item]
-     * @returns {number | null}
-     */
-    firstFreeContainerSlot(window, item = null) {
-        if (item) {
-            for (let i = 0; i < window.inventoryStart; i++) {
-                const _item = window.slots[i]
-                if (!_item) { continue }
-                if (!isItemEquals(_item, item)) { continue }
-                if (_item.count >= _item.stackSize) { continue }
-                return i
-            }
-        }
-
-        for (let i = 0; i < window.inventoryStart; i++) {
-            if (window.slots[i] === null) {
-                return i
-            }
-        }
-
-        return null
-    }
-
-    *clearMainHand() {
-        const emptySlot = this.bot.inventory.firstEmptyInventorySlot(true)
-        if (!emptySlot) {
-            return false
-        }
-        yield* taskUtils.wrap(this.bot.unequip('hand'))
-        return true
-    }
-
-    /**
-     * @param {import('./utils/other').ItemId} item
-     */
-    holds(item, offhand = false) {
-        if (offhand) {
-            if (this.bot.supportFeature('doesntHaveOffHandSlot')) { return false }
-
-            const holdingItem = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('off-hand')]
-            if (!holdingItem) { return false }
-
-            return isItemEquals(holdingItem, item)
-        } else {
-            const holdingItem = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-            if (!holdingItem) { return false }
-
-            return isItemEquals(holdingItem, item)
-        }
-    }
-
-    /**
-     * @param {import('./utils/other').ItemId | null} item
-     */
-    isInventoryFull(item = null) {
-        const slotIds = [
-            this.bot.getEquipmentDestSlot('hand'),
-            this.bot.getEquipmentDestSlot('off-hand'),
-        ]
-
-        for (let i = this.bot.inventory.inventoryStart; i <= this.bot.inventory.inventoryEnd; i++) {
-            slotIds.push(i)
-        }
-
-        for (const slotId of slotIds) {
-            const slot = this.bot.inventory.slots[slotId]
-            if (!slot) { return false }
-            if (slot.count >= slot.stackSize) { continue }
-            if (item && isItemEquals(item, slot)) { return false }
-        }
-
-        return true
-    }
-
-    /**
-     * @param {MineFlayer.Chest | null} chest
-     * @param {Vec3} chestBlock
-     * @param {Readonly<import('./utils/other').ItemId>} item
-     * @param {number} count
-     * @returns {import('./task').Task<number>}
-     */
-    *chestDeposit(chest, chestBlock, item, count) {
-        let depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
-
-        if (depositCount === 0) {
-            chest.close()
-            try {
-                yield* taskUtils.sleepTicks()
-                depositCount = (count === Infinity) ? this.inventoryItemCount(chest, item) : count
-            } finally {
-                chest = yield* taskUtils.wrap(this.bot.openChest(this.bot.blockAt(chestBlock)))
-            }
-        }
-
-        if (depositCount === 0) return 0
-
-        const stackSize = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].stackSize
-
-        let botItems = this.inventoryItems(chest)
-            .filter(v => isItemEquals(v, item) && v.count > 0)
-            .toArray()
-
-        if (botItems.length === 0) {
-            chest.close()
-            try {
-                yield* taskUtils.sleepTicks()
-                const botItemsWithoutChest = this.inventoryItems(null)
-                    .filter(v => isItemEquals(v, item) && v.count > 0)
-                    .toArray()
-                if (botItemsWithoutChest.length > 0) {
-                    const firstItem = botItemsWithoutChest[0]
-                    const specialSlotNames = (/** @type {Array<MineFlayer.EquipmentDestination>} */ ([
-                        'head',
-                        'torso',
-                        'legs',
-                        'feet',
-                        'off-hand',
-                    ])).map(v => ({ name: v, slot: this.bot.getEquipmentDestSlot(v) }))
-                    const slot = specialSlotNames.find(v => v.slot === firstItem.slot)
-                    if (slot) {
-                        yield* taskUtils.wrap(this.bot.unequip(slot.name))
-                    }
-                }
-            } finally {
-                chest = yield* taskUtils.wrap(this.bot.openChest(this.bot.blockAt(chestBlock)))
-                botItems = this.inventoryItems(chest)
-                    .filter(v => isItemEquals(v, item) && v.count > 0)
-                    .toArray()
-            }
-        }
-
-        let error = null
-        for (let i = 0; i < 5; i++) {
-            try {
-                if (botItems.length === 0) return 0
-                if (!botItems[0]) return 0
-
-                const destinationSlot = this.firstFreeContainerSlot(chest, item)
-                if (destinationSlot === null) return 0
-
-                const actualCount = Math.min(
-                    depositCount,
-                    botItems[0].count,
-                    stackSize,
-                    stackSize - (chest.slots[destinationSlot] ? chest.slots[destinationSlot].count : 0)
-                )
-
-                const sourceSlot = botItems[0].slot
-
-                yield* taskUtils.wrap(this.bot.transfer({
-                    window: chest,
-                    itemType: this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id,
-                    metadata: null,
-                    count: actualCount,
-                    sourceStart: (sourceSlot !== null) ? sourceSlot : chest.inventoryStart,
-                    sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryEnd,
-                    destStart: (destinationSlot !== null) ? destinationSlot : 0,
-                    destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryStart,
-                }))
-
-                this.env.recordChestTransfer(
-                    this,
-                    chest,
-                    new Vec3Dimension(chestBlock, this.dimension),
-                    typeof item === 'string' ? item : item.name,
-                    actualCount)
-
-                return actualCount
-            } catch (_error) {
-                error = _error
-            }
-        }
-
-        if (error) throw error
-    }
-
-    /**
-     * @param {MineFlayer.Chest} chest
-     * @param {Vec3} chestBlock
-     * @param {Readonly<import('./utils/other').ItemId>} item
-     * @param {number} count
-     * @returns {import('./task').Task<number>}
-     */
-    *chestWithdraw(chest, chestBlock, item, count) {
-        const withdrawCount = Math.min(this.containerItemCount(chest, item), count)
-        if (withdrawCount === 0) {
-            console.warn(`No ${typeof item === 'string' ? item : item.name} in the chest`)
-            return 0
-        }
-
-        const stackSize = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].stackSize
-
-        const containerSlots = this.containerSlots(chest)
-        const containerItems = Object.keys(containerSlots)
-            .map(i => Number.parseInt(i))
-            .map(i => ({ slot: i, item: containerSlots[i] }))
-            .filter(v => v.item && isItemEquals(v.item, item) && (v.item.count))
-
-        if (containerItems.length === 0) {
-            console.warn(`No ${typeof item === 'string' ? item : item.name} in the chest (what?)`)
-            return 0
-        }
-
-        if (!containerItems[0]?.item) {
-            console.warn(`No ${typeof item === 'string' ? item : item.name} in the chest (what???)`)
-            return 0
-        }
-
-        const actualCount = Math.min(
-            withdrawCount,
-            containerItems[0].item.count,
-            stackSize
-        )
-
-        const destinationSlot = this.firstFreeInventorySlot(chest, item)
-        if (destinationSlot === null) {
-            console.warn(`Inventory is full`)
-            return 0
-        }
-
-        const sourceSlot = containerItems[0].slot
-
-        yield* taskUtils.wrap(this.bot.transfer({
-            window: chest,
-            itemType: this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id,
-            metadata: null,
-            count: actualCount,
-            sourceStart: (sourceSlot !== null) ? sourceSlot : 0,
-            sourceEnd: (sourceSlot !== null) ? sourceSlot + 1 : chest.inventoryStart,
-            destStart: (destinationSlot !== null) ? destinationSlot : chest.inventoryStart,
-            destEnd: (destinationSlot !== null) ? destinationSlot + 1 : chest.inventoryEnd,
-        }))
-
-        this.env.recordChestTransfer(
-            this,
-            chest,
-            new Vec3Dimension(chestBlock, this.dimension),
-            typeof item === 'string' ? item : item.name,
-            -actualCount)
-
-        return actualCount
-    }
-
-    /**
-     * @param {import('./task').RuntimeArgs<{
-     *   item: import('./utils/other').ItemId;
-     *   count: number;
-     * } | {
-     *   item: ReadonlyArray<import('./utils/other').ItemId>;
-     * }>} args
-     * @returns {import('./task').Task<Item | null>}
-     */
-    *ensureItem(args) {
-        if ('count' in args) {
-            const has = this.inventoryItemCount(null, args.item)
-
-            if (has >= args.count) {
-                const result = this.searchInventoryItem(null, args.item)
-                if (result) { return result }
-            }
-
-            try {
-                yield* tasks.gatherItem.task(this, {
-                    ...taskUtils.runtimeArgs(args),
-                    item: args.item,
-                    count: args.count,
-                    canUseInventory: true,
-                    canUseChests: true,
-                })
-                const result = this.searchInventoryItem(null, args.item)
-                if (result) { return result }
-            } catch (error) {
-                console.warn(`[Bot "${this.username}"]`, error)
-            }
-
-            return null
-        } else {
-            let result = this.searchInventoryItem(null, ...args.item)
-            if (result) { return result }
-
-            try {
-                yield* tasks.gatherItem.task(this, {
-                    item: args.item,
-                    count: 1,
-                    canUseInventory: true,
-                    canUseChests: true,
-                    ...taskUtils.runtimeArgs(args),
-                })
-                result = this.searchInventoryItem(null, ...args.item)
-                if (result) { return result }
-            } catch (error) {
-
-            }
-
-            return null
-        }
-    }
-
-    //#endregion
-
     //#region Basic Actions
 
     /**
@@ -4228,437 +2738,5 @@ module.exports = class BruhBot {
         }
     }
 
-    /**
-     * @param {import('./utils/other').ItemId} item
-     * @param {number} [count = 1]
-     */
-    *toss(item, count = 1) {
-        /**
-         * @type {ReadonlyArray<MineFlayer.EquipmentDestination>}
-         */
-        const specialSlotNames = [
-            'head',
-            'torso',
-            'legs',
-            'feet',
-            'off-hand',
-        ]
-
-        /** @type {Array<import('prismarine-entity').Entity>} */
-        const droppedItems = []
-
-        let tossed = 0
-        for (const have of this.inventoryItems()) {
-            if (!isItemEquals(have, item)) { continue }
-            for (const specialSlotName of specialSlotNames) {
-                if (this.bot.getEquipmentDestSlot(specialSlotName) !== have.slot) { continue }
-                yield* taskUtils.wrap(this.bot.unequip(specialSlotName))
-            }
-            const tossCount = Math.min(count - tossed, have.count)
-            if (tossCount <= 0) { continue }
-
-            let droppedItemEntity = null
-            const droppedAt = performance.now()
-            /**
-             * @param {import('prismarine-entity').Entity} entity
-             */
-            const onSpawn = (entity) => {
-                if (entity.name !== 'item') return
-                setTimeout(() => {
-                    const _item = entity.getDroppedItem()
-                    if (!_item) return
-                    if (_item.name !== have.name) return
-                    droppedItemEntity = entity
-                }, 100)
-            }
-            this.bot.on('entitySpawn', onSpawn)
-
-            try {
-                yield* taskUtils.wrap(this.bot.toss(have.type, null, tossCount))
-                const waitTime = performance.now() - droppedAt
-                while (!droppedItemEntity && waitTime < 1000) {
-                    yield* taskUtils.sleepTicks()
-                }
-                if (droppedItemEntity) droppedItems.push(droppedItemEntity)
-            } finally {
-                this.bot.off('entitySpawn', onSpawn)
-            }
-
-            tossed += tossCount
-        }
-
-        return {
-            tossed: tossed,
-            droppedItems: droppedItems,
-        }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} block
-     * @param {boolean | 'ignore'} forceLook
-     * @param {boolean} allocate
-     * @param {import('./utils/interrupt')} interrupt
-     * @returns {import('./task').Task<boolean>}
-     */
-    *dig(block, forceLook, allocate, interrupt) {
-        if (allocate) {
-            const blockLocation = new Vec3Dimension(block.position, this.dimension)
-            const digLock = this.env.tryLockBlock(this.username, blockLocation, 'dig')
-            if (!digLock) return false
-            try {
-                yield* this.dig(block, forceLook, false, interrupt)
-            } finally {
-                digLock.unlock()
-            }
-            return true
-        } else {
-            const onInterrupt = () => {
-                this.bot.stopDigging()
-            }
-            interrupt?.on(onInterrupt)
-            try {
-                yield* taskUtils.wrap(this.bot.dig(block, forceLook))
-            } catch (error) {
-                if (error instanceof Error && error.message === 'Digging aborted') {
-                    return false
-                }
-            } finally {
-                interrupt?.off(onInterrupt)
-            }
-            return true
-        }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} referenceBlock
-     * @param {Vec3} faceVector
-     * @param {import('./utils/other').ItemId} item
-     * @param {boolean} [allocate]
-     * @returns {import('./task').Task<boolean>}
-     */
-    *place(referenceBlock, faceVector, item, allocate = true) {
-        const above = referenceBlock.position.offset(faceVector.x, faceVector.y, faceVector.z)
-        if (allocate) {
-            const blockLocation = new Vec3Dimension(above, this.dimension)
-            const lock = yield* this.env.lockBlockPlacing(this, blockLocation, v => v?.name !== 'air')
-            if (!lock) return false
-
-            try {
-                return yield* this.place(referenceBlock, faceVector, item, false)
-            } finally {
-                lock.unlock()
-            }
-        } else {
-            let holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-            if (!holds || !isItemEquals(holds, item)) {
-                const itemId = this.mc.registry.itemsByName[typeof item === 'string' ? item : item.name].id
-                yield* taskUtils.wrap(this.bot.equip(itemId, 'hand'))
-            }
-            holds = this.bot.inventory.slots[this.bot.getEquipmentDestSlot('hand')]
-            if (!holds || !isItemEquals(holds, item)) {
-                throw new GameError(`I have no ${stringifyItemH(item)}`)
-            }
-
-            if (this.bot.blocks.at(above)?.name !== 'air') {
-                throw new EnvironmentError(`Can't place \"${item}\": there is something else there (${this.bot.blocks.at(above)?.name})`)
-            }
-
-            yield* taskUtils.wrap(this.bot._placeBlockWithOptions(referenceBlock, faceVector, { forceLook: 'ignore' }))
-
-            return true
-        }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} block
-     * @param {boolean} [forceLook]
-     * @param {boolean} [allocate]
-     * @returns {import('./task').Task<void>}
-     */
-    *activate(block, forceLook = false, allocate = true) {
-        if (allocate) {
-            const lock = yield* this.env.waitLock(this.username, new Vec3Dimension(block.position, this.dimension), 'use')
-            try {
-                yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
-            } finally {
-                lock.unlock()
-            }
-        } else {
-            yield* taskUtils.wrap(this.bot.activateBlock(block, null, null, forceLook))
-        }
-    }
-
     //#endregion
-
-    /**
-     * @type {undefined | Array<{
-     *   options: {
-     *     matching: ReadonlySet<number>;
-     *     point: Vec3;
-     *     maxDistance: number;
-     *   };
-     *   result: ReadonlyArray<import('prismarine-block').Block>;
-     *   time: number;
-     * }>}
-     */
-    #findBlocksCache
-
-    /**
-     * @param {{
-     *   matching: number | string | Iterable<string | number> | ReadonlySet<number>;
-     *   filter?: (block: import('prismarine-block').Block) => boolean;
-     *   point?: Vec3
-     *   maxDistance?: number
-     *   count?: number
-     *   force?: boolean
-     * }} options
-     * @returns {Iterable<import('prismarine-block').Block>}
-     */
-    findBlocks(options) {
-        // @ts-ignore
-        const Block = require('prismarine-block')(this.bot.registry)
-
-        /** @type {ReadonlySet<number>} */
-        let matching = null
-
-        if (typeof options.matching === 'number') {
-            matching = new Set([options.matching])
-            // console.log(`Find block${options.count === 1 ? '' : 's'}`, this.bot.registry.blocks[options.matching]?.name)
-        } else if (typeof options.matching === 'string') {
-            matching = new Set([this.bot.registry.blocksByName[options.matching].id])
-            // console.log(`Find block${options.count === 1 ? '' : 's'}`, options.matching)
-        } else if ('has' in options.matching) {
-            matching = options.matching
-            // console.log(`Find block${options.count === 1 ? '' : 's'}`, options.matching.entries().map(v => this.bot.registry.blocks[v[0]]?.name).toArray())
-        } else {
-            matching = new Set()
-            for (const item of options.matching) {
-                if (typeof item === 'string') {
-                    //@ts-ignore
-                    matching.add(this.bot.registry.blocksByName[item].id)
-                } else {
-                    //@ts-ignore
-                    matching.add(item)
-                }
-            }
-            // console.log(`Find block${options.count === 1 ? '' : 's'}`, options.matching.map(v => typeof v === 'number' ? this.bot.registry.blocks[v]?.name : v).toArray())
-        }
-
-        /**
-         * @param {import('prismarine-chunk').PCChunk['sections'][0]} section
-         */
-        const isBlockInSection = (section) => {
-            if (!section) return false // section is empty, skip it (yay!)
-            // If the chunk use a palette we can speed up the search by first
-            // checking the palette which usually contains less than 20 ids
-            // vs checking the 4096 block of the section. If we don't have a
-            // match in the palette, we can skip this section.
-            if (section.palette) {
-                for (const stateId of section.palette) {
-                    if (matching.has(Block.fromStateId(stateId, 0).type)) {
-                        return true // the block is in the palette
-                    }
-                }
-                return false // skip
-            }
-            return true // global palette, the block might be in there
-        }
-
-        this.#findBlocksCache ??= []
-
-        const bot = this.bot
-        const cache = this.#findBlocksCache
-
-        return new Iterable(function*() {
-            const point = (options.point || bot.entity.position).floored()
-            const maxDistance = options.maxDistance || 16
-            const count = options.count || 1
-
-            if (!options.force) {
-                const now = performance.now()
-                for (let i = cache.length - 1; i >= 0; i--) {
-                    const item = cache[i]
-                    if ((now - item.time) > 20000) {
-                        cache.splice(i, 1)
-                        continue
-                    }
-                    if (!item.options.point.equals(point)) { continue }
-                    if (item.options.maxDistance !== maxDistance) { continue }
-                    if (item.options.matching.symmetricDifference(matching).size) { continue }
-                    for (const cached of item.result) {
-                        yield cached
-                    }
-                    return
-                }
-            }
-
-            const start = new Vec3(Math.floor(point.x / 16), Math.floor(point.y / 16), Math.floor(point.z / 16))
-            const it = new (require('prismarine-world').iterators.OctahedronIterator)(start, Math.ceil((maxDistance + 8) / 16))
-            // the octahedron iterator can sometime go through the same section again
-            // we use a set to keep track of visited sections
-            const visitedSections = new Set()
-
-            let n = 0
-            let startedLayer = 0
-            let next = start
-            /** @type {Array<import('prismarine-block').Block>} */
-            const currentCachedItemResult = []
-            /** @type {(typeof cache)[0]} */
-            const currentCachedItem = {
-                options: { matching, maxDistance, point },
-                result: currentCachedItemResult,
-                time: performance.now(),
-            }
-            cache.push(currentCachedItem)
-            while (next) {
-                yield
-                const column = bot.world.getColumn(next.x, next.z)
-                //@ts-ignore
-                const sectionY = next.y + Math.abs(bot.game.minY >> 4)
-                //@ts-ignore
-                const totalSections = bot.game.height >> 4
-                if (sectionY >= 0 && sectionY < totalSections && column && !visitedSections.has(next.toString())) {
-                    /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */ //@ts-ignore
-                    const section = column.sections[sectionY]
-                    if (isBlockInSection(section)) {
-                        //@ts-ignore
-                        const begin = new Vec3(next.x * 16, sectionY * 16 + bot.game.minY, next.z * 16)
-                        const cursor = begin.clone()
-                        const end = cursor.offset(16, 16, 16)
-                        for (cursor.x = begin.x; cursor.x < end.x; cursor.x++) {
-                            for (cursor.y = begin.y; cursor.y < end.y; cursor.y++) {
-                                for (cursor.z = begin.z; cursor.z < end.z; cursor.z++) {
-                                    const block = bot.blockAt(cursor)
-                                    if (matching.has(block.type) && (!options.filter || options.filter(block)) && cursor.distanceTo(point) <= maxDistance) {
-                                        currentCachedItemResult.push(block)
-                                        currentCachedItem.time = performance.now()
-                                        yield block
-                                        n++
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    visitedSections.add(next.toString())
-                }
-                // If we started a layer, we have to finish it otherwise we might miss closer blocks
-                //@ts-ignore
-                if (startedLayer !== it.apothem && n >= count) {
-                    break
-                }
-                //@ts-ignore
-                startedLayer = it.apothem
-                next = it.next()
-            }
-        })
-    }
-
-    /**
-     * @private
-     * @param {import('prismarine-block').Block} block
-     * @param {Vec3} [eye]
-     */
-    _blockVisibility(block, eye = null) {
-        if (!eye) {
-            eye = this.bot.entity.position.offset(0, this.bot.entity.eyeHeight, 0)
-        }
-
-        // Check faces that could be seen from the current position. If the delta is smaller then 0.5 that means the
-        // bot can most likely not see the face as the block is 1 block thick
-        // this could be false for blocks that have a smaller bounding box than 1x1x1
-        const dx = eye.x - (block.position.x + 0.5)
-        const dy = eye.y - (block.position.y + 0.5)
-        const dz = eye.z - (block.position.z + 0.5)
-
-        // Check y first then x and z
-        const visibleFaces = {
-            y: Math.sign(Math.abs(dy) > 0.5 ? dy : 0),
-            x: Math.sign(Math.abs(dx) > 0.5 ? dx : 0),
-            z: Math.sign(Math.abs(dz) > 0.5 ? dz : 0)
-        }
-
-        const validFaces = []
-        const closerBlocks = []
-
-        for (const i of /** @type {['x', 'y', 'z']} */ (Object.keys(visibleFaces))) {
-            if (!visibleFaces[i]) continue // skip as this face is not visible
-            // target position on the target block face. -> 0.5 + (current face) * 0.5
-            const targetPos = block.position.offset(
-                0.5 + (i === 'x' ? visibleFaces[i] * 0.5 : 0),
-                0.5 + (i === 'y' ? visibleFaces[i] * 0.5 : 0),
-                0.5 + (i === 'z' ? visibleFaces[i] * 0.5 : 0)
-            )
-            const rayBlock = this.bot.world.raycast(eye, targetPos.clone().subtract(eye).normalize(), 5)
-            if (rayBlock) {
-                if (eye.distanceTo(rayBlock.intersect) < eye.distanceTo(targetPos)) {
-                    // Block is closer then the raycasted block
-                    closerBlocks.push(rayBlock)
-                    // continue since if distance is ever less, then we did not intersect the block we wanted,
-                    // meaning that the position of the intersected block is not what we want.
-                    continue
-                }
-                const rayPos = rayBlock.position
-                if (
-                    rayPos.x === block.position.x &&
-                    rayPos.y === block.position.y &&
-                    rayPos.z === block.position.z
-                ) {
-                    validFaces.push({
-                        face: rayBlock.face,
-                        targetPos: rayBlock.intersect
-                    })
-                }
-            }
-        }
-
-        return { validFaces, closerBlocks }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} block
-     * @param {Vec3} [eye]
-     */
-    async lookAtBlock(block, eye = undefined, force = true) {
-        const { validFaces, closerBlocks } = this._blockVisibility(block, eye)
-
-        if (validFaces.length > 0) {
-            // Chose closest valid face
-            let closest
-            let distSqrt = 999
-            for (const i in validFaces) {
-                const tPos = validFaces[i].targetPos
-                const cDist = new Vec3(tPos.x, tPos.y, tPos.z).distanceSquared(
-                    this.bot.entity.position.offset(0, this.bot.entity.eyeHeight, 0)
-                )
-                if (distSqrt > cDist) {
-                    closest = validFaces[i]
-                    distSqrt = cDist
-                }
-            }
-            await this.bot.lookAt(closest.targetPos, force)
-        } else if (closerBlocks.length === 0 && block.shapes.length === 0) {
-            // no other blocks were detected and the block has no shapes.
-            // The block in question is replaceable (like tall grass) so we can just dig it
-            // TODO: do AABB + ray intercept check to this position for digFace.
-            await this.bot.lookAt(block.position.offset(0.5, 0.5, 0.5), force)
-        } else {
-            // Block is obstructed return error?
-            throw new EnvironmentError('Block not in view')
-        }
-    }
-
-    /**
-     * @param {import('prismarine-block').Block} block
-     * @param {Vec3} [eye]
-     */
-    blockInView(block, eye = null) {
-        const { validFaces, closerBlocks } = this._blockVisibility(block, eye)
-        if (validFaces.length > 0) {
-            return true
-        } else if (closerBlocks.length === 0 && block.shapes.length === 0) {
-            return true
-        } else {
-            return false
-        }
-    }
 }

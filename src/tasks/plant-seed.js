@@ -34,7 +34,7 @@ function* plant(bot, placeOn, placeVector, seedItem, args) {
 
     if (args.interrupt.isCancelled) { return }
 
-    yield* bot.place(placeOn, placeVector, seedItem.name, true)
+    yield* bot.blocks.place(placeOn, placeVector, seedItem.name, true)
 }
 
 /**
@@ -121,7 +121,7 @@ module.exports = {
                     continue
                 }
 
-                const seed = yield* bot.ensureItem({
+                const seed = yield* bot.inventory.ensureItem({
                     ...runtimeArgs(args),
                     item: crop.seed,
                     count: 1,
@@ -147,7 +147,7 @@ module.exports = {
 
                 // console.log(`[Bot "${bot.username}"] Try plant seed`)
 
-                const seed = bot.searchInventoryItem(null, ...args.seedItems.map(v => bot.mc.registry.items[v].name))
+                const seed = bot.inventory.searchInventoryItem(null, ...args.seedItems.map(v => bot.mc.registry.items[v].name))
                 if (!seed) { break }
 
                 const cropInfo = Object.values(Minecraft.cropsByBlockName).find(v => v.seed === seed.name)

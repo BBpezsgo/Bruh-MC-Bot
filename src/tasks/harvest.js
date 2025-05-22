@@ -80,7 +80,7 @@ module.exports = {
                                 block: cropPosition.position,
                                 ...runtimeArgs(args),
                             })
-                            yield* bot.activate(bot.bot.blockAt(cropPosition.position.xyz(bot.dimension)))
+                            yield* bot.blocks.activate(bot.bot.blockAt(cropPosition.position.xyz(bot.dimension)))
                             break
                         }
                         case 'tree': {
@@ -144,7 +144,7 @@ module.exports = {
                     }
 
                     try {
-                        const seed = bot.searchInventoryItem(null, crop.seed)
+                        const seed = bot.inventory.searchInventoryItem(null, crop.seed)
                         if (!seed) { throw new GameError(`Can't replant this: doesn't have "${crop.seed}"`) }
 
                         const placeOn = bot.env.getPlantableBlock(bot, p.xyz(bot.dimension), crop, true, true)

@@ -24,7 +24,7 @@ module.exports = {
 
         const recipes = args.recipes.filter(v => v.type === 'campfire')
 
-        let campfire = bot.findBlocks({
+        let campfire = bot.blocks.find({
             matching: 'campfire',
             count: 1,
             maxDistance: 48,
@@ -97,7 +97,7 @@ module.exports = {
                 let ingredientItem
                 for (const ingredient of recipe.ingredient) {
                     const actualIngredient = (ingredient.startsWith('#') ? bot.mc.local.resolveItemTag(ingredient.replace('#', '')) : [ingredient])
-                    ingredientItem = bot.searchInventoryItem(null, ...actualIngredient)
+                    ingredientItem = bot.inventory.searchInventoryItem(null, ...actualIngredient)
                     if (ingredientItem) { break }
                 }
 

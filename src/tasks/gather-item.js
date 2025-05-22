@@ -557,8 +557,8 @@ const planners = [
 
         if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} | Check inventory ...`)
 
-        let inInventory = bot.inventoryItemCount(null, item) + (future.inventory.get(item) ?? 0)
-        inInventory -= bot.isItemLocked(item)
+        let inInventory = bot.inventory.inventoryItemCount(null, item) + (future.inventory.get(item) ?? 0)
+        inInventory -= bot.inventory.isItemLocked(item)
 
         if (inInventory <= 0) {
             if (planningLogs) console.log(`[Bot "${bot.username}"] ${_depthPrefix} |   None`)
@@ -571,7 +571,7 @@ const planners = [
         let locks = []
         if (context.lockItems) {
             debugger
-            const lock = bot.tryLockItem(bot.username, item, needFromInventory)
+            const lock = bot.inventory.tryLockItem(bot.username, item, needFromInventory)
             if (!lock) { return null }
             context.localLocks.push(lock)
             locks.push(lock)
@@ -1011,7 +1011,7 @@ const planners = [
         const recipes = Object.values(bot.mc.local.recipes.campfire).filter(v => isItemEquals(v.result, item))
         if (!recipes.length) { return null }
 
-        const campfire = bot.findBlocks({
+        const campfire = bot.blocks.find({
             matching: 'campfire',
             count: 1,
             maxDistance: 48,
@@ -1135,7 +1135,7 @@ const planners = [
 
         if (recipes.length === 0) { return null }
 
-        const brewingStand = bot.findBlocks({
+        const brewingStand = bot.blocks.find({
             matching: 'brewing_stand',
             maxDistance: 32,
             count: 1,
@@ -1350,7 +1350,7 @@ const planners = [
         if (!permissions.canDigGenerators) { return null }
         if (typeof item !== 'string') { return null }
 
-        if (!bot.searchInventoryItem(null,
+        if (!bot.inventory.searchInventoryItem(null,
             'wooden_pickaxe',
             'stone_pickaxe',
             'iron_pickaxe',
@@ -1581,7 +1581,7 @@ const planners = [
             return null
         }
 
-        const water = bot.findBlocks({
+        const water = bot.blocks.find({
             matching: 'water',
             count: 1,
             maxDistance: 64,
@@ -1895,7 +1895,7 @@ function* evaluatePlan(bot, plan, args) {
                         continue
                     }
                     case 'fill-item': {
-                        const filledItemBefore = bot.inventoryItemCount(null, step.expectedResult)
+                        const filledItemBefore = bot.inventory.inventoryItemCount(null, step.expectedResult)
                         yield* goto.task(bot, {
                             block: step.block.position,
                             reach: 3,
@@ -1904,10 +1904,10 @@ function* evaluatePlan(bot, plan, args) {
                             },
                             ...runtimeArgs(args),
                         })
-                        let itemToFill = bot.searchInventoryItem(null, step.item)
+                        let itemToFill = bot.inventory.searchInventoryItem(null, step.item)
                         if (!itemToFill) { throw new GameError(`I have no ${stringifyItemH(step.item)}`) }
 
-                        yield* bot.equip(itemToFill)
+                        yield* bot.inventory.equip(itemToFill)
 
                         let block = bot.bot.blockAt(step.block.position.xyz(bot.dimension))
                         if (!block) { throw new GameError(`The chunk where I want to fill my ${stringifyItemH(itemToFill)} aint loaded`) }
@@ -1918,7 +1918,7 @@ function* evaluatePlan(bot, plan, args) {
                         /** @type {Set<string>} */
                         const bad = new Set()
                         while (true) {
-                            if (!bot.blockInView(block)) {
+                            if (!bot.blocks.inView(block)) {
                                 yield* goto.task(bot, {
                                     block: block.position,
                                     raycast: true,
@@ -1927,14 +1927,14 @@ function* evaluatePlan(bot, plan, args) {
                             }
 
                             try {
-                                yield* wrap(bot.lookAtBlock(block, null, bot.instantLook), args.interrupt)
+                                yield* wrap(bot.blocks.lookAt(block, null, bot.instantLook), args.interrupt)
                                 yield* sleepTicks(1)
                                 bot.bot.activateItem(false)
                                 yield* sleepTicks(1)
 
                                 bot.bot.deactivateItem()
 
-                                const filledItemAfter = bot.inventoryItemCount(null, step.expectedResult)
+                                const filledItemAfter = bot.inventory.inventoryItemCount(null, step.expectedResult)
                                 if (filledItemAfter <= filledItemBefore) {
                                     throw new GameError(`Failed to fill my ${stringifyItemH(itemToFill)}`)
                                 }
@@ -1981,7 +1981,7 @@ function* evaluatePlan(bot, plan, args) {
                                 lock: lock,
                             }
                         }
-                        const took = yield* bot.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
+                        const took = yield* bot.inventory.chestWithdraw(openedChest.chest, openedChest.chestPosition.xyz(bot.dimension), step.item, step.count)
                         if (took < step.count) {
                             throw new GameError(`Item ${step.item} disappeared from chest: took ${took} but expected ${step.count}`)
                         }
@@ -2006,7 +2006,7 @@ function* evaluatePlan(bot, plan, args) {
                         if (!entity.isValid) {
                             throw new EnvironmentError(`The ${step.entity.expectedType} is invalid`)
                         }
-                        const toolItem = bot.searchInventoryItem(null, step.tool)
+                        const toolItem = bot.inventory.searchInventoryItem(null, step.tool)
                         if (!toolItem) {
                             throw new GameError(`I have no ${step.tool}`)
                         }
@@ -2047,7 +2047,7 @@ function* evaluatePlan(bot, plan, args) {
                                 maxDistance: config.gatherItem.craftingTableSearchRadius,
                             })
                             if (!tableBlock) {
-                                const tableItem = bot.searchInventoryItem(null, 'crafting_table')
+                                const tableItem = bot.inventory.searchInventoryItem(null, 'crafting_table')
                                 if (!tableItem) {
                                     throw new GameError(`I have no crafting table`)
                                 }
@@ -2207,7 +2207,7 @@ function* evaluatePlan(bot, plan, args) {
 
                         /** @type {Freq<import('../utils/other').ItemId>} */
                         const originalItems = new Freq(isItemEquals)
-                        bot.inventoryItems().forEach(item => {
+                        bot.inventory.inventoryItems().forEach(item => {
                             originalItems.add(item, item.count)
                         })
 
@@ -2218,7 +2218,7 @@ function* evaluatePlan(bot, plan, args) {
                             yield* sleepG(100)
                             /** @type {Freq<import('../utils/other').ItemId>} */
                             const newItems = new Freq(isItemEquals)
-                            bot.inventoryItems().forEach(item => {
+                            bot.inventory.inventoryItems().forEach(item => {
                                 newItems.add(item, item.count)
                             })
 
@@ -2795,7 +2795,7 @@ const def = {
                 }
             }
 
-            const itemsBefore = bot.inventoryItemCount(null, bestPlan.item)
+            const itemsBefore = bot.inventory.inventoryItemCount(null, bestPlan.item)
 
             if (planningLogs) console.log(`[Bot "${bot.username}"] Evaluating plan ...`)
             const locks = lockPlanItems(bot, _organizedPlan)
@@ -2819,7 +2819,7 @@ const def = {
                 cleanup('cancel')
             }
 
-            const itemsAfter = bot.inventoryItemCount(null, bestPlan.item)
+            const itemsAfter = bot.inventory.inventoryItemCount(null, bestPlan.item)
             const itemsGathered = itemsAfter - itemsBefore
 
             return {

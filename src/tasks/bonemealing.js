@@ -19,7 +19,7 @@ module.exports = {
         if (args.interrupt.isCancelled) { return 0 }
         if (bot.quietMode) { throw new PermissionError(`Can't bonemeal in quiet mode`) }
 
-        let bonemeal = bot.searchInventoryItem(null, 'bonemeal')
+        let bonemeal = bot.inventory.searchInventoryItem(null, 'bonemeal')
         let n = 0
 
         while (bonemeal) {
@@ -45,11 +45,11 @@ module.exports = {
 
             crops = backNForthSort(crops)
 
-            bonemeal = bot.searchInventoryItem(null, 'bonemeal')
+            bonemeal = bot.inventory.searchInventoryItem(null, 'bonemeal')
             if (!bonemeal) { break }
 
             for (const crop of crops) {
-                bonemeal = bot.searchInventoryItem(null, 'bonemeal')
+                bonemeal = bot.inventory.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }
 
                 yield* goto.task(bot, {
@@ -59,7 +59,7 @@ module.exports = {
 
                 if (args.interrupt.isCancelled) { break }
 
-                bonemeal = bot.searchInventoryItem(null, 'bonemeal')
+                bonemeal = bot.inventory.searchInventoryItem(null, 'bonemeal')
                 if (!bonemeal) { break }
 
                 bot.bot.equip(bonemeal, 'hand')

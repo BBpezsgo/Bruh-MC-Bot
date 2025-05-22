@@ -139,7 +139,7 @@ function* parallelAll(...tasks) {
  */
 
 /**
- * @param {ReadonlyArray<TaskInParallel<any>>} tasks
+ * @param {ReadonlyArray<TaskInParallel<any> | import('../task').Task<any>>} tasks
  * @returns {import('../task').Task<void>}
  */
 function* parallel(tasks) {
@@ -150,7 +150,12 @@ function* parallel(tasks) {
      *   callback: (result: any) => void;
      * }>}
      */
-    const context = tasks.map(v => ({
+    const context = tasks.map(v => 'next' in v ? ({
+        task: v,
+        callback: () => { },
+        /** @type {any} */
+        value: null,
+    }) : ({
         task: v.task,
         callback: v.callback,
         /** @type {any} */

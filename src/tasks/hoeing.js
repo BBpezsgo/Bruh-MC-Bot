@@ -44,7 +44,7 @@ module.exports = {
         {
             let hasHoe = false
             for (const hoe of hoes) {
-                const hoeItem = bot.searchInventoryItem(null, hoe)
+                const hoeItem = bot.inventory.searchInventoryItem(null, hoe)
                 if (hoeItem) {
                     hasHoe = true
                     break
@@ -59,7 +59,7 @@ module.exports = {
         }
 
         const equipHoe = function*() {
-            const hoeItem = yield* bot.ensureItem({
+            const hoeItem = yield* bot.inventory.ensureItem({
                 item: hoes,
                 ...runtimeArgs(args),
             })
@@ -125,7 +125,7 @@ module.exports = {
                     })
 
                     if (above && Minecraft.replaceableBlocks[above.name] === 'break') {
-                        yield* bot.dig(above, true, false, args.interrupt)
+                        yield* bot.blocks.dig(above, true, false, args.interrupt)
                     }
                 }
             } finally {
@@ -191,7 +191,7 @@ module.exports = {
                 if (args.interrupt.isCancelled) { break }
 
                 if (Minecraft.replaceableBlocks[above.name] === 'break') {
-                    yield* bot.dig(above, true, false, args.interrupt)
+                    yield* bot.blocks.dig(above, true, false, args.interrupt)
                 }
 
                 if (args.interrupt.isCancelled) { break }

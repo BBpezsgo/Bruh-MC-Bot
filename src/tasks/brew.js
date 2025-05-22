@@ -350,8 +350,8 @@ module.exports = {
             }
         })()
 
-        let bottleItem = bot.inventoryItems(null).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
-        let ingredientItem = bot.inventoryItems(null).filter(v => v.name === recipe.ingredient).first()
+        let bottleItem = bot.inventory.inventoryItems(null).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
+        let ingredientItem = bot.inventory.inventoryItems(null).filter(v => v.name === recipe.ingredient).first()
 
         if (!bottleItem && !ingredientItem) {
             throw new GameError(`I don't have "${recipe.ingredient}" and the bottle`)
@@ -373,7 +373,7 @@ module.exports = {
             })
         }
 
-        let brewingStand = bot.findBlocks({
+        let brewingStand = bot.blocks.find({
             matching: 'brewing_stand',
             count: 1,
             maxDistance: 64,
@@ -403,8 +403,8 @@ module.exports = {
 
             window = yield* wrap(bot.bot.openBrewingStand(brewingStand), args.interrupt)
 
-            bottleItem = bot.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
-            ingredientItem = bot.inventoryItems(window).filter(v => v.name === recipe.ingredient).first()
+            bottleItem = bot.inventory.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
+            ingredientItem = bot.inventory.inventoryItems(window).filter(v => v.name === recipe.ingredient).first()
 
             if (!bottleItem || !ingredientItem) {
                 throw new GameError(`Ingredients disappeared`)
@@ -445,7 +445,7 @@ module.exports = {
             }
 
             if (!window.fuel && !window.fuelItem()) {
-                const fuelItem = bot.searchInventoryItem(window, 'blaze_powder')
+                const fuelItem = bot.inventory.searchInventoryItem(window, 'blaze_powder')
                 if (!fuelItem) { throw new GameError(`I have no blaze powder`) }
                 yield* wrap(window.putFuel(fuelItem.type, fuelItem.metadata, 1), args.interrupt)
             }
@@ -458,7 +458,7 @@ module.exports = {
             bot.bot.clickWindow(ingredientItem.slot, 0, 0)
 
             for (let slot = 0; slot < Math.clamp(args.count, 1, 3); slot++) {
-                bottleItem = bot.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
+                bottleItem = bot.inventory.inventoryItems(window).filter(v => v.name === recipe.bottle.name && NBT2JSON(v.nbt)?.['Potion'] === recipe.bottle.potion).first()
 
                 if (!bottleItem) {
                     yield

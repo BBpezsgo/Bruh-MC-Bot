@@ -131,7 +131,7 @@ module.exports = {
             if (trade.tradeDisabled) { throw new EnvironmentError(`This trade is disabled`) }
             while (traded < args.numberOfTrades) {
                 if (args.interrupt.isCancelled) { break }
-                const have = bot.inventoryItemCount(villager, trade.inputItem1)
+                const have = bot.inventory.inventoryItemCount(villager, trade.inputItem1)
                 if (have < trade.inputItem1.count) { break }
                 yield* wrap(bot.bot.trade(villager, tradeIndex, 1), args.interrupt)
                 traded++
