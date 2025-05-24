@@ -9,7 +9,7 @@ module.exports = (bot) => {
     const ensureEquipmentInterval = new Interval(60000)
 
     return () => {
-        if (bot.tasks.isIdle && ensureEquipmentInterval.done()) {
+        if (bot.tasks.isIdle && bot.tasks.timeSinceImportantTask > 10000 && ensureEquipmentInterval.done()) {
             bot.tasks.push(bot, {
                 task: BruhBot.ensureEquipment,
                 id: 'ensure-equipment',

@@ -7,7 +7,7 @@ const taskUtils = require('../../utils/tasks')
  */
 module.exports = (bot) => {
     return () => {
-        if (bot.memory.myArrows.length > 0) {
+        if (bot.memory.myArrows.length > 0 && bot.tasks.timeSinceImportantTask > 3000) {
             bot.tasks.push(bot, {
                 task: function*(bot, args) {
                     const myArrow = bot.memory.myArrows.shift()

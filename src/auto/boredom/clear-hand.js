@@ -9,7 +9,7 @@ module.exports = (bot) => {
     return () => {
         if (bot.bot.heldItem && clearHandInterval?.done() && bot.tasks.isIdleOrThinking && (bot.tasks.timeSinceImportantTask > 1000 || bot.isFollowingButNotMoving)) {
             bot.inventory.tryUnequip()
-                .then(v => v || console.log(`[Bot "${bot.username}"] Failed to clear hand`))
+                .then(() => { })
                 .catch(v => console.error(`[Bot "${bot.username}"]`, v))
             return true
         }

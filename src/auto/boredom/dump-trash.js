@@ -10,7 +10,7 @@ module.exports = (bot) => {
     const forceDumpTrashInterval = new Interval(120000)
 
     return () => {
-        if (bot.tasks.isIdle && dumpTrashInterval?.done()) {
+        if (bot.tasks.isIdle && bot.tasks.timeSinceImportantTask > 10000 && dumpTrashInterval.done()) {
             const freeSlots = bot.inventory.inventorySlots().filter(v => !bot.bot.inventory.slots[v]).toArray()
             if (freeSlots.length < 10 || forceDumpTrashInterval?.done()) {
                 const trashItems = bot.inventory.getTrashItems()

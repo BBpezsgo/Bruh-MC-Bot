@@ -10,7 +10,7 @@ module.exports = (bot) => {
     const loadCrossbowsInterval = new Interval(5000)
 
     return () => {
-        if (loadCrossbowsInterval.done()) {
+        if (loadCrossbowsInterval.done() && bot.tasks.timeSinceImportantTask > 5000) {
             bot.tasks.push(bot, {
                 task: function*(bot, args) {
                     const crossbows =

@@ -394,13 +394,10 @@ module.exports = class BruhBot {
             require('./auto/boredom/give-back')(this),
             require('./auto/boredom/pickup-items')(this),
             require('./auto/boredom/pickup-xps')(this),
-        ]
-
-        this.nothingAutos = [
-            require('./auto/nothing/goto-idle')(this),
-            require('./auto/nothing/move-away')(this),
-            require('./auto/nothing/look')(this),
-            require('./auto/nothing/clear-hand')(this),
+            require('./auto/boredom/goto-idle')(this),
+            require('./auto/boredom/move-away')(this),
+            require('./auto/boredom/look')(this),
+            require('./auto/boredom/clear-hand')(this),
         ]
 
         if (config.bot.behavior?.loadCrossbows) this.boredomAutos.push(require('./auto/boredom/load-crossbow')(this))
@@ -2070,13 +2067,7 @@ module.exports = class BruhBot {
             return
         }
 
-        if (this.tasks.timeSinceImportantTask > 10000) {
-            for (const auto of this.boredomAutos) {
-                if (auto()) return
-            }
-        }
-
-        for (const auto of this.nothingAutos) {
+        for (const auto of this.boredomAutos) {
             if (auto()) return
         }
     }

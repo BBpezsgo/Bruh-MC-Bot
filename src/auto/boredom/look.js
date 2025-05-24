@@ -67,12 +67,12 @@ module.exports = (bot) => {
         if (bot.tasks.isIdleOrThinking || bot.isFollowingButNotMoving) {
             if ((!bot.tasks.isIdleOrThinking || bot.tasks.timeSinceImportantTask > 1000) && lookAtNearestPlayer()) {
                 randomLookInterval?.restart()
-                return true
+                return false
             }
 
             if ((!bot.tasks.isIdle || bot.tasks.timeSinceImportantTask > 1000) && randomLookInterval?.done()) {
                 lookRandomly()
-                return true
+                return false
             }
         }
 
