@@ -76,18 +76,18 @@ module.exports = {
                 const at = bot.bot.blocks.at(savedCrop.position.xyz(bot.dimension))
 
                 if (at && Minecraft.replaceableBlocks[at.name] !== 'yes') {
-                    console.warn(`[Bot "${bot.username}"] There is something else there (${at.name})`)
+                    args.warn(`[Bot "${bot.username}"] There is something else there (${at.name})`)
                     continue
                 }
                 if (crop.type === 'tree' &&
                     crop.size !== 'small') {
-                    console.warn(`[Bot "${bot.username}"] This tree is too big to me`)
+                    args.warn(`[Bot "${bot.username}"] This tree is too big to me`)
                 }
 
                 let placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${crop.seed}": There is already something else`)
+                    args.warn(`[Bot "${bot.username}"] Can't replant "${crop.seed}": There is already something else`)
                     continue
                 }
 
@@ -107,7 +107,7 @@ module.exports = {
                             ...runtimeArgs(args),
                         })
                     } catch (error) {
-                        console.error(`[Bot "${bot.username}"]`, error)
+                        args.error(`[Bot "${bot.username}"]`, error)
                         continue
                     }
                 }
@@ -117,7 +117,7 @@ module.exports = {
                 placeOn = bot.env.getPlantableBlock(bot, savedCrop.position.xyz(bot.dimension), crop, true, false)
 
                 if (!placeOn.isExactBlock) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant ${crop.seed}: couldn't find a good spot`)
+                    args.warn(`[Bot "${bot.username}"] Can't replant ${crop.seed}: couldn't find a good spot`)
                     continue
                 }
 
@@ -127,7 +127,7 @@ module.exports = {
                     count: 1,
                 })
                 if (!seed) {
-                    console.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${crop.seed}"`)
+                    args.warn(`[Bot "${bot.username}"] Can't replant "${savedCrop.block}": doesn't have "${crop.seed}"`)
                     continue
                 }
 

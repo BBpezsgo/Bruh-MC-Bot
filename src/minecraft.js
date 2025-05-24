@@ -1072,15 +1072,15 @@ module.exports = class Minecraft {
             alwaysAngry: true,
             rangeOfSight: 16, // ?
         },
-        'evoker_fangs': {
-            meleeAttack: {
-                damage: { type: 'physical', amount: 6 },
-                cooldown: 1, // ?
-                range: 1, // ?
-            },
-            alwaysAngry: true,
-            rangeOfSight: 3, // ?
-        },
+        // 'evoker_fangs': {
+        //     meleeAttack: {
+        //         damage: { type: 'physical', amount: 6 },
+        //         cooldown: 1, // ?
+        //         range: 1, // ?
+        //     },
+        //     alwaysAngry: true,
+        //     rangeOfSight: 3, // ?
+        // },
         'elder_guardian': {
             rangeAttack: {
                 damage: { type: 'physical', amount: { easy: 5, normal: 8, hard: 12 } },
@@ -1239,6 +1239,11 @@ module.exports = class Minecraft {
             meleeAttack: {
                 range: 2,
                 damage: { type: 'physical', amount: 24 },
+            },
+            rangeAttack: { // Fangs
+                range: 8,
+                damage: { type: 'physical', amount: 6 },
+                cooldown: 5,
             },
             rangeOfSight: 12,
             alwaysAngry: true,

@@ -14,7 +14,9 @@ module.exports = (bot) => {
                 task: BruhBot.tryRestoreCrops,
                 id: `check-crops`,
                 humanReadableId: `Checking crops`,
-            }, {}, priorities.unnecessary, false, null, false)
+            }, {
+                silent: true
+            }, priorities.unnecessary, false, null, false)
         }
         return false
     }

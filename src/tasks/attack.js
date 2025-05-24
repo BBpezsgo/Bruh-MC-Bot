@@ -1098,6 +1098,9 @@ module.exports = {
 
         args.interrupt.on(onInterrupt)
 
+        /** @type {Record<number, Vec3>} */
+        const targetPositions = {}
+
         try {
             while (true) {
                 yield
@@ -1105,15 +1108,22 @@ module.exports = {
                 const { target } = selectTarget()
                 if (!target) break
 
-                if (noPath.melee && performance.now() - noPath.melee > 5000) {
+                ensureMovement()
+
+                if (noPath.melee && (performance.now() - noPath.melee > 5000 || !args.useBow || !searchRangeWeapon(bot))) {
                     noPath.melee = 0
                 }
 
-                if (noPath.range && performance.now() - noPath.range > 5000) {
+                if (noPath.range && (performance.now() - noPath.range > 5000 || !args.useMelee)) {
                     noPath.range = 0
                 }
 
-                ensureMovement()
+                if (!targetPositions[target.id]) {
+                    targetPositions[target.id] = target.position.clone()
+                } else if (targetPositions[target.id].distanceTo(target.position) > 1) {
+                    noPath.range = 0
+                    noPath.melee = 0
+                }
 
                 const distance = Math.entityDistance(bot.bot.entity.position.offset(0, bot.bot.entity.eyeHeight ?? 1.6, 0), target)
 
@@ -1122,7 +1132,7 @@ module.exports = {
                         reequipMeleeWeapon = true
                         isGoalChanged = movementState !== 'goto-melee'
                         movementState = 'goto-melee'
-                        // console.log(`distance (${distance.toFixed(2)}) > 4`)
+                        // console.log(`Distance (${distance.toFixed(2)}) > 4`)
                         continue
                     }
 
@@ -1163,9 +1173,11 @@ module.exports = {
 
                     if (reequipMeleeWeapon) {
                         if (args.useMeleeWeapon) {
+                            //console.log(`Equip weapon`)
                             yield* equipMeleeWeapon(target.name)
                         } else {
                             if (bot.bot.inventory.slots[bot.bot.getEquipmentDestSlot('hand')]) {
+                                //console.log(`Unequip item`)
                                 yield* wrap(bot.bot.unequip('hand'), args.interrupt)
                             }
                         }
@@ -1175,6 +1187,7 @@ module.exports = {
                     shield = bot.inventory.searchInventoryItem(null, 'shield')
                     if (shield) {
                         if (!bot.inventory.holds('shield', true)) {
+                            //console.log(`Equip shield`)
                             yield* wrap(bot.bot.equip(shield.type, 'off-hand'), args.interrupt)
                         }
                         bot.bot.lookAt(target.position.offset(0, target.height, 0), true)
@@ -1187,19 +1200,20 @@ module.exports = {
                         bot.bot.blocks.at(bot.bot.entity.position.offset(0, -0.5, 0))?.name !== 'farmland' &&
                         now + Minecraft.general.jumpTotalTime > cooldownEndAt + extraCooldown) {
                         bot.bot.jumpQueued = true
+                        //console.log(`Jump`)
                     }
 
                     if (now <= cooldownEndAt + extraCooldown) {
-                        // console.log(`Waiting ${(cooldownEndAt + extraCooldown - now).toFixed(0)} ms`)
+                        //console.log(`Waiting ${(cooldownEndAt + extraCooldown - now).toFixed(0)} ms`)
                         continue
                     }
 
                     if (bot.env.isEntityHurting(target)) {
-                        // console.log(`Entity is hurting`)
+                        //console.log(`Entity is hurting`)
                         continue
                     }
 
-                    // console.log('Attack')
+                    //console.log('Attack')
                     bot.bot.attack(target)
                     bot.leftHand.isActivated = false
                     cooldownEndAt = now + cooldown
@@ -1208,6 +1222,14 @@ module.exports = {
                     activateShield(shield)
 
                     continue
+                }
+
+                if (args.useMelee) {
+                    if (noPath.melee) {
+                        //console.warn(`No path`)
+                    } else {
+                        //console.warn(`${distance.toFixed(2)} > ${config.attack.distanceToUseRangeWeapons.toFixed(2)}`)
+                    }
                 }
 
                 const isProjectileImmune = (

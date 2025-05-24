@@ -181,6 +181,18 @@ const equipment = [
         item: 'arrow',
         count: 'any',
     },
+    {
+        type: 'single',
+        priority: 'good',
+        item: 'totem_of_undying',
+        count: 1,
+    },
+    {
+        type: 'single',
+        priority: 'good',
+        item: 'milk_bucket',
+        count: 1,
+    },
 ]
 
 module.exports = equipment

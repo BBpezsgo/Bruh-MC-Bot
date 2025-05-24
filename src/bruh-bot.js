@@ -373,6 +373,7 @@ module.exports = class BruhBot {
         this.blocks = require('./utils/blocks')(this)
 
         this.autos = [
+            require('./auto/important/evoker-fangs-defense')(this),
             require('./auto/important/creeper-defense')(this),
             require('./auto/important/fireball-defense')(this),
             require('./auto/important/fire-lava-defense')(this),

@@ -18,6 +18,15 @@ module.exports = class TimeoutError extends Error {
             // @ts-ignore
             waitedTimeMs = waitedTimeMs.start - performance.now()
         }
-        return new TimeoutError(`Waited for ${waitedTimeMs} ms`, options)
+        let suffix = 'ms'
+        if (waitedTimeMs >= 500) {
+            waitedTimeMs /= 1000
+            suffix = 'sec'
+        }
+        if (waitedTimeMs >= 30) {
+            waitedTimeMs /= 30
+            suffix = 'mins'
+        }
+        return new TimeoutError(`Waited for ${Math.round(waitedTimeMs * 10) / 10} ${suffix}`, options)
     }
 }

@@ -16,7 +16,7 @@ module.exports = (bot) => {
                     }
                     const entity = bot.bot.nearestEntity((/** @type {import('prismarine-entity').Entity} */ v) => v.id === myArrow)
                     if (!entity) {
-                        console.warn(`[Bot "${bot.username}"] Can't find the arrow`)
+                        args.warn(`[Bot "${bot.username}"] Can't find the arrow`)
                         return
                     }
                     yield* tasks.goto.task(bot, {
@@ -26,9 +26,9 @@ module.exports = (bot) => {
                     })
                     yield* taskUtils.sleepG(1000)
                     if (entity.isValid) {
-                        console.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
+                        args.warn(`[Bot "${bot.username}"] Can't pick up this arrow`)
                     } else {
-                        console.log(`[Bot "${bot.username}"] Arrow picked up`)
+                        args.log(`[Bot "${bot.username}"] Arrow picked up`)
                     }
                 },
                 id: `pickup-my-arrows`,

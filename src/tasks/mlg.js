@@ -1,6 +1,6 @@
 'use strict'
 
-const { wrap, sleepG, sleepTicks } = require('../utils/tasks')
+const { wrap, sleepG, sleepTicks, runtimeArgs } = require('../utils/tasks')
 const { Vec3 } = require('vec3')
 const Vec3Dimension = require('../utils/vec3-dimension')
 const Minecraft = require('../minecraft')
@@ -67,9 +67,7 @@ module.exports = {
                 const eatTask = eat.task(bot, {
                     food: chorusFruit,
                     interrupt: cancelEat,
-                    response: args.response,
-                    silent: args.silent,
-                    task: args.task,
+                    ...runtimeArgs(args),
                 })
                 args.interrupt.on(cancelEat.trigger)
 

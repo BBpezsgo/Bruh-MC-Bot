@@ -183,6 +183,9 @@ class ManagedTask {
             task: this,
             response: args.response ?? null,
             silent: args.silent ?? false,
+            log: args.silent ? () => { } : console.log,
+            warn: args.silent ? () => { } : console.warn,
+            error: args.silent ? () => { } : console.error,
         }
         this._bot = bot
         this._def = def

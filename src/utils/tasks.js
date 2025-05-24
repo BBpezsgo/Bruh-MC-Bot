@@ -221,6 +221,9 @@ function runtimeArgs(args) {
         response: args.response,
         silent: args.silent,
         task: args.task,
+        log: args.log,
+        warn: args.warn,
+        error: args.error,
     }
 }
 

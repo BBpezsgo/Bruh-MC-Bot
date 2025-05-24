@@ -30,4 +30,7 @@ export type RuntimeArgs<TArgs extends {}> = TArgs & {
     silent: boolean
     interrupt: Interrupt
     task: IManagedTask
+    log: typeof console.log,
+    warn: typeof console.warn,
+    error: typeof console.error,
 }

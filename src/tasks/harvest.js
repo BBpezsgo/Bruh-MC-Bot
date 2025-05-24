@@ -70,7 +70,7 @@ module.exports = {
                                 block: grownBlock,
                                 alsoTheNeighbors: false,
                                 pickUpItems: true,
-                                skipIfAllocated: false,
+                                skipIfAllocated: true,
                                 ...runtimeArgs(args),
                             })
                             break
@@ -96,7 +96,7 @@ module.exports = {
                                 block: grownBlock,
                                 alsoTheNeighbors: true,
                                 pickUpItems: true,
-                                skipIfAllocated: false,
+                                skipIfAllocated: true,
                                 ...runtimeArgs(args),
                             })
                             break
