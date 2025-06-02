@@ -132,12 +132,12 @@ module.exports = {
         try {
             furnaceBlock = bot.bot.blockAt(furnaceBlock.position)
             if (!furnaceBlock) { throw new EnvironmentError(`Furnace disappeared`) }
-    
+
             yield* goto.task(bot, {
                 block: furnaceBlock.position,
                 ...runtimeArgs(args),
             })
-    
+
             furnace = yield* wrap(bot.bot.openFurnace(furnaceBlock), args.interrupt)
             furnace.once('close', () => {
                 furnace = null
@@ -168,11 +168,11 @@ module.exports = {
                             }
                             return detRes
                         }
-    
+
                         if (/where(\s*is\s*it)?\s*\?*/.exec(q)) {
                             return `At ${furnaceBlock.position.x} ${furnaceBlock.position.y} ${furnaceBlock.position.z} in ${bot.dimension}`
                         }
-    
+
                         return null
                     }))
                     if (res.message) {
@@ -210,20 +210,23 @@ module.exports = {
 
                     if (args.interrupt.isCancelled) { return outputs }
 
-                    if (furnace.fuel <= 0 && !furnace.fuelItem()) {
-                        let havePutSomething = false
-                        for (const fuel of fuels) {
-                            const have = bot.inventory.searchInventoryItem(furnace, fuel.item)
-                            if (!have) continue
-                            const canPut = have.count - bot.inventory.isItemLocked(have)
-                            if (canPut > 0) {
-                                yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)), args.interrupt)
-                                havePutSomething = true
-                                break
+                    puttingFuel: {
+                        for (let retry = 0; retry < 5; retry++) {
+                            yield* sleepTicks()
+                            if (furnace.fuel <= 0 && !furnace.fuelItem()) {
+                                for (const fuel of fuels) {
+                                    const have = bot.inventory.searchInventoryItem(furnace, fuel.item)
+                                    if (!have) continue
+                                    const canPut = have.count - bot.inventory.isItemLocked(have, args.locks)
+                                    if (canPut > 0) {
+                                        yield* wrap(furnace.putFuel(have.type, null, Math.min(canPut, 1)), args.interrupt)
+                                        break puttingFuel
+                                    }
+                                }
                             }
                         }
 
-                        if (!havePutSomething && furnace.fuel <= 0 && !furnace.fuelItem()) { throw new GameError(`I have no fuel`) }
+                        if (furnace.fuel <= 0 && !furnace.fuelItem()) { throw new GameError(`I have no fuel`) }
                     }
 
                     yield* sleepTicks(1)

@@ -168,7 +168,7 @@ module.exports = class LocalMinecraftData {
     async readTags(zip, zipEntries) {
         for (const entry in zipEntries) {
             if (!entry.endsWith('.json')) { continue }
-            if (!entry.startsWith('data/minecraft/tags/items/')) { continue }
+            if (!entry.startsWith('data/minecraft/tags/item/')) { continue }
 
             const data = await zip.entryData(entry)
             const rawTag = JSON.parse(data.toString('utf8'))
@@ -253,7 +253,7 @@ module.exports = class LocalMinecraftData {
 
         for (const entry in zipEntries) {
             if (!entry.endsWith('.json')) { continue }
-            if (!entry.startsWith('data/minecraft/recipes/')) { continue }
+            if (!entry.startsWith('data/minecraft/recipe/')) { continue }
 
             const data = await zip.entryData(entry)
             const id = Path.basename(entry).replace('.json', '')
@@ -265,7 +265,7 @@ module.exports = class LocalMinecraftData {
                         type: 'campfire',
                         experience: rawRecipe.experience,
                         time: rawRecipe.cookingtime / 20,
-                        result: rawRecipe.result.replace('minecraft:', ''),
+                        result: rawRecipe.result.id.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
                     this.recipes.campfire[id] = recipe
@@ -278,7 +278,7 @@ module.exports = class LocalMinecraftData {
                         type: 'smelting',
                         experience: rawRecipe.experience,
                         time: rawRecipe.cookingtime / 20,
-                        result: rawRecipe.result.replace('minecraft:', ''),
+                        result: rawRecipe.result.id.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
                     if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break
@@ -292,7 +292,7 @@ module.exports = class LocalMinecraftData {
                         type: 'blasting',
                         experience: rawRecipe.experience,
                         time: rawRecipe.cookingtime / 20,
-                        result: rawRecipe.result.replace('minecraft:', ''),
+                        result: rawRecipe.result.id.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
                     if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break
@@ -306,7 +306,7 @@ module.exports = class LocalMinecraftData {
                         type: 'smoking',
                         experience: rawRecipe.experience,
                         time: rawRecipe.cookingtime / 20,
-                        result: rawRecipe.result.replace('minecraft:', ''),
+                        result: rawRecipe.result.id.replace('minecraft:', ''),
                         ingredient: this.parseIngredients(rawRecipe.ingredient),
                     }
                     if (invalidSmeltingIngredients.some(v => recipe.ingredient.includes(v))) break

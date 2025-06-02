@@ -841,6 +841,8 @@ const planners = [
             recipes.push(recipe)
         }
 
+        if (recipes.length === 0) { return null }
+
         const usableRecipes = yield* smelt.findBestFurnace(bot, recipes)
 
         if (!usableRecipes || usableRecipes.recipes.length === 0) { return null }
@@ -1622,7 +1624,7 @@ const planners = [
         if (typeof item !== 'string') return null
 
         const loots = Object.values(bot.mc.registry.entityLoot)
-            .filter(v => v.drops.some(v => v.item === item))
+            .filter(v => v.drops.some(v => v.item === item && v.dropChance >= 1))
 
         /** @type {Array<{ entity: import('prismarine-entity').Entity; loot: import('minecraft-data').EntityLootEntry; distance: number; }>} */
         const entityCanditates = []

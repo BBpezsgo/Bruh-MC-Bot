@@ -1123,6 +1123,7 @@ module.exports = {
                 } else if (targetPositions[target.id].distanceTo(target.position) > 1) {
                     noPath.range = 0
                     noPath.melee = 0
+                    targetPositions[target.id] = target.position.clone()
                 }
 
                 const distance = Math.entityDistance(bot.bot.entity.position.offset(0, bot.bot.entity.eyeHeight ?? 1.6, 0), target)

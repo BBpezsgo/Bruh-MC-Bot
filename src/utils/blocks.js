@@ -133,10 +133,9 @@ module.exports = (bot) => {
      * @returns {Iterable<import('prismarine-block').Block>}
      */
     const find = function(options) {
-        // @ts-ignore
         const Block = require('prismarine-block')(bot.bot.registry)
 
-        /** @type {ReadonlySet<number>} */
+        /** @type {Set<number>} */
         let matching = null
 
         if (typeof options.matching === 'number') {
@@ -152,10 +151,8 @@ module.exports = (bot) => {
             matching = new Set()
             for (const item of options.matching) {
                 if (typeof item === 'string') {
-                    //@ts-ignore
                     matching.add(bot.bot.registry.blocksByName[item].id)
                 } else {
-                    //@ts-ignore
                     matching.add(item)
                 }
             }
@@ -226,16 +223,13 @@ module.exports = (bot) => {
             while (next) {
                 yield
                 const column = bot.bot.world.getColumn(next.x, next.z)
-                //@ts-ignore
-                const sectionY = next.y + Math.abs(bot.game.minY >> 4)
-                //@ts-ignore
-                const totalSections = bot.game.height >> 4
+                const sectionY = next.y + Math.abs(bot.bot.game.minY >> 4)
+                const totalSections = bot.bot.game.height >> 4
                 if (sectionY >= 0 && sectionY < totalSections && column && !visitedSections.has(next.toString())) {
-                    /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */ //@ts-ignore
+                    /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */
                     const section = column.sections[sectionY]
                     if (isBlockInSection(section)) {
-                        //@ts-ignore
-                        const begin = new Vec3(next.x * 16, sectionY * 16 + bot.game.minY, next.z * 16)
+                        const begin = new Vec3(next.x * 16, sectionY * 16 + bot.bot.game.minY, next.z * 16)
                         const cursor = begin.clone()
                         const end = cursor.offset(16, 16, 16)
                         for (cursor.x = begin.x; cursor.x < end.x; cursor.x++) {
@@ -255,11 +249,9 @@ module.exports = (bot) => {
                     visitedSections.add(next.toString())
                 }
                 // If we started a layer, we have to finish it otherwise we might miss closer blocks
-                //@ts-ignore
                 if (startedLayer !== it.apothem && n >= count) {
                     break
                 }
-                //@ts-ignore
                 startedLayer = it.apothem
                 next = it.next()
             }

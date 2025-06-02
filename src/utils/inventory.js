@@ -125,10 +125,12 @@ module.exports = (bot) => {
 
     /**
      * @param {import('./other').ItemId} item
+     * @param {ReadonlyArray<import('../locks/item-lock')> | undefined} [expectThese]
      */
-    const isItemLocked = function(item) {
+    const isItemLocked = function(item, expectThese) {
+        expectThese ??= []
         let n = 0
-        for (const lock of bot.lockedItems) {
+        for (const lock of bot.lockedItems.filter(v1 => !expectThese.some(v2 => v1 === v2))) {
             if (!isItemEquals(lock.item, item)) continue
             if (lock.isUnlocked) continue
             n += lock.count
