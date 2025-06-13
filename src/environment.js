@@ -992,7 +992,23 @@ module.exports = class Environment {
         }
 
         let bestBlock = null
-        if (!exactPosition) {
+        if (exactPosition) {
+            const offsets = {
+                'top': [new Vec3(0, -1, 0)],
+                'side': [new Vec3(1, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, 0, 1), new Vec3(0, 0, -1)],
+                'bottom': [new Vec3(0, 1, 0)],
+            }[plant.growsOnSide]
+            good: {
+                for (const offset of offsets) {
+                    bestBlock = bot.bot.blockAt(plantPosition.offset(offset.x, offset.y, offset.z))
+                    if (!bestBlock) continue
+                    if (!growsOnBlock.includes(bestBlock.type)) continue
+                    if (!filter(bestBlock)) continue
+                    break good
+                }
+                return null
+            }
+        } else {
             bestBlock = bot.bot.findBlock({
                 matching: growsOnBlock,
                 point: plantPosition,
@@ -1000,11 +1016,6 @@ module.exports = class Environment {
                 useExtraInfo: filter,
             })
             if (!bestBlock) return null
-        } else {
-            bestBlock = bot.bot.blockAt(plantPosition.offset(0, -1, 0))
-            if (!bestBlock) return null
-            if (!growsOnBlock.includes(bestBlock.type)) return null
-            if (!filter(bestBlock)) return null
         }
 
         const neighbors = directBlockNeighbors(bestBlock.position, plant.growsOnSide)

@@ -475,10 +475,8 @@ module.exports = class BruhBot {
                         b.y = bot.bot.entity.position.y
                         p.y = bot.bot.entity.position.y
 
-                        if (bot.debug) {
-                            bot.debug.drawLine(a, b, [1, 0, 0])
-                            bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
-                        }
+                        bot.debug.drawLine(a, b, [1, 0, 0])
+                        bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
 
                         bot.bot.movement.setGoal(goal)
                         const yaw = bot.bot.movement.getYaw(360, 15, 2)
@@ -563,10 +561,8 @@ module.exports = class BruhBot {
                         b.y = bot.bot.entity.position.y
                         p.y = bot.bot.entity.position.y
 
-                        if (bot.debug) {
-                            bot.debug.drawLine(a, b, [1, 0, 0])
-                            bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
-                        }
+                        bot.debug.drawLine(a, b, [1, 0, 0])
+                        bot.debug.drawLine(bot.bot.entity.position, p, [1, 0, 1])
 
                         goal.proximity
                             .target(p)
@@ -2361,13 +2357,13 @@ module.exports = class BruhBot {
             ...taskUtils.runtimeArgs(args),
         })
 
-        for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
-            yield
-            const blockAt = bot.bot.blocks.at(crop.position.xyz(bot.dimension))
-            if (!blockAt) { continue }
-            if (blockAt.name !== 'air') { continue }
-            return 0
-        }
+        //for (const crop of bot.env.crops.filter(v => v.position.dimension === bot.dimension && v.block !== 'brown_mushroom' && v.block !== 'red_mushroom')) {
+        //    yield
+        //    const blockAt = bot.bot.blocks.at(crop.position.xyz(bot.dimension))
+        //    if (!blockAt) { continue }
+        //    if (blockAt.name !== 'air') { continue }
+        //    return harvested
+        //}
 
         try {
             yield* tasks.compost.task(bot, {

@@ -80,7 +80,7 @@ module.exports = {
                                 block: cropPosition.position,
                                 ...runtimeArgs(args),
                             })
-                            yield* bot.blocks.activate(bot.bot.blockAt(cropPosition.position.xyz(bot.dimension)))
+                            yield* bot.blocks.activate(bot.bot.blockAt(cropPosition.position.xyz(bot.dimension)), bot.instantLook)
                             break
                         }
                         case 'tree': {
