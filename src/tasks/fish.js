@@ -46,7 +46,7 @@ function findWater(bot, preferTreasure) {
     const waters = bot.bot.findBlocks({
         matching: bot.mc.registry.blocksByName['water'].id,
         maxDistance: config.fishing.waterSearchRadius,
-        count: 64,
+        count: 256,
         useExtraInfo: (/** @type {Block} */ water) => {
             if (bot.bot.blocks.at(water.position.offset(0, 1, 0)).name !== 'air') {
                 return false
@@ -192,8 +192,8 @@ module.exports = {
             // console.log(`[Bot "${bot.username}"] Bobber landed`)
 
             bot.onHeard = async (/** @type {string | number} */ soundName) => {
-                if (soundName !== 'entity.bobber.splash' &&
-                    soundName !== 488) { return }
+                if (soundName !== 'entity.fishing_bobber.splash' &&
+                    soundName !== 518) { return }
                 if (!bobber || !bobber.isValid) { return }
                 splashHeard = performance.now()
                 bot.onHeard = null

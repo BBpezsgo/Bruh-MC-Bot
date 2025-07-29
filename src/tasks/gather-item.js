@@ -1870,6 +1870,18 @@ function* evaluatePlan(bot, plan, args) {
 
     if (planningLogs) console.log(`[Bot "${bot.username}"] Evaluating plan`)
 
+    const cleanup = () => {
+        if (openedChest) {
+            openedChest.chest.close()
+            openedChest.lock.unlock()
+            openedChest = null
+        }
+        // @ts-ignore
+        bot.bot.currentWindow?.close?.()
+    }
+
+    args.interrupt.on(cleanup)
+
     try {
         for (const step of plan) {
             yield
@@ -1881,6 +1893,7 @@ function* evaluatePlan(bot, plan, args) {
             if (openedChest) {
                 if (step.type !== 'chest') {
                     openedChest.chest.close()
+                    openedChest.lock.unlock()
                     openedChest = null
                 }
             }
@@ -1969,14 +1982,15 @@ function* evaluatePlan(bot, plan, args) {
                             bot.env.deleteChest(step.chest)
                             throw new EnvironmentError(`Chest disappeared`)
                         }
-                        if (openedChest && !step.chest.equals(openedChest.chestPosition)) {
+                        if (openedChest) {
                             openedChest.chest.close()
                             openedChest.lock.unlock()
                             openedChest = null
+                            yield* sleepTicks()
                         }
                         if (!openedChest) {
-                            const chest = yield* bot.openChest(chestBlock)
                             const lock = yield* bot.env.waitLock(bot.username, new Vec3Dimension(chestBlock.position, bot.dimension), 'use')
+                            const chest = yield* bot.openChest(chestBlock)
                             openedChest = {
                                 chestPosition: new Vec3Dimension(chestBlock.position, bot.dimension),
                                 chest: chest,
@@ -2393,11 +2407,8 @@ function* evaluatePlan(bot, plan, args) {
             }
         }
     } finally {
-        if (openedChest) {
-            openedChest.chest.close()
-            openedChest.lock.unlock()
-            openedChest = null
-        }
+        cleanup()
+        args.interrupt.off(cleanup)
     }
 }
 

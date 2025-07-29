@@ -169,42 +169,63 @@ class Interval {
 
 /**
  * @param {string} text
- * @returns {null | Vec3Dimension}
+ * @param {Vec3Dimension | null} position
+ * @returns {Vec3Dimension | null}
  */
-function parseLocationH(text) {
-    text = text.trim().toLowerCase()
-    const match = /x(-?[0-9]+), y(-?[0-9]+), z(-?[0-9]+), ([a-zA-Z]*)/.exec(text)
-    if (!match) {
-        return null
+function parseLocationH(text, position) {
+    for (const parser of [
+        () => {
+            text = text.trim().toLowerCase()
+            const match = /x(-?[0-9]+), y(-?[0-9]+), z(-?[0-9]+), ([a-zA-Z]*)/.exec(text)
+            if (!match) {
+                return null
+            }
+            if (match.length !== 5) {
+                return null
+            }
+            const x = Number.parseInt(match[1])
+            const y = Number.parseInt(match[2])
+            const z = Number.parseInt(match[3])
+            if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
+                return null
+            }
+            const rawDimension = match[4]
+            /**
+             * @type {import('mineflayer').Dimension}
+             */
+            let dimension
+            switch (rawDimension.toLowerCase()) {
+                case 'overworld':
+                    dimension = 'overworld'
+                    break
+                case 'end':
+                    dimension = 'the_end'
+                    break
+                case 'nether':
+                    dimension = 'the_nether'
+                    break
+                default:
+                    return null
+            }
+            return new Vec3Dimension({ x, y, z }, dimension)
+        },
+        () => {
+            if (!position) return null
+            text = text.trim().toLowerCase()
+            const match = /(-?[0-9]+) (-?[0-9]+) (-?[0-9]+)/.exec(text)
+            if (!match) return null
+            if (match.length !== 5) return null
+            const x = Number.parseInt(match[1])
+            const y = Number.parseInt(match[2])
+            const z = Number.parseInt(match[3])
+            if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) return null
+            return new Vec3Dimension({ x, y, z }, position.dimension)
+        },
+    ]) {
+        const v = parser()
+        if (v) return v
     }
-    if (match.length !== 5) {
-        return null
-    }
-    const x = Number.parseInt(match[1])
-    const y = Number.parseInt(match[2])
-    const z = Number.parseInt(match[3])
-    if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
-        return null
-    }
-    const rawDimension = match[4]
-    /**
-     * @type {import('mineflayer').Dimension}
-     */
-    let dimension
-    switch (rawDimension.toLowerCase()) {
-        case 'overworld':
-            dimension = 'overworld'
-            break
-        case 'end':
-            dimension = 'the_end'
-            break
-        case 'nether':
-            dimension = 'the_nether'
-            break
-        default:
-            return null
-    }
-    return new Vec3Dimension({ x, y, z }, dimension)
+    return null
 }
 
 /**
@@ -229,7 +250,7 @@ function parseAnyLocationH(text, bot = null) {
         }
     }
 
-    return parseLocationH(text)
+    return parseLocationH(text, bot ? new Vec3Dimension(bot.bot.entity.position, bot.dimension) : null)
 }
 
 /**

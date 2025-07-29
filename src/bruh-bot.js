@@ -222,6 +222,8 @@ module.exports = class BruhBot {
         this.memory = new Memory(this, path.join(config.worldPath, `memory-${config.bot.username}.json`))
         this.tasks = new TaskManager()
 
+        const _bot = this.bot
+
         /**
          * @param {string} sender
          * @param {(message: string) => void} send
@@ -290,7 +292,7 @@ module.exports = class BruhBot {
                     const _target = player ?? sender
 
                     const res = await this.askAsync(question, _send, _target, timeout, v => {
-                        if (parseLocationH(v)) return 'finish'
+                        if (parseLocationH(v, new Vec3Dimension(_bot.entity.position, _bot.game.dimension))) return 'finish'
                         if (detailProvider) {
                             const details = detailProvider(v)
                             if (details) {
@@ -302,7 +304,7 @@ module.exports = class BruhBot {
                     })
                     return {
                         sender: res.sender,
-                        message: parseLocationH(res.message),
+                        message: parseLocationH(res.message, new Vec3Dimension(_bot.entity.position, _bot.game.dimension)),
                     }
                 },
                 ask: (question, timeout, player, detailProvider) => {

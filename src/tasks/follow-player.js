@@ -120,7 +120,7 @@ module.exports = {
                 if (bot.bot.players[args.player]?.entity) {
                     const movements = new Movements(bot.bot, bot.restrictedMovements)
                     const _sneak = movements.sneak
-                    movements.sneak = () => (_sneak ? _sneak() : false) || (bot.bot.players[args.player].entity.metadata[6] === EntityPose.SNEAKING)
+                    movements.sneak = () => (_sneak ? _sneak() : false) || (bot.bot.players[args.player].entity?.metadata[6] === EntityPose.SNEAKING)
                     yield* goto.task(bot, {
                         entity: bot.bot.players[args.player].entity,
                         distance: args.range,

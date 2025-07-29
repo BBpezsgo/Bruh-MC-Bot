@@ -491,4 +491,12 @@ module.exports = class Debug {
         TextDisplay.disposeAll(this._bot.commands)
         BlockDisplay.disposeAll(this._bot.commands)
     }
+
+    /**
+     * @param {import('prismarine-entity').Entity} entity
+     * @param {number} seconds
+     */
+    highlightEntity(entity, seconds) {
+        this._bot.commands.sendAsync(`/execute positioned ${entity.position.x} ${entity.position.y} ${entity.position.z} run effect give @e[limit=1,sort=nearest] minecraft:glowing ${seconds}`)
+    }
 }

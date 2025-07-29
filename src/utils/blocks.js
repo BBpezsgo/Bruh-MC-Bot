@@ -135,7 +135,7 @@ module.exports = (bot) => {
     const find = function(options) {
         const Block = require('prismarine-block')(bot.bot.registry)
 
-        /** @type {Set<number>} */
+        /** @type {ReadonlySet<number>} */
         let matching = null
 
         if (typeof options.matching === 'number') {
@@ -148,14 +148,15 @@ module.exports = (bot) => {
             matching = options.matching
             // console.log(`Find block${options.count === 1 ? '' : 's'}`, options.matching.entries().map(v => bot.bot.registry.blocks[v[0]]?.name).toArray())
         } else {
-            matching = new Set()
+            const _matching = new Set()
             for (const item of options.matching) {
                 if (typeof item === 'string') {
-                    matching.add(bot.bot.registry.blocksByName[item].id)
+                    _matching.add(bot.bot.registry.blocksByName[item].id)
                 } else {
-                    matching.add(item)
+                    _matching.add(item)
                 }
             }
+            matching = _matching
             // console.log(`Find block${options.count === 1 ? '' : 's'}`, options.matching.map(v => typeof v === 'number' ? bot.bot.registry.blocks[v]?.name : v).toArray())
         }
 
@@ -222,11 +223,11 @@ module.exports = (bot) => {
             findBlocksCache.push(currentCachedItem)
             while (next) {
                 yield
+                /** @type {import('prismarine-chunk').PCChunk} */ //@ts-ignore
                 const column = bot.bot.world.getColumn(next.x, next.z)
                 const sectionY = next.y + Math.abs(bot.bot.game.minY >> 4)
                 const totalSections = bot.bot.game.height >> 4
                 if (sectionY >= 0 && sectionY < totalSections && column && !visitedSections.has(next.toString())) {
-                    /** @type {import('prismarine-chunk').PCChunk['sections'][0]} */
                     const section = column.sections[sectionY]
                     if (isBlockInSection(section)) {
                         const begin = new Vec3(next.x * 16, sectionY * 16 + bot.bot.game.minY, next.z * 16)
